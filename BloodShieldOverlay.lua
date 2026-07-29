@@ -151,7 +151,7 @@ local function CreateTickMarks()
         tickLines[fraction] = tick
 
         local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        label:SetText(string.format("%d%%", fraction * 100))
+        label:SetText("")
         label:SetTextColor(1, 1, 1, 0.9)
         tickLabels[fraction] = label
     end
