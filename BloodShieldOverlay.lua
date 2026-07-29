@@ -9,6 +9,8 @@ local defaults = {
     relativePoint = "BOTTOM",
     xOffset = 0,
     yOffset = 90,
+    width = 160,
+    height = 24,
     locked = true,
 }
 
@@ -27,6 +29,12 @@ local function EnsureDB()
     end
     if not db.yOffset then
         db.yOffset = defaults.yOffset
+    end
+    if not db.width then
+        db.width = defaults.width
+    end
+    if not db.height then
+        db.height = defaults.height
     end
     if db.locked == nil then
         db.locked = defaults.locked
@@ -80,12 +88,13 @@ local function CreateBar()
     end
 
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
-    bar:SetSize(160, 24)
+    bar:SetSize(db.width or defaults.width, db.height or defaults.height)
     bar:SetPoint(db.point, UIParent, db.relativePoint, db.xOffset, db.yOffset)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
     bar:SetFrameStrata("HIGH")
     bar:SetFrameLevel(20)
+    bar:SetReverseFill(true)
     bar:EnableMouse(true)
     bar:RegisterForDrag("LeftButton")
     bar:Show()
@@ -110,7 +119,7 @@ local function CreateConfigMenu()
     end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(260, 120)
+    menuFrame:SetSize(300, 180)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -135,6 +144,44 @@ local function CreateConfigMenu()
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
     info:SetJustifyH("LEFT")
     info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore default position.")
+
+    local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -16)
+    widthLabel:SetText("Width:")
+
+    local widthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    widthEdit:SetSize(60, 24)
+    widthEdit:SetPoint("LEFT", widthLabel, "RIGHT", 12, 0)
+    widthEdit:SetAutoFocus(false)
+    widthEdit:SetText(tostring(db.width or defaults.width))
+
+    local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -12)
+    heightLabel:SetText("Height:")
+
+    local heightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    heightEdit:SetSize(60, 24)
+    heightEdit:SetPoint("LEFT", heightLabel, "RIGHT", 12, 0)
+    heightEdit:SetAutoFocus(false)
+    heightEdit:SetText(tostring(db.height or defaults.height))
+
+    local applySize = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    applySize:SetSize(80, 24)
+    applySize:SetPoint("LEFT", heightEdit, "RIGHT", 12, 0)
+    applySize:SetText("Apply")
+    applySize:SetScript("OnClick", function()
+        local width = tonumber(widthEdit:GetText())
+        local height = tonumber(heightEdit:GetText())
+        if width and width > 0 and height and height > 0 then
+            db.width = width
+            db.height = height
+            if bar then
+                bar:SetSize(width, height)
+            end
+        else
+            print("BloodShieldOverlay: width and height must be positive numbers.")
+        end
+    end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(100, 24)
@@ -204,10 +251,13 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         db.relativePoint = defaults.relativePoint
         db.xOffset = defaults.xOffset
         db.yOffset = defaults.yOffset
+        db.width = defaults.width
+        db.height = defaults.height
         db.locked = defaults.locked
         if bar then
             bar:ClearAllPoints()
             bar:SetPoint(db.point, UIParent, db.relativePoint, db.xOffset, db.yOffset)
+            bar:SetSize(db.width, db.height)
             UpdateBarLock()
         end
         print("BloodShieldOverlay position reset.")
