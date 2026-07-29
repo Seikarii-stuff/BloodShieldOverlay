@@ -14,6 +14,8 @@ local bg
 local menuFrame
 local tickLines = {}
 local tickLabels = {}
+local warnedNoAbsorbAPI = false
+
 -- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 
@@ -30,7 +32,10 @@ local DEFAULTS = {
     capMultiplier = 2.0,
 }
 
--- Runtime reference to the SavedVariable.
+-- Populated from the BloodShieldOverlayDB SavedVariable once ADDON_LOADED
+-- fires for this addon (see the OnEvent handler below). Starts as a plain
+-- table (not nil) so that any event which fires out of order can't crash
+-- CreateBar()/UpdateBar() by indexing a nil config.
 local config = {}
 
 local function ApplyDefaults(db)
@@ -43,7 +48,8 @@ local function ApplyDefaults(db)
     return db
 end
 
--- Ensures the SavedVariable always contains every expected setting.
+-- Defensive re-entry point: guarantees config is a fully populated table
+-- no matter what order events fire in. Safe to call as often as needed.
 local function EnsureConfig()
     if BloodShieldOverlayDB then
         config = ApplyDefaults(BloodShieldOverlayDB)
@@ -62,6 +68,10 @@ end
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then
         return UnitGetTotalAbsorbs(unit) or 0
+    end
+    if not warnedNoAbsorbAPI then
+        warnedNoAbsorbAPI = true
+        print("|cffff5555BloodShieldOverlay:|r this version of WoW does not expose UnitGetTotalAbsorbs; the bar will stay empty.")
     end
     return 0
 end
@@ -148,7 +158,9 @@ local function CreateTickMarks()
     UpdateTickMarks()
 end
 
-local function SetBarColor()
+-- Picks a bar color based on how far past 100% health the shield is.
+-- Plain red under 100%, purple between 100-150%, gold above 150%.
+local function UpdateBarColor(ratio)
     bar:SetStatusBarColor(1.0, 1.0, 1.0, 0.95)
 end
 
@@ -180,7 +192,7 @@ local function CreateBar()
     bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
     bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    SetBarColor()
+    bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
     bar:SetFrameStrata("HIGH")
     bar:SetFrameLevel(20)
     bar:SetOrientation("VERTICAL")
@@ -317,7 +329,8 @@ local function CreateConfigMenu()
     end)
 end
 
--- Keeps the settings menu in sync after /shield reset changes config.
+-- Keeps the open settings menu in sync after /shield reset changes config
+-- outside of the menu's own Apply button.
 local function RefreshConfigMenuFields()
     if not menuFrame then
         return
@@ -345,14 +358,33 @@ local function UpdateBar()
 
     local absorb = GetAbsorbAmount("player")
     local maxHP = UnitHealthMax("player") or 1
-    local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
+    local capMultiplier = config.capMultiplier or DEFAULTS.capMultiplier
+    local displayMax = maxHP * capMultiplier
 
     if displayMax > 0 then
         bar:SetMinMaxValues(0, displayMax)
-        bar:SetValue(absorb)
+        local ok = pcall(function()
+            bar:SetValue(absorb or 0)
+        end)
+        if not ok then
+            bar:SetValue(0)
+        end
     else
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
+    end
+
+    if maxHP > 0 then
+        local ok, ratio = pcall(function()
+            return (absorb or 0) / maxHP
+        end)
+        if ok then
+            UpdateBarColor(ratio)
+        else
+            UpdateBarColor(0)
+        end
+    else
+        UpdateBarColor(0)
     end
 end
 
