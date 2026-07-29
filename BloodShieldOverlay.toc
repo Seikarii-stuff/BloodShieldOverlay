@@ -2,7 +2,8 @@
 ## Title: Blood Shield Overlay
 ## Notes: Visually displays your Blood Shield amount over your health and raid/party frames.
 ## Author: Assistant
-## Version: 1.0.1
+## Version: 1.0.2
 ## IconTexture: 237540
+## SavedVariables: BloodShieldOverlayDB
 
 BloodShieldOverlay.lua
