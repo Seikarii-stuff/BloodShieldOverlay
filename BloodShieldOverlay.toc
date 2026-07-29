@@ -1,8 +1,8 @@
 ## Interface: 120007
 ## Title: Blood Shield Overlay
-## Notes: Visually displays your Blood Shield amount over your health and raid/party frames.
+## Notes: Visually displays your Blood Shield amount over your health as a percentage bar, including overshoot past 100% with 50/100/150% markers.
 ## Author: Assistant
-## Version: 1.0.2
+## Version: 1.1.0
 ## IconTexture: 237540
 ## SavedVariables: BloodShieldOverlayDB
 

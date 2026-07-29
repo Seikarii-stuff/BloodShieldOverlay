@@ -1,10 +1,25 @@
 -- BloodShieldOverlay.lua
 -- Movable absorb bar for the player with slash command /shield.
+--
+-- The bar represents the player's absorb shield as a percentage of max
+-- health (not an absolute number), and can visually exceed 100% for
+-- mechanics that let absorbs overshoot current health (e.g. Blood Shield).
+-- Tick marks at 50% / 100% / 150% make it easy to read at a glance.
+
+local ADDON_NAME = "BloodShieldOverlay"
 
 local addon = CreateFrame("Frame")
 local bar
-local barText
-local defaults = {
+local bg
+local menuFrame
+local tickLines = {}
+local tickLabels = {}
+local warnedNoAbsorbAPI = false
+
+-- Fractions of max health at which we draw a tick mark on the bar.
+local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
+
+local DEFAULTS = {
     point = "BOTTOM",
     relativePoint = "BOTTOM",
     xOffset = 100,
@@ -12,25 +27,38 @@ local defaults = {
     width = 18,
     height = 150,
     locked = true,
+    -- How much overshoot the bar can display, expressed as a multiple of
+    -- max health. 2.0 = the bar tops out at 200% of max health.
+    capMultiplier = 2.0,
 }
 
-local config = {}
+-- Populated from the BloodShieldOverlayDB SavedVariable once ADDON_LOADED
+-- fires for this addon (see the OnEvent handler below).
+local config
 
-local function ResetConfig()
-    config.point = defaults.point
-    config.relativePoint = defaults.relativePoint
-    config.xOffset = defaults.xOffset
-    config.yOffset = defaults.yOffset
-    config.width = defaults.width
-    config.height = defaults.height
-    config.locked = defaults.locked
+local function ApplyDefaults(db)
+    db = db or {}
+    for key, value in pairs(DEFAULTS) do
+        if db[key] == nil then
+            db[key] = value
+        end
+    end
+    return db
 end
 
-ResetConfig()
+local function ResetConfig()
+    for key, value in pairs(DEFAULTS) do
+        config[key] = value
+    end
+end
 
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then
         return UnitGetTotalAbsorbs(unit) or 0
+    end
+    if not warnedNoAbsorbAPI then
+        warnedNoAbsorbAPI = true
+        print("|cffff5555BloodShieldOverlay:|r this version of WoW does not expose UnitGetTotalAbsorbs; the bar will stay empty.")
     end
     return 0
 end
@@ -50,14 +78,14 @@ local function UpdateBarLock()
     if not bar then
         return
     end
+    -- Mouse stays enabled even when locked so the tooltip keeps working;
+    -- only dragging is gated behind the lock state.
+    bar:EnableMouse(true)
+    bar:SetMovable(not config.locked)
     if config.locked then
-        bar:EnableMouse(false)
-        bar:SetMovable(false)
         bar:SetScript("OnDragStart", nil)
         bar:SetScript("OnDragStop", nil)
     else
-        bar:EnableMouse(true)
-        bar:SetMovable(true)
         bar:RegisterForDrag("LeftButton")
         bar:SetScript("OnDragStart", function(self)
             self:StartMoving()
@@ -69,13 +97,93 @@ local function UpdateBarLock()
     end
 end
 
+-- Repositions the 50% / 100% / 150% tick marks and their labels to match
+-- the bar's current height and cap multiplier. Ticks beyond the current
+-- cap are hidden rather than clamped to the edge.
+local function UpdateTickMarks()
+    if not bar then
+        return
+    end
+
+    local capMultiplier = config.capMultiplier or DEFAULTS.capMultiplier
+    local totalHeight = bar:GetHeight()
+
+    for _, fraction in ipairs(TICK_FRACTIONS) do
+        local tick = tickLines[fraction]
+        local label = tickLabels[fraction]
+
+        if fraction <= capMultiplier then
+            local yOffset = totalHeight * (fraction / capMultiplier)
+
+            tick:ClearAllPoints()
+            tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
+            tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
+            tick:Show()
+
+            label:ClearAllPoints()
+            label:SetPoint("LEFT", bar, "BOTTOMLEFT", bar:GetWidth() + 4, yOffset)
+            label:Show()
+        else
+            tick:Hide()
+            label:Hide()
+        end
+    end
+end
+
+local function CreateTickMarks()
+    for _, fraction in ipairs(TICK_FRACTIONS) do
+        local tick = bar:CreateTexture(nil, "OVERLAY")
+        tick:SetColorTexture(1, 1, 1, 0.85)
+        tick:SetHeight(2)
+        tickLines[fraction] = tick
+
+        local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetText(string.format("%d%%", fraction * 100))
+        label:SetTextColor(1, 1, 1, 0.9)
+        tickLabels[fraction] = label
+    end
+    UpdateTickMarks()
+end
+
+-- Picks a bar color based on how far past 100% health the shield is.
+-- Plain red under 100%, purple between 100-150%, gold above 150%.
+local function UpdateBarColor(ratio)
+    if ratio >= 1.5 then
+        bar:SetStatusBarColor(1.0, 0.85, 0.1, 0.95)
+    elseif ratio >= 1.0 then
+        bar:SetStatusBarColor(0.85, 0.45, 0.9, 0.9)
+    else
+        bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
+    end
+end
+
+local function OnBarEnter(self)
+    local absorb = GetAbsorbAmount("player")
+    local maxHP = UnitHealthMax("player") or 1
+    local percent = maxHP > 0 and (absorb / maxHP * 100) or 0
+
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Blood Shield Overlay", 1, 1, 1)
+    GameTooltip:AddLine(string.format("Absorb: %d", absorb), 0.9, 0.9, 0.9)
+    GameTooltip:AddLine(string.format("%.0f%% of max health", percent), 0.9, 0.9, 0.9)
+    if config.locked then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("/shield unlock to move this bar", 0.6, 0.6, 0.6)
+    end
+    GameTooltip:Show()
+end
+
+local function OnBarLeave()
+    GameTooltip:Hide()
+end
+
 local function CreateBar()
     if bar then
         return
     end
 
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
-    bar:SetSize(config.width or defaults.width, config.height or defaults.height)
+    bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
     bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
@@ -83,23 +191,19 @@ local function CreateBar()
     bar:SetFrameLevel(20)
     bar:SetOrientation("VERTICAL")
     bar:SetReverseFill(false)
-    bar:EnableMouse(true)
-    bar:RegisterForDrag("LeftButton")
     bar:Show()
 
-    local bg = bar:CreateTexture(nil, "BACKGROUND")
+    bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
 
-    barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    barText:SetPoint("CENTER", bar, "CENTER", 0, 0)
-    barText:SetTextColor(1, 1, 1, 1)
-    barText:SetText("0")
+    bar:SetScript("OnEnter", OnBarEnter)
+    bar:SetScript("OnLeave", OnBarLeave)
+    bar:SetScript("OnSizeChanged", UpdateTickMarks)
 
+    CreateTickMarks()
     UpdateBarLock()
 end
-
-local menuFrame
 
 local function CreateConfigMenu()
     if menuFrame then
@@ -107,7 +211,7 @@ local function CreateConfigMenu()
     end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(300, 180)
+    menuFrame:SetSize(320, 230)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -131,43 +235,71 @@ local function CreateConfigMenu()
     info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 16, -40)
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
     info:SetJustifyH("LEFT")
-    info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore default position.")
+    info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore defaults.")
 
     local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -16)
     widthLabel:SetText("Width:")
 
     local widthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    widthEdit:SetSize(60, 24)
+    widthEdit:SetSize(50, 24)
     widthEdit:SetPoint("LEFT", widthLabel, "RIGHT", 12, 0)
     widthEdit:SetAutoFocus(false)
-    widthEdit:SetText(tostring(config.width or defaults.width))
+    widthEdit:SetText(tostring(config.width or DEFAULTS.width))
+    menuFrame.widthEdit = widthEdit
 
     local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -12)
+    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -14)
     heightLabel:SetText("Height:")
 
     local heightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    heightEdit:SetSize(60, 24)
+    heightEdit:SetSize(50, 24)
     heightEdit:SetPoint("LEFT", heightLabel, "RIGHT", 12, 0)
     heightEdit:SetAutoFocus(false)
-    heightEdit:SetText(tostring(config.height or defaults.height))
+    heightEdit:SetText(tostring(config.height or DEFAULTS.height))
+    menuFrame.heightEdit = heightEdit
 
-    local applySize = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    applySize:SetSize(80, 24)
-    applySize:SetPoint("LEFT", heightEdit, "RIGHT", 12, 0)
-    applySize:SetText("Apply")
-    applySize:SetScript("OnClick", function()
+    local capLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    capLabel:SetPoint("TOPLEFT", heightLabel, "BOTTOMLEFT", 0, -14)
+    capLabel:SetText("Max %:")
+
+    local capEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    capEdit:SetSize(50, 24)
+    capEdit:SetPoint("LEFT", capLabel, "RIGHT", 12, 0)
+    capEdit:SetAutoFocus(false)
+    capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
+    menuFrame.capEdit = capEdit
+
+    local capHint = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    capHint:SetPoint("LEFT", capEdit, "RIGHT", 8, 0)
+    capHint:SetText("top of the bar,\ne.g. 200")
+    capHint:SetJustifyH("LEFT")
+
+    local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    applyButton:SetSize(90, 24)
+    applyButton:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", 0, -16)
+    applyButton:SetText("Apply")
+    applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
         local height = tonumber(heightEdit:GetText())
-        if width and width > 0 and height and height > 0 then
-            config.width = width
-            config.height = height
-            if bar then
-                bar:SetSize(width, height)
-            end
-        else
+        local capPercent = tonumber(capEdit:GetText())
+
+        if not (width and width > 0 and height and height > 0) then
             print("BloodShieldOverlay: width and height must be positive numbers.")
+            return
+        end
+        if not (capPercent and capPercent >= 100) then
+            print("BloodShieldOverlay: Max %% must be a number of at least 100.")
+            return
+        end
+
+        config.width = width
+        config.height = height
+        config.capMultiplier = capPercent / 100
+
+        if bar then
+            bar:SetSize(width, height)
+            UpdateTickMarks()
         end
     end)
 
@@ -191,11 +323,21 @@ local function CreateConfigMenu()
     end)
 end
 
+-- Keeps the open settings menu in sync after /shield reset changes config
+-- outside of the menu's own Apply button.
+local function RefreshConfigMenuFields()
+    if not menuFrame then
+        return
+    end
+    menuFrame.widthEdit:SetText(tostring(config.width or DEFAULTS.width))
+    menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
+    menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
+end
+
 local function ShowConfigMenu()
     CreateConfigMenu()
-    if menuFrame then
-        menuFrame:Show()
-    end
+    RefreshConfigMenuFields()
+    menuFrame:Show()
 end
 
 local function UpdateBar()
@@ -208,23 +350,28 @@ local function UpdateBar()
 
     local absorb = GetAbsorbAmount("player")
     local maxHP = UnitHealthMax("player") or 1
-    if maxHP > 0 then
-        bar:SetMinMaxValues(0, maxHP)
+    local capMultiplier = config.capMultiplier or DEFAULTS.capMultiplier
+    local displayMax = maxHP * capMultiplier
+
+    if displayMax > 0 then
+        bar:SetMinMaxValues(0, displayMax)
+        bar:SetValue(math.min(absorb, displayMax))
     else
         bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
     end
 
-    bar:SetValue(absorb)
-    barText:SetText(string.format(" %d", absorb))
+    local ratio = maxHP > 0 and (absorb / maxHP) or 0
+    UpdateBarColor(ratio)
 end
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
     msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
+
     if msg == "" then
         ShowConfigMenu()
         return
-    end
-    if msg == "lock" then
+    elseif msg == "lock" then
         config.locked = true
         UpdateBarLock()
         print("BloodShieldOverlay locked.")
@@ -241,8 +388,10 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
             bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
             bar:SetSize(config.width, config.height)
             UpdateBarLock()
+            UpdateTickMarks()
         end
-        print("BloodShieldOverlay position reset.")
+        RefreshConfigMenuFields()
+        print("BloodShieldOverlay settings reset to defaults.")
         return
     end
 
@@ -255,6 +404,7 @@ end
 SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 
+addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
 addon:RegisterEvent("PLAYER_ENTERING_WORLD")
 addon:RegisterEvent("UNIT_AURA")
@@ -262,7 +412,19 @@ addon:RegisterEvent("UNIT_MAXHEALTH")
 addon:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 
 addon:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_LOGIN" then
+    if event == "ADDON_LOADED" then
+        local loadedAddon = ...
+        if loadedAddon == ADDON_NAME then
+            BloodShieldOverlayDB = ApplyDefaults(BloodShieldOverlayDB)
+            config = BloodShieldOverlayDB
+        end
+    elseif event == "PLAYER_LOGIN" then
+        -- Safety net: ADDON_LOADED should always have fired by now, but
+        -- fall back to fresh defaults rather than erroring if it hasn't.
+        if not config then
+            BloodShieldOverlayDB = ApplyDefaults(BloodShieldOverlayDB)
+            config = BloodShieldOverlayDB
+        end
         CreateBar()
         UpdateBar()
     elseif event == "PLAYER_ENTERING_WORLD" then
