@@ -9,8 +9,8 @@ local defaults = {
     relativePoint = "BOTTOM",
     xOffset = -22,
     yOffset = 390,
-    width = 200,
-    height = 18,
+    width = 18,
+    height = 200,
     locked = true,
 }
 
@@ -94,7 +94,8 @@ local function CreateBar()
     bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
     bar:SetFrameStrata("HIGH")
     bar:SetFrameLevel(20)
-    bar:SetReverseFill(true)
+    bar:SetOrientation("VERTICAL")
+    bar:SetReverseFill(false)
     bar:EnableMouse(true)
     bar:RegisterForDrag("LeftButton")
     bar:Show()
