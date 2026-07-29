@@ -5,7 +5,6 @@ local ADDON_NAME = "BloodShieldOverlay"
 
 local addon = CreateFrame("Frame")
 local bar
-local barText
 local bg
 local menuFrame
 local warnedNoAbsorbAPI = false
@@ -118,11 +117,6 @@ local function CreateBar()
     bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
-
-    barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    barText:SetPoint("CENTER", bar, "CENTER", 0, 0)
-    barText:SetTextColor(1, 1, 1, 1)
-    barText:SetText("0")
 
     bar:SetScript("OnEnter", function(self)
         local absorb = GetAbsorbAmount("player")
@@ -267,9 +261,6 @@ local function UpdateBar()
     end
 
     bar:SetValue(absorb)
-    if barText then
-        barText:SetText(string.format(" %d", absorb))
-    end
 end
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
