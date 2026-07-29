@@ -7,8 +7,8 @@ local barText
 local defaults = {
     point = "BOTTOM",
     relativePoint = "BOTTOM",
-    xOffset = 0,
-    yOffset = 90,
+    xOffset = -22,
+    yOffset = 390,
     width = 200,
     height = 18,
     locked = true,
