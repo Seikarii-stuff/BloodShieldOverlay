@@ -107,7 +107,7 @@ local function CreateBar()
     barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     barText:SetPoint("CENTER", bar, "CENTER", 0, 0)
     barText:SetTextColor(1, 1, 1, 1)
-    barText:SetText("Absorb: 0")
+    barText:SetText("0")
 
     UpdateBarLock()
 end
