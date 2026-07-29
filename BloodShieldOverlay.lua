@@ -45,13 +45,24 @@ local playerShieldBar
 local playerShieldText
 
 local function SetupPlayerBar()
+    if playerShieldBar then
+        return
+    end
+
+    if not PlayerFrameHealthBar then
+        return
+    end
+
     playerShieldBar = CreateFrame("StatusBar", "BloodShieldPlayerBar", PlayerFrameHealthBar)
-    playerShieldBar:SetAllPoints(PlayerFrameHealthBar)
+    playerShieldBar:SetPoint("TOPLEFT", PlayerFrameHealthBar, "TOPLEFT", 0, 0)
+    playerShieldBar:SetPoint("BOTTOMRIGHT", PlayerFrameHealthBar, "BOTTOMRIGHT", 0, 0)
     playerShieldBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     -- Dark red semi-transparent color for Death Knight vibes
     playerShieldBar:SetStatusBarColor(0.7, 0.1, 0.1, 0.65)
     playerShieldBar:SetFrameStrata("MEDIUM")
     playerShieldBar:SetFrameLevel(PlayerFrameHealthBar:GetFrameLevel() + 5)
+    playerShieldBar:SetMinMaxValues(0, 1)
+    playerShieldBar:SetValue(0)
     playerShieldBar:Hide()
 
     -- Optional: Add text to show exact value on the player frame
@@ -62,12 +73,13 @@ local function SetupPlayerBar()
 end
 
 local function UpdatePlayerBar()
+    SetupPlayerBar()
     if not playerShieldBar then return end
 
     local shield = GetBloodShieldAmount()
     local maxHP = UnitHealthMax("player")
 
-    if maxHP > 0 then
+    if maxHP and maxHP > 0 then
         playerShieldBar:SetMinMaxValues(0, maxHP)
         playerShieldBar:SetValue(shield)
 
@@ -78,6 +90,9 @@ local function UpdatePlayerBar()
             playerShieldBar:Hide()
             playerShieldText:SetText("")
         end
+    else
+        playerShieldBar:Hide()
+        playerShieldText:SetText("")
     end
 end
 
@@ -130,7 +145,11 @@ addon:SetScript("OnEvent", function(self, event, ...)
     local arg1 = ...
     
     if event == "PLAYER_LOGIN" then
-        SetupPlayerBar()
+        -- Delay the setup until the player frames are fully created.
+        C_Timer.After(0.1, function()
+            SetupPlayerBar()
+            UpdatePlayerBar()
+        end)
         
         -- Hook the Raid/Party Frame update functions
         if CompactUnitFrame_UpdateHealth then
@@ -143,8 +162,6 @@ addon:SetScript("OnEvent", function(self, event, ...)
             hooksecurefunc("CompactUnitFrame_UpdateAll", UpdateCompactFrame)
         end
         
-        UpdatePlayerBar()
-        
     elseif event == "UNIT_AURA" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
         -- Only trigger if the aura/health/absorb change happened to the player
         if arg1 == "player" then
@@ -153,6 +170,9 @@ addon:SetScript("OnEvent", function(self, event, ...)
         
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Delay update slightly to ensure frames are fully loaded
-        C_Timer.After(1, UpdatePlayerBar)
+        C_Timer.After(0.2, function()
+            SetupPlayerBar()
+            UpdatePlayerBar()
+        end)
     end
 end)
