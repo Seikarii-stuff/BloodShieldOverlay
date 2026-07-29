@@ -161,13 +161,7 @@ end
 -- Picks a bar color based on how far past 100% health the shield is.
 -- Plain red under 100%, purple between 100-150%, gold above 150%.
 local function UpdateBarColor(ratio)
-    if ratio >= 1.5 then
-        bar:SetStatusBarColor(1.0, 0.85, 0.1, 0.95)
-    elseif ratio >= 1.0 then
-        bar:SetStatusBarColor(0.85, 0.45, 0.9, 0.9)
-    else
-        bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
-    end
+    bar:SetStatusBarColor(1.0, 1.0, 1.0, 0.95)
 end
 
 local function OnBarEnter(self)
