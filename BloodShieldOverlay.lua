@@ -9,8 +9,8 @@ local defaults = {
     relativePoint = "BOTTOM",
     xOffset = 0,
     yOffset = 90,
-    width = 160,
-    height = 24,
+    width = 200,
+    height = 18,
     locked = true,
 }
 
