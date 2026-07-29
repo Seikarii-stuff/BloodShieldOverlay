@@ -14,32 +14,19 @@ local defaults = {
     locked = true,
 }
 
-BloodShieldOverlayDB = BloodShieldOverlayDB or {}
-local db = BloodShieldOverlayDB
+local config = {}
 
-local function EnsureDB()
-    if not db.point then
-        db.point = defaults.point
-    end
-    if not db.relativePoint then
-        db.relativePoint = defaults.relativePoint
-    end
-    if not db.xOffset then
-        db.xOffset = defaults.xOffset
-    end
-    if not db.yOffset then
-        db.yOffset = defaults.yOffset
-    end
-    if not db.width then
-        db.width = defaults.width
-    end
-    if not db.height then
-        db.height = defaults.height
-    end
-    if db.locked == nil then
-        db.locked = defaults.locked
-    end
+local function ResetConfig()
+    config.point = defaults.point
+    config.relativePoint = defaults.relativePoint
+    config.xOffset = defaults.xOffset
+    config.yOffset = defaults.yOffset
+    config.width = defaults.width
+    config.height = defaults.height
+    config.locked = defaults.locked
 end
+
+ResetConfig()
 
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then
@@ -53,17 +40,17 @@ local function SaveBarPosition()
         return
     end
     local point, _, relativePoint, xOffset, yOffset = bar:GetPoint()
-    db.point = point
-    db.relativePoint = relativePoint
-    db.xOffset = xOffset
-    db.yOffset = yOffset
+    config.point = point
+    config.relativePoint = relativePoint
+    config.xOffset = xOffset
+    config.yOffset = yOffset
 end
 
 local function UpdateBarLock()
     if not bar then
         return
     end
-    if db.locked then
+    if config.locked then
         bar:EnableMouse(false)
         bar:SetMovable(false)
         bar:SetScript("OnDragStart", nil)
@@ -88,8 +75,8 @@ local function CreateBar()
     end
 
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
-    bar:SetSize(db.width or defaults.width, db.height or defaults.height)
-    bar:SetPoint(db.point, UIParent, db.relativePoint, db.xOffset, db.yOffset)
+    bar:SetSize(config.width or defaults.width, config.height or defaults.height)
+    bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     bar:SetStatusBarColor(0.7, 0.1, 0.1, 0.85)
     bar:SetFrameStrata("HIGH")
@@ -154,7 +141,7 @@ local function CreateConfigMenu()
     widthEdit:SetSize(60, 24)
     widthEdit:SetPoint("LEFT", widthLabel, "RIGHT", 12, 0)
     widthEdit:SetAutoFocus(false)
-    widthEdit:SetText(tostring(db.width or defaults.width))
+    widthEdit:SetText(tostring(config.width or defaults.width))
 
     local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -12)
@@ -164,7 +151,7 @@ local function CreateConfigMenu()
     heightEdit:SetSize(60, 24)
     heightEdit:SetPoint("LEFT", heightLabel, "RIGHT", 12, 0)
     heightEdit:SetAutoFocus(false)
-    heightEdit:SetText(tostring(db.height or defaults.height))
+    heightEdit:SetText(tostring(config.height or defaults.height))
 
     local applySize = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     applySize:SetSize(80, 24)
@@ -174,8 +161,8 @@ local function CreateConfigMenu()
         local width = tonumber(widthEdit:GetText())
         local height = tonumber(heightEdit:GetText())
         if width and width > 0 and height and height > 0 then
-            db.width = width
-            db.height = height
+            config.width = width
+            config.height = height
             if bar then
                 bar:SetSize(width, height)
             end
@@ -189,7 +176,7 @@ local function CreateConfigMenu()
     unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
     unlock:SetText("Unlock")
     unlock:SetScript("OnClick", function()
-        db.locked = false
+        config.locked = false
         UpdateBarLock()
     end)
 
@@ -198,7 +185,7 @@ local function CreateConfigMenu()
     lock:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
     lock:SetText("Lock")
     lock:SetScript("OnClick", function()
-        db.locked = true
+        config.locked = true
         UpdateBarLock()
         menuFrame:Hide()
     end)
@@ -228,7 +215,7 @@ local function UpdateBar()
     end
 
     bar:SetValue(absorb)
-    barText:SetText(string.format("Absorb: %d", absorb))
+    barText:SetText(string.format(" %d", absorb))
 end
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
@@ -238,34 +225,28 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         return
     end
     if msg == "lock" then
-        db.locked = true
+        config.locked = true
         UpdateBarLock()
         print("BloodShieldOverlay locked.")
         return
     elseif msg == "unlock" or msg == "move" then
-        db.locked = false
+        config.locked = false
         UpdateBarLock()
         print("BloodShieldOverlay unlocked. Drag the bar to move it, then type /shield lock.")
         return
     elseif msg == "reset" then
-        db.point = defaults.point
-        db.relativePoint = defaults.relativePoint
-        db.xOffset = defaults.xOffset
-        db.yOffset = defaults.yOffset
-        db.width = defaults.width
-        db.height = defaults.height
-        db.locked = defaults.locked
+        ResetConfig()
         if bar then
             bar:ClearAllPoints()
-            bar:SetPoint(db.point, UIParent, db.relativePoint, db.xOffset, db.yOffset)
-            bar:SetSize(db.width, db.height)
+            bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
+            bar:SetSize(config.width, config.height)
             UpdateBarLock()
         end
         print("BloodShieldOverlay position reset.")
         return
     end
 
-    if db.locked then
+    if config.locked then
         print("BloodShieldOverlay is locked. Use /shield unlock to move it.")
     else
         print("BloodShieldOverlay is unlocked. Drag the bar to move it, then use /shield lock.")
@@ -282,7 +263,6 @@ addon:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 
 addon:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
-        EnsureDB()
         CreateBar()
         UpdateBar()
     elseif event == "PLAYER_ENTERING_WORLD" then
