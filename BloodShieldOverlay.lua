@@ -10,7 +10,7 @@ local defaults = {
     xOffset = 100,
     yOffset = 450,
     width = 18,
-    height = 100,
+    height = 150,
     locked = true,
 }
 
