@@ -1,6 +1,6 @@
 ## Interface: 120007
 ## Title: Blood Shield Overlay
-## Notes: Visually displays your Shield amount over your health as a percentage bar, /shield to move it /shield reset to default
+## Notes: Movable player-absorb percentage bar with per-character settings. /shield configures, unlock to move,lock  to close, /shield reset to default; display cap supports 20%-250%+.
 ## Author: Seikarii
 ## Version: 1.1.1
 ## IconTexture: 237540
