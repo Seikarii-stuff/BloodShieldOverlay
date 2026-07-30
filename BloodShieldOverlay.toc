@@ -4,6 +4,6 @@
 ## Author: Seikarii
 ## Version: 1.1.0
 ## IconTexture: 237540
-## SavedVariables: BloodShieldOverlayDB
+## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
 
 BloodShieldOverlay.lua

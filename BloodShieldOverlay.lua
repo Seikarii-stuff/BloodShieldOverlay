@@ -30,8 +30,21 @@ local DEFAULTS = {
     capMultiplier = 2.0,
 }
 
--- Runtime reference to the SavedVariable.
+-- Runtime reference to the current character profile.
 local config = {}
+
+local function GetProfileKey()
+    local playerName = UnitName("player") or "Player"
+    local realmName = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Unknown"
+    return string.format("%s-%s", playerName, realmName)
+end
+
+local function EnsureProfileStore()
+    if type(BloodShieldOverlayProfiles) ~= "table" then
+        BloodShieldOverlayProfiles = {}
+    end
+    return BloodShieldOverlayProfiles
+end
 
 local function ApplyDefaults(db)
     db = db or {}
@@ -43,20 +56,35 @@ local function ApplyDefaults(db)
     return db
 end
 
--- Ensures the SavedVariable always contains every expected setting.
+-- Ensures the current character has its own profile with every expected setting.
 local function EnsureConfig()
-    if BloodShieldOverlayDB then
-        config = ApplyDefaults(BloodShieldOverlayDB)
-    else
-        config = ApplyDefaults(config)
+    local profiles = EnsureProfileStore()
+    local profileKey = GetProfileKey()
+
+    if not profiles[profileKey] then
+        if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
+            profiles[profileKey] = ApplyDefaults(BloodShieldOverlayDB)
+        else
+            profiles[profileKey] = {}
+        end
     end
-    BloodShieldOverlayDB = config
+
+    config = ApplyDefaults(profiles[profileKey])
+    profiles[profileKey] = config
+    BloodShieldOverlayProfiles = profiles
 end
 
 local function ResetConfig()
+    local profiles = EnsureProfileStore()
+    local profileKey = GetProfileKey()
+
+    config = {}
     for key, value in pairs(DEFAULTS) do
         config[key] = value
     end
+
+    profiles[profileKey] = config
+    BloodShieldOverlayProfiles = profiles
 end
 
 local function GetAbsorbAmount(unit)
@@ -230,7 +258,7 @@ local function CreateConfigMenu()
     info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 16, -40)
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
     info:SetJustifyH("LEFT")
-    info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore defaults.")
+    info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore defaults. Settings are stored separately for each character.")
 
     local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -16)
@@ -357,6 +385,18 @@ local function UpdateBar()
     end
 end
 
+local function OnEvent(self, event, arg1)
+    if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
+        EnsureConfig()
+        UpdateBar()
+    elseif event == "PLAYER_LOGIN" then
+        EnsureConfig()
+        UpdateBar()
+    elseif (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED") and arg1 == "player" then
+        UpdateBar()
+    end
+end
+
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
     msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
 
@@ -400,25 +440,7 @@ addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
 addon:RegisterEvent("PLAYER_ENTERING_WORLD")
 addon:RegisterEvent("UNIT_AURA")
+addon:RegisterEvent("UNIT_HEALTH")
 addon:RegisterEvent("UNIT_MAXHEALTH")
 addon:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
-
-addon:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" then
-        local loadedAddon = ...
-        if loadedAddon == ADDON_NAME then
-            EnsureConfig()
-        end
-    elseif event == "PLAYER_LOGIN" then
-        EnsureConfig()
-        CreateBar()
-        UpdateBar()
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        UpdateBar()
-    elseif event == "UNIT_AURA" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
-        local unit = ...
-        if unit == "player" then
-            UpdateBar()
-        end
-    end
-end)
+addon:SetScript("OnEvent", OnEvent)
