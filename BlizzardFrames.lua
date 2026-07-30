@@ -1,8 +1,10 @@
--- Experimental absorb overlays for Blizzard's player, party, and raid frames.
+-- Absorb overlays for Blizzard's player, personal-resource, party, and raid frames.
 -- Frames are discovered out of combat; combat updates only change overlay values.
 
 local addon = _G.BloodShieldOverlay
 local manager = CreateFrame("Frame")
+-- A unit can have more than one visible health bar.  In particular, the player
+-- can have both PlayerFrame and the Personal Resource Display enabled.
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 
@@ -21,6 +23,14 @@ local function GetFrameName(frame)
 end
 
 local function GetHealthBar(frame)
+    if not frame then
+        return
+    end
+
+    if IsStatusBar(frame) then
+        return frame
+    end
+
     for _, key in ipairs(HEALTH_BAR_KEYS) do
         local healthBar = frame[key]
         if IsStatusBar(healthBar) then
@@ -54,17 +64,6 @@ local function IsSupportedUnit(unit)
 end
 
 local function AddOverlay(unit, healthBar)
-    local currentEntry = overlays[unit]
-    if currentEntry and currentEntry.healthBar == healthBar then
-        return
-    end
-
-    if currentEntry then
-        currentEntry.overlay:Hide()
-        currentEntry.unit = nil
-        overlays[unit] = nil
-    end
-
     local entry = overlaysByHealthBar[healthBar]
     if not entry then
         entry = {
@@ -72,13 +71,53 @@ local function AddOverlay(unit, healthBar)
             overlay = addon.CreateAbsorbOverlay(healthBar),
         }
         overlaysByHealthBar[healthBar] = entry
-    elseif entry.unit then
-        entry.overlay:Hide()
-        overlays[entry.unit] = nil
+    end
+
+    if entry.unit == unit then
+        return
+    end
+
+    if entry.unit and overlays[entry.unit] then
+        overlays[entry.unit][healthBar] = nil
     end
 
     entry.unit = unit
-    overlays[unit] = entry
+    overlays[unit] = overlays[unit] or {}
+    overlays[unit][healthBar] = entry
+end
+
+local function GetPlayerFrameHealthBar()
+    -- The modern PlayerFrame does not expose its health bar directly.  It is
+    -- nested inside the new content frame, so the generic frame scan cannot
+    -- reliably discover it.
+    local content = PlayerFrame and PlayerFrame.PlayerFrameContent
+    local main = content and content.PlayerFrameContentMain
+    local healthBarArea = main and main.HealthBarArea
+    return healthBarArea and GetHealthBar(healthBarArea.HealthBar or healthBarArea)
+end
+
+local function GetPersonalResourceHealthBar()
+    -- Retail's Personal Resource Display has its own top-level frame.  This
+    -- explicit path works even when the player nameplate is not enumerable.
+    local container = PersonalResourceDisplayFrame and PersonalResourceDisplayFrame.HealthBarsContainer
+    local healthBar = container and (container.healthBar or container.HealthBar)
+    if IsStatusBar(healthBar) then
+        return healthBar
+    end
+
+    -- Older UI layouts expose the same display as the player's nameplate.
+    if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then
+        return
+    end
+
+    local nameplate = C_NamePlate.GetNamePlateForUnit("player")
+    if not nameplate then
+        return
+    end
+
+    -- Blizzard uses UnitFrame on current Retail builds.  unitFrame is kept as
+    -- a fallback for older frame implementations and third-party nameplates.
+    return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
 local function DiscoverFrames()
@@ -86,11 +125,17 @@ local function DiscoverFrames()
         return
     end
 
-    local foundUnits = {}
-    local playerHealthBar = PlayerFrame and GetHealthBar(PlayerFrame)
+    local foundHealthBars = setmetatable({}, { __mode = "k" })
+    local playerHealthBar = GetPlayerFrameHealthBar()
     if playerHealthBar then
         AddOverlay("player", playerHealthBar)
-        foundUnits.player = true
+        foundHealthBars[playerHealthBar] = true
+    end
+
+    local personalResourceHealthBar = GetPersonalResourceHealthBar()
+    if personalResourceHealthBar then
+        AddOverlay("player", personalResourceHealthBar)
+        foundHealthBars[personalResourceHealthBar] = true
     end
 
     local frame
@@ -105,27 +150,36 @@ local function DiscoverFrames()
             local healthBar = GetHealthBar(frame)
             if healthBar then
                 AddOverlay(unit, healthBar)
-                foundUnits[unit] = true
+                foundHealthBars[healthBar] = true
             end
         end
     end
 
-    for unit, entry in pairs(overlays) do
-        if not foundUnits[unit] then
-            entry.overlay:Hide()
-            entry.unit = nil
+    for unit, entries in pairs(overlays) do
+        for healthBar, entry in pairs(entries) do
+            if not foundHealthBars[healthBar] then
+                entry.overlay:Hide()
+                entry.unit = nil
+                entries[healthBar] = nil
+            end
+        end
+        if not next(entries) then
             overlays[unit] = nil
         end
     end
 end
 
 local function UpdateUnit(unit, absorb, maxHealth)
-    local entry = overlays[unit]
-    if not entry then
+    local entries = overlays[unit]
+    if not entries then
         return
     end
 
-    addon.UpdateAbsorbOverlay(entry.overlay, absorb or UnitGetTotalAbsorbs(unit), maxHealth or UnitHealthMax(unit))
+    absorb = absorb or UnitGetTotalAbsorbs(unit)
+    maxHealth = maxHealth or UnitHealthMax(unit)
+    for _, entry in pairs(entries) do
+        addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
+    end
 end
 
 local function UpdateAll()
@@ -147,6 +201,8 @@ manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
 manager:RegisterEvent("PLAYER_REGEN_ENABLED")
+manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 manager:RegisterEvent("UNIT_HEALTH")
 manager:RegisterEvent("UNIT_MAXHEALTH")
