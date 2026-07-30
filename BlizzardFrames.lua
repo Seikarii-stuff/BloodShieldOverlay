@@ -7,6 +7,7 @@ local manager = CreateFrame("Frame")
 -- can have both PlayerFrame and the Personal Resource Display enabled.
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
+local discoveryPending = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "health", "Health" }
 
@@ -193,6 +194,20 @@ local function DiscoverAndUpdate()
     UpdateAll()
 end
 
+-- Several UI events can arrive together (for example while entering the
+-- world).  Coalescing them avoids repeatedly enumerating every UI frame.
+local function QueueDiscoverAndUpdate()
+    if discoveryPending then
+        return
+    end
+
+    discoveryPending = true
+    C_Timer.After(0.2, function()
+        discoveryPending = false
+        DiscoverAndUpdate()
+    end)
+end
+
 addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
     UpdateUnit("player", absorb, maxHealth)
 end)
@@ -214,5 +229,12 @@ manager:SetScript("OnEvent", function(_, event, unit)
         return
     end
 
-    C_Timer.After(0.2, DiscoverAndUpdate)
+    -- Only the player's nameplate can affect the Personal Resource Display.
+    -- Ignoring other units prevents a full frame scan when enemies appear.
+    if (event == "NAME_PLATE_UNIT_ADDED" or event == "NAME_PLATE_UNIT_REMOVED")
+        and (not unit or not UnitIsUnit(unit, "player")) then
+        return
+    end
+
+    QueueDiscoverAndUpdate()
 end)
