@@ -119,13 +119,13 @@ local function DiscoverFrames()
     end
 end
 
-local function UpdateUnit(unit)
+local function UpdateUnit(unit, absorb, maxHealth)
     local entry = overlays[unit]
     if not entry then
         return
     end
 
-    addon.UpdateAbsorbOverlay(entry.overlay, UnitGetTotalAbsorbs(unit), UnitHealthMax(unit))
+    addon.UpdateAbsorbOverlay(entry.overlay, absorb or UnitGetTotalAbsorbs(unit), maxHealth or UnitHealthMax(unit))
 end
 
 local function UpdateAll()
@@ -139,6 +139,10 @@ local function DiscoverAndUpdate()
     UpdateAll()
 end
 
+addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
+    UpdateUnit("player", absorb, maxHealth)
+end)
+
 manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -148,7 +152,7 @@ manager:RegisterEvent("UNIT_HEALTH")
 manager:RegisterEvent("UNIT_MAXHEALTH")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-        if unit and overlays[unit] then
+        if unit and unit ~= "player" and overlays[unit] then
             UpdateUnit(unit)
         end
         return

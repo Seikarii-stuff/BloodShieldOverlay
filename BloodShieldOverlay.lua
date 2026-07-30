@@ -7,6 +7,7 @@
 -- Tick marks at 50% / 100% / 150% make it easy to read at a glance.
 
 local ADDON_NAME = "BloodShieldOverlay"
+local core = _G.BloodShieldOverlay
 
 local addon = CreateFrame("Frame")
 local bar
@@ -344,7 +345,7 @@ local function ShowConfigMenu()
     menuFrame:Show()
 end
 
-local function UpdateBar()
+local function UpdateBar(absorb, maxHP)
     if not bar then
         CreateBar()
     end
@@ -352,8 +353,8 @@ local function UpdateBar()
         return
     end
 
-    local absorb = GetAbsorbAmount("player")
-    local maxHP = UnitHealthMax("player") or 1
+    absorb = absorb or GetAbsorbAmount("player")
+    maxHP = maxHP or UnitHealthMax("player") or 1
     local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
 
     if displayMax > 0 then
@@ -365,14 +366,14 @@ local function UpdateBar()
     end
 end
 
+core.RegisterPlayerUpdateListener(UpdateBar)
+
 local function OnEvent(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
         EnsureConfig()
         UpdateBar()
     elseif event == "PLAYER_LOGIN" then
         EnsureConfig()
-        UpdateBar()
-    elseif (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED") and arg1 == "player" then
         UpdateBar()
     end
 end
@@ -419,7 +420,4 @@ SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
-addon:RegisterEvent("UNIT_HEALTH")
-addon:RegisterEvent("UNIT_MAXHEALTH")
-addon:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 addon:SetScript("OnEvent", OnEvent)
