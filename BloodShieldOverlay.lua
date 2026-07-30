@@ -10,10 +10,8 @@ local ADDON_NAME = "BloodShieldOverlay"
 
 local addon = CreateFrame("Frame")
 local bar
-local bg
 local menuFrame
 local tickLines = {}
-local tickLabels = {}
 -- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
@@ -120,9 +118,7 @@ local function UpdateBarLock()
     if not bar then
         return
     end
-    -- Mouse stays enabled even when locked so the tooltip keeps working;
-    -- only dragging is gated behind the lock state.
-    bar:EnableMouse(true)
+    bar:EnableMouse(not config.locked)
     bar:SetMovable(not config.locked)
     if config.locked then
         bar:SetScript("OnDragStart", nil)
@@ -139,9 +135,9 @@ local function UpdateBarLock()
     end
 end
 
--- Repositions the 50% / 100% / 150% tick marks and their labels to match
--- the bar's current height and cap multiplier. Ticks beyond the current
--- cap are hidden rather than clamped to the edge.
+-- Repositions the 50% / 100% / 150% tick marks to match the bar's current
+-- height and cap multiplier. Ticks beyond the current cap are hidden rather
+-- than clamped to the edge.
 local function UpdateTickMarks()
     if not bar then
         return
@@ -152,7 +148,6 @@ local function UpdateTickMarks()
 
     for _, fraction in ipairs(TICK_FRACTIONS) do
         local tick = tickLines[fraction]
-        local label = tickLabels[fraction]
 
         if fraction <= capMultiplier then
             local yOffset = totalHeight * (fraction / capMultiplier)
@@ -161,13 +156,8 @@ local function UpdateTickMarks()
             tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
             tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
             tick:Show()
-
-            label:ClearAllPoints()
-            label:SetPoint("LEFT", bar, "BOTTOMLEFT", bar:GetWidth() + 4, yOffset)
-            label:Show()
         else
             tick:Hide()
-            label:Hide()
         end
     end
 end
@@ -178,36 +168,12 @@ local function CreateTickMarks()
         tick:SetColorTexture(1, 1, 1, 0.85)
         tick:SetHeight(2)
         tickLines[fraction] = tick
-
-        local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        label:SetText("")
-        label:SetTextColor(1, 1, 1, 0.9)
-        tickLabels[fraction] = label
     end
     UpdateTickMarks()
 end
 
 local function SetBarColor()
     bar:SetStatusBarColor(1.0, 1.0, 1.0, 0.95)
-end
-
-local function OnBarEnter(self)
-    local absorb = GetAbsorbAmount("player")
-    local absorbText = tostring(absorb or 0)
-
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Blood Shield Overlay", 1, 1, 1)
-    GameTooltip:AddLine(string.format("Absorb: %s", absorbText), 0.9, 0.9, 0.9)
-    GameTooltip:AddLine("Value shown live from the absorb API", 0.9, 0.9, 0.9)
-    if config.locked then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("/shield unlock to move this bar", 0.6, 0.6, 0.6)
-    end
-    GameTooltip:Show()
-end
-
-local function OnBarLeave()
-    GameTooltip:Hide()
 end
 
 local function CreateBar()
@@ -227,12 +193,10 @@ local function CreateBar()
     bar:SetReverseFill(false)
     bar:Show()
 
-    bg = bar:CreateTexture(nil, "BACKGROUND")
+    local bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
 
-    bar:SetScript("OnEnter", OnBarEnter)
-    bar:SetScript("OnLeave", OnBarLeave)
     bar:SetScript("OnSizeChanged", UpdateTickMarks)
 
     CreateTickMarks()
