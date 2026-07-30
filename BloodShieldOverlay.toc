@@ -1,6 +1,6 @@
 ## Interface: 120007
 ## Title: Blood Shield Overlay
-## Notes: Visually displays your Blood Shield amount over your health as a percentage bar, /shield to move it
+## Notes: Visually displays your Shield amount over your health as a percentage bar, /shield to move it
 ## Author: Seikarii
 ## Version: 1.1.1
 ## IconTexture: 237540

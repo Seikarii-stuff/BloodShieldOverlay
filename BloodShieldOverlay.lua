@@ -52,6 +52,17 @@ local function ApplyDefaults(db)
             db[key] = value
         end
     end
+
+    if type(db.width) ~= "number" or db.width <= 0 then
+        db.width = DEFAULTS.width
+    end
+    if type(db.height) ~= "number" or db.height <= 0 then
+        db.height = DEFAULTS.height
+    end
+    if type(db.capMultiplier) ~= "number" or db.capMultiplier < MIN_CAP_PERCENT / 100 then
+        db.capMultiplier = DEFAULTS.capMultiplier
+    end
+
     return db
 end
 
@@ -172,10 +183,6 @@ local function CreateTickMarks()
     UpdateTickMarks()
 end
 
-local function SetBarColor()
-    bar:SetStatusBarColor(1.0, 1.0, 1.0, 0.95)
-end
-
 local function CreateBar()
     if bar then
         return
@@ -184,8 +191,8 @@ local function CreateBar()
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
     bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
     bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    SetBarColor()
+    bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    bar:SetStatusBarColor(1.0, 1.0, 1.0, 1.0)
     -- Keep the bar below most opened panels so profession and other windows cover it.
     bar:SetFrameStrata("LOW")
     bar:SetFrameLevel(1)
@@ -396,6 +403,7 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
             UpdateTickMarks()
         end
         RefreshConfigMenuFields()
+        UpdateBar()
         print("BloodShieldOverlay settings reset to defaults.")
         return
     end
