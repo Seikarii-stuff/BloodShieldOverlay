@@ -25,6 +25,8 @@ local DEFAULTS = {
     width = 18,
     height = 150,
     locked = true,
+    -- Kept per character: false means the external bar remains visible.
+    hideExternalBar = false,
     -- How much overshoot the bar can display, expressed as a multiple of
     -- max health. 2.0 = the bar tops out at 200% of max health.
     capMultiplier = 2.0,
@@ -62,6 +64,9 @@ local function ApplyDefaults(db)
     end
     if type(db.capMultiplier) ~= "number" or db.capMultiplier < MIN_CAP_PERCENT / 100 then
         db.capMultiplier = DEFAULTS.capMultiplier
+    end
+    if type(db.hideExternalBar) ~= "boolean" then
+        db.hideExternalBar = DEFAULTS.hideExternalBar
     end
 
     return db
@@ -199,8 +204,6 @@ local function CreateBar()
     bar:SetFrameLevel(1)
     bar:SetOrientation("VERTICAL")
     bar:SetReverseFill(false)
-    bar:Show()
-
     local bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
@@ -211,13 +214,25 @@ local function CreateBar()
     UpdateBarLock()
 end
 
+local function UpdateExternalBarVisibility()
+    if not bar then
+        return
+    end
+
+    if config.hideExternalBar then
+        bar:Hide()
+    else
+        bar:Show()
+    end
+end
+
 local function CreateConfigMenu()
     if menuFrame then
         return
     end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(320, 230)
+    menuFrame:SetSize(320, 260)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -281,9 +296,18 @@ local function CreateConfigMenu()
     capHint:SetText("top of the bar,\ne.g. 200")
     capHint:SetJustifyH("LEFT")
 
+    local visibilityCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
+    visibilityCheck:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", -2, -12)
+    visibilityCheck.Text:SetText("Hide external shield bar")
+    visibilityCheck:SetScript("OnClick", function(self)
+        config.hideExternalBar = self:GetChecked() and true or false
+        UpdateExternalBarVisibility()
+    end)
+    menuFrame.visibilityCheck = visibilityCheck
+
     local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     applyButton:SetSize(90, 24)
-    applyButton:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", 0, -16)
+    applyButton:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 2, -10)
     applyButton:SetText("Apply")
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
@@ -337,6 +361,7 @@ local function RefreshConfigMenuFields()
     menuFrame.widthEdit:SetText(tostring(config.width or DEFAULTS.width))
     menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
+    menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
 end
 
 local function ShowConfigMenu()
@@ -352,6 +377,13 @@ local function UpdateBar(absorb, maxHP)
     if not bar then
         return
     end
+
+    if config.hideExternalBar then
+        bar:Hide()
+        return
+    end
+
+    bar:Show()
 
     absorb = absorb or GetAbsorbAmount("player")
     maxHP = maxHP or UnitHealthMax("player") or 1
@@ -394,6 +426,19 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         UpdateBarLock()
         print("BloodShieldOverlay unlocked. Drag the bar to move it, then type /shield lock.")
         return
+    elseif msg == "hide" then
+        config.hideExternalBar = true
+        UpdateExternalBarVisibility()
+        RefreshConfigMenuFields()
+        print("BloodShieldOverlay external bar hidden for this character.")
+        return
+    elseif msg == "show" then
+        config.hideExternalBar = false
+        UpdateExternalBarVisibility()
+        UpdateBar()
+        RefreshConfigMenuFields()
+        print("BloodShieldOverlay external bar shown for this character.")
+        return
     elseif msg == "reset" then
         ResetConfig()
         if bar then
@@ -417,6 +462,7 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
 end
 SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
+SLASH_BLOODSHIELDOVERLAY3 = "/shields"
 
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
