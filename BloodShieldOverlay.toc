@@ -1,6 +1,6 @@
 ## Interface: 120007
-## Title: Blood Shield Overlay
-## Notes: /shield to move, /shield reset to default, 20%-200% functional shield bar, shows both shield bar and shields in raid/player frames.
+## Title: Shield Overlay
+## Notes: /shield to move, /shield reset to default,/shield hide/show to show/hide shield bar, 20%-200% functional shield bar, shows both shield bar and shields in raid/player frames.
 ## Author: Seikarii
 ## Version: 1.2.4
 ## IconTexture: 237540
