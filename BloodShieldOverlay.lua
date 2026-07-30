@@ -16,6 +16,7 @@ local tickLines = {}
 local tickLabels = {}
 -- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
+local MIN_CAP_PERCENT = 20
 
 local DEFAULTS = {
     point = "BOTTOM",
@@ -56,6 +57,16 @@ local function ApplyDefaults(db)
     return db
 end
 
+local function CopySettings(source)
+    local copy = {}
+    if type(source) == "table" then
+        for key, value in pairs(source) do
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
 -- Ensures the current character has its own profile with every expected setting.
 local function EnsureConfig()
     local profiles = EnsureProfileStore()
@@ -63,7 +74,7 @@ local function EnsureConfig()
 
     if not profiles[profileKey] then
         if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
-            profiles[profileKey] = ApplyDefaults(BloodShieldOverlayDB)
+            profiles[profileKey] = CopySettings(BloodShieldOverlayDB)
         else
             profiles[profileKey] = {}
         end
@@ -311,8 +322,8 @@ local function CreateConfigMenu()
             print("BloodShieldOverlay: width and height must be positive numbers.")
             return
         end
-        if not (capPercent and capPercent >= 100) then
-            print("BloodShieldOverlay: Max %% must be a number of at least 100.")
+        if not (capPercent and capPercent >= MIN_CAP_PERCENT) then
+            print(string.format("BloodShieldOverlay: Max %% must be a number of at least %d.", MIN_CAP_PERCENT))
             return
         end
 
@@ -363,8 +374,6 @@ local function ShowConfigMenu()
 end
 
 local function UpdateBar()
-    EnsureConfig()
-
     if not bar then
         CreateBar()
     end
@@ -438,8 +447,6 @@ SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
-addon:RegisterEvent("PLAYER_ENTERING_WORLD")
-addon:RegisterEvent("UNIT_AURA")
 addon:RegisterEvent("UNIT_HEALTH")
 addon:RegisterEvent("UNIT_MAXHEALTH")
 addon:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
