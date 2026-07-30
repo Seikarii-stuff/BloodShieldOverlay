@@ -1,8 +1,8 @@
 ## Interface: 120007
 ## Title: Blood Shield Overlay
-## Notes: Movable player-absorb percentage bar with per-character settings, plus passive white overlays for Blizzard party/raid frames. /shield configures, unlock to move,lock  to close, /shield reset to default; display cap supports 20%-250%+.
+## Notes: /shield to move, /shield reset to default, 20%-200% functional shield bar, shows both shield bar and shields in raid frames.
 ## Author: Seikarii
-## Version: 1.2.0-beta
+## Version: 1.2.1
 ## IconTexture: 237540
 ## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
 
