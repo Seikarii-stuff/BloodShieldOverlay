@@ -8,8 +8,11 @@ local manager = CreateFrame("Frame")
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 local discoveryPending = false
+local lastDiscoveryTime = 0
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "health", "Health" }
+local FRAME_SCAN_LIMIT = 200
+local DISCOVERY_COOLDOWN = 0.25
 
 local function IsStatusBar(frame)
     return frame and frame.GetObjectType and frame:GetObjectType() == "StatusBar"
@@ -52,6 +55,11 @@ end
 local function GetUnit(frame)
     if type(frame.unit) == "string" then
         return frame.unit
+    end
+
+    local name = GetFrameName(frame)
+    if name ~= "" and not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
+        return
     end
 
     local ok, unit = pcall(frame.GetAttribute, frame, "unit")
@@ -140,9 +148,15 @@ local function DiscoverFrames()
     end
 
     local frame
+    local scannedFrames = 0
     while true do
         frame = EnumerateFrames(frame)
         if not frame then
+            break
+        end
+
+        scannedFrames = scannedFrames + 1
+        if scannedFrames > FRAME_SCAN_LIMIT then
             break
         end
 
@@ -201,6 +215,12 @@ local function QueueDiscoverAndUpdate()
         return
     end
 
+    local now = GetTime()
+    if now - lastDiscoveryTime < DISCOVERY_COOLDOWN then
+        return
+    end
+
+    lastDiscoveryTime = now
     discoveryPending = true
     C_Timer.After(0.2, function()
         discoveryPending = false
