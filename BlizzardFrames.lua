@@ -1,5 +1,7 @@
 -- Absorb overlays for Blizzard's player, personal-resource, party, and raid frames.
 -- Frames are discovered out of combat; combat updates only change overlay values.
+-- # Module: Frame discovery and overlay attachment.
+-- # This file owns the logic that finds Blizzard unit frames and attaches absorb overlays.
 
 local addon = _G.BloodShieldOverlay
 local manager = CreateFrame("Frame")
@@ -26,6 +28,8 @@ local function GetFrameName(frame)
     return ""
 end
 
+-- Traverses a frame and its descendants to find the first health status bar.
+-- # DEV: This is intentionally recursive to support nested Blizzard frame layouts.
 local function GetHealthBar(frame)
     if not frame then
         return
@@ -58,6 +62,8 @@ local function GetHealthBar(frame)
     end
 end
 
+-- Attempts to resolve a frame's unit token.
+-- # DEV: This uses both explicit unit fields and name-based Blizzard heuristics.
 local function GetUnit(frame)
     if type(frame.unit) == "string" then
         return frame.unit
@@ -109,15 +115,15 @@ local function AddOverlay(unit, healthBar)
     overlays[unit][healthBar] = entry
 end
 
+-- Ensures party-related native Blizzard frames are visible and updated.
+-- # DEV: This is separate from overlay creation so refresh logic can stay isolated.
 local function TryEnsurePartyFramesVisible()
     local function EnsureFrameShown(frame)
         if not frame then
             return
         end
 
-        if frame.IsShown then
-            frame:Show()
-        else
+        if frame.Show then
             frame:Show()
         end
     end
@@ -154,6 +160,11 @@ local function TryEnsurePartyFramesVisible()
     end
 end
 
+-- Expose the party refresh helper so the main addon can invoke it without owning
+-- the party-frame discovery logic itself.
+addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
+
+-- # DEV: The main addon should not need to know the details of unit frame discovery.
 local function GetPlayerFrameHealthBar()
     -- The modern PlayerFrame does not expose its health bar directly.  It is
     -- nested inside the new content frame, so the generic frame scan cannot

@@ -1,4 +1,6 @@
 -- Shared event dispatcher for player absorb updates.
+-- # DEV: This core module decouples absorption updates from UI and frame discovery.
+-- # DEV: Other modules can register listeners without depending directly on the WoW event system.
 
 local core = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = core

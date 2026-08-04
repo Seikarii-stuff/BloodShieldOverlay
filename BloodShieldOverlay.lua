@@ -14,48 +14,9 @@ local bar
 local menuFrame
 local tickLines = {}
 
-local function TryShowPartyFrame()
-    local function ShowFrame(frame)
-        if not frame then
-            return
-        end
+-- # DEV: Main addon module owns the bar UI and configuration behavior.
+-- # DEV: Frame discovery and absorb overlay rendering are delegated to other modules.
 
-        if frame.Show then
-            frame:Show()
-        end
-    end
-
-    if PartyFrame then
-        ShowFrame(PartyFrame)
-        if PartyFrame.Update then
-            PartyFrame:Update()
-        end
-    end
-
-    if CompactPartyFrame then
-        ShowFrame(CompactPartyFrame)
-        if _G.CompactPartyFrame_Update then
-            _G.CompactPartyFrame_Update()
-        end
-    end
-
-    local partyMemberFrame = _G.PartyMemberFrame1
-    if partyMemberFrame then
-        ShowFrame(partyMemberFrame)
-        partyMemberFrame.unit = "player"
-        if _G.PartyMemberFrame_Update then
-            _G.PartyMemberFrame_Update(partyMemberFrame, "player")
-        end
-    end
-
-    local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
-    if compactPartyMemberFrame then
-        ShowFrame(compactPartyMemberFrame)
-        if compactPartyMemberFrame.SetUnit then
-            compactPartyMemberFrame:SetUnit("player")
-        end
-    end
-end
 -- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
@@ -78,6 +39,7 @@ local DEFAULTS = {
 -- Runtime reference to the current character profile.
 local config = {}
 
+-- Config and saved-variable helpers.
 local function GetProfileKey()
     local playerName = UnitName("player") or "Player"
     local realmName = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Unknown"
@@ -269,6 +231,7 @@ local function UpdateExternalBarVisibility()
     end
 end
 
+-- UI creation for the slash-command configuration menu.
 local function CreateConfigMenu()
     if menuFrame then
         return
@@ -452,8 +415,12 @@ local function OnEvent(self, event, arg1)
         UpdateBar()
     end
 
+    -- # DEV: Party frame refresh is delegated to BlizzardFrames.lua.
+
     if event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PARTY_INVITE_REQUEST" or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
-        C_Timer.After(0.2, TryShowPartyFrame)
+        if core.RefreshPartyFrames then
+            C_Timer.After(0.2, core.RefreshPartyFrames)
+        end
     end
 end
 
@@ -500,8 +467,12 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         print("BloodShieldOverlay settings reset to defaults.")
         return
     elseif msg == "party" then
-        TryShowPartyFrame()
-        print("BloodShieldOverlay: party frames refreshed.")
+        if core.RefreshPartyFrames then
+            core.RefreshPartyFrames()
+            print("BloodShieldOverlay: party frames refreshed.")
+        else
+            print("BloodShieldOverlay: party refresh unavailable.")
+        end
         return
     end
 

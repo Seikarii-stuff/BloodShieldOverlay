@@ -1,4 +1,6 @@
 -- Reusable, mouse-transparent absorb overlay for a unit health bar.
+-- # DEV: This module provides a lightweight overlay helper for any status bar.
+-- # DEV: It is intentionally kept independent from frame discovery and update logic.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
