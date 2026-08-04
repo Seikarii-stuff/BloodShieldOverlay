@@ -93,10 +93,10 @@ local function IsSupportedUnit(unit)
     local inRaid = IsInRaid and IsInRaid()
     
     if inRaid then
-        -- En Raid solo procesamos 'player' y los miembros de 'raid'
+        -- En Raid ignoramos los marcos de party para evitar duplicados
         return unit == "player" or unit:match("^raid%d+$")
     else
-        -- En Party o Solo procesamos 'player' y 'party'
+        -- Estando solo o en party, aceptamos player y party
         return unit == "player" or unit:match("^party%d+$")
     end
 end
@@ -129,16 +129,11 @@ end
 local function TryEnsurePartyFramesVisible()
     local inRaid = IsInRaid and IsInRaid()
     local inGroup = IsInGroup and IsInGroup()
-    
-    -- Si estamos en raid, nos aseguramos de OCULTAR los marcos de party
+
+    -- 1. Si estamos en RAID: Ocultamos marcos de party para que solo salga la Raid
     if inRaid then
         if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
         if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
-        return
-    end
-
-    -- Si estamos solos, no forzamos nada
-    if not inGroup then
         return
     end
 
@@ -147,6 +142,7 @@ local function TryEnsurePartyFramesVisible()
         if frame.Show then frame:Show() end
     end
 
+    -- 2. Si estamos en PARTY o SOLOS: Mostramos el marco de party
     if PartyFrame then
         EnsureFrameShown(PartyFrame)
         if PartyFrame.Update then PartyFrame:Update() end
@@ -160,6 +156,11 @@ local function TryEnsurePartyFramesVisible()
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         EnsureFrameShown(partyMemberFrame)
+        -- Si no estamos en grupo (estamos solos), forzamos "player" en party1
+        -- Si ESTAMOS en grupo, respetamos la unidad asignada por el juego
+        if not inGroup then
+            partyMemberFrame.unit = "player"
+        end
         if _G.PartyMemberFrame_Update and partyMemberFrame.unit then
             _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit)
         end
@@ -168,6 +169,9 @@ local function TryEnsurePartyFramesVisible()
     local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
     if compactPartyMemberFrame then
         EnsureFrameShown(compactPartyMemberFrame)
+        if not inGroup and compactPartyMemberFrame.SetUnit then
+            compactPartyMemberFrame:SetUnit("player")
+        end
     end
 end
 
