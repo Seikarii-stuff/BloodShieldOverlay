@@ -90,7 +90,15 @@ local function GetUnit(frame)
 end
 
 local function IsSupportedUnit(unit)
-    return unit == "player" or unit:match("^party%d+$") or unit:match("^raid%d+$")
+    local inRaid = IsInRaid and IsInRaid()
+    
+    if inRaid then
+        -- En Raid solo procesamos 'player' y los miembros de 'raid'
+        return unit == "player" or unit:match("^raid%d+$")
+    else
+        -- En Party o Solo procesamos 'player' y 'party'
+        return unit == "player" or unit:match("^party%d+$")
+    end
 end
 
 local function AddOverlay(unit, healthBar)
@@ -119,45 +127,47 @@ end
 -- Ensures party-related native Blizzard frames are visible and updated.
 -- # DEV: This is separate from overlay creation so refresh logic can stay isolated.
 local function TryEnsurePartyFramesVisible()
-    local function EnsureFrameShown(frame)
-        if not frame then
-            return
-        end
+    local inRaid = IsInRaid and IsInRaid()
+    local inGroup = IsInGroup and IsInGroup()
+    
+    -- Si estamos en raid, nos aseguramos de OCULTAR los marcos de party
+    if inRaid then
+        if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
+        if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
+        return
+    end
 
-        if frame.Show then
-            frame:Show()
-        end
+    -- Si estamos solos, no forzamos nada
+    if not inGroup then
+        return
+    end
+
+    local function EnsureFrameShown(frame)
+        if not frame then return end
+        if frame.Show then frame:Show() end
     end
 
     if PartyFrame then
         EnsureFrameShown(PartyFrame)
-        if PartyFrame.Update then
-            PartyFrame:Update()
-        end
+        if PartyFrame.Update then PartyFrame:Update() end
     end
 
     if CompactPartyFrame then
         EnsureFrameShown(CompactPartyFrame)
-        if _G.CompactPartyFrame_Update then
-            _G.CompactPartyFrame_Update()
-        end
+        if _G.CompactPartyFrame_Update then _G.CompactPartyFrame_Update() end
     end
 
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         EnsureFrameShown(partyMemberFrame)
-        partyMemberFrame.unit = "player"
-        if _G.PartyMemberFrame_Update then
-            _G.PartyMemberFrame_Update(partyMemberFrame, "player")
+        if _G.PartyMemberFrame_Update and partyMemberFrame.unit then
+            _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit)
         end
     end
 
     local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
     if compactPartyMemberFrame then
         EnsureFrameShown(compactPartyMemberFrame)
-        if compactPartyMemberFrame.SetUnit then
-            compactPartyMemberFrame:SetUnit("player")
-        end
     end
 end
 
