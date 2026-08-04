@@ -13,6 +13,49 @@ local addon = CreateFrame("Frame")
 local bar
 local menuFrame
 local tickLines = {}
+
+local function TryShowPartyFrame()
+    local function ShowFrame(frame)
+        if not frame then
+            return
+        end
+
+        if frame.Show then
+            frame:Show()
+        end
+    end
+
+    if PartyFrame then
+        ShowFrame(PartyFrame)
+        if PartyFrame.Update then
+            PartyFrame:Update()
+        end
+    end
+
+    if CompactPartyFrame then
+        ShowFrame(CompactPartyFrame)
+        if _G.CompactPartyFrame_Update then
+            _G.CompactPartyFrame_Update()
+        end
+    end
+
+    local partyMemberFrame = _G.PartyMemberFrame1
+    if partyMemberFrame then
+        ShowFrame(partyMemberFrame)
+        partyMemberFrame.unit = "player"
+        if _G.PartyMemberFrame_Update then
+            _G.PartyMemberFrame_Update(partyMemberFrame, "player")
+        end
+    end
+
+    local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
+    if compactPartyMemberFrame then
+        ShowFrame(compactPartyMemberFrame)
+        if compactPartyMemberFrame.SetUnit then
+            compactPartyMemberFrame:SetUnit("player")
+        end
+    end
+end
 -- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
@@ -408,6 +451,10 @@ local function OnEvent(self, event, arg1)
         EnsureConfig()
         UpdateBar()
     end
+
+    if event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PARTY_INVITE_REQUEST" or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+        C_Timer.After(0.2, TryShowPartyFrame)
+    end
 end
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
@@ -452,6 +499,10 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         UpdateBar()
         print("BloodShieldOverlay settings reset to defaults.")
         return
+    elseif msg == "party" then
+        TryShowPartyFrame()
+        print("BloodShieldOverlay: party frames refreshed.")
+        return
     end
 
     if config.locked then
@@ -466,4 +517,10 @@ SLASH_BLOODSHIELDOVERLAY3 = "/shields"
 
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
+addon:RegisterEvent("PLAYER_ENTERING_WORLD")
+addon:RegisterEvent("GROUP_ROSTER_UPDATE")
+addon:RegisterEvent("PARTY_INVITE_REQUEST")
+addon:RegisterEvent("PARTY_LEADER_CHANGED")
+addon:RegisterEvent("PLAYER_REGEN_ENABLED")
+addon:RegisterEvent("PLAYER_REGEN_DISABLED")
 addon:SetScript("OnEvent", OnEvent)
