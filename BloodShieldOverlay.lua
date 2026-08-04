@@ -467,7 +467,10 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         print("BloodShieldOverlay settings reset to defaults.")
         return
     elseif msg == "party" then
-        if core.RefreshPartyFrames then
+        if core.RequestRefresh then
+            core.RequestRefresh()
+            print("BloodShieldOverlay: party frames refreshed.")
+        elseif core.RefreshPartyFrames then
             core.RefreshPartyFrames()
             print("BloodShieldOverlay: party frames refreshed.")
         else

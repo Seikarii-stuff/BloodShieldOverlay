@@ -11,6 +11,7 @@ local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 local discoveryPending = false
 local lastDiscoveryTime = 0
+local pendingRefresh = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "health", "Health" }
 local FRAME_SCAN_LIMIT = 200
@@ -311,21 +312,37 @@ end
 -- Several UI events can arrive together (for example while entering the
 -- world).  Coalescing them avoids repeatedly enumerating every UI frame.
 local function QueueDiscoverAndUpdate()
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
+
     if discoveryPending then
         return
     end
 
     local now = GetTime()
-    if now - lastDiscoveryTime < DISCOVERY_COOLDOWN then
+    if not pendingRefresh and now - lastDiscoveryTime < DISCOVERY_COOLDOWN then
         return
     end
 
+    pendingRefresh = false
     lastDiscoveryTime = now
     discoveryPending = true
     C_Timer.After(0.35, function()
         discoveryPending = false
+        pendingRefresh = false
         DiscoverAndUpdate()
     end)
+end
+
+-- Requests a full refresh of party/raid frame discovery and overlay updates.
+-- This is used both by the main addon events and by the /shield party command.
+addon.RequestRefresh = function()
+    TryEnsurePartyFramesVisible()
+    if QueueDiscoverAndUpdate then
+        QueueDiscoverAndUpdate()
+    end
 end
 
 addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
@@ -336,11 +353,14 @@ manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
 manager:RegisterEvent("PLAYER_REGEN_ENABLED")
+manager:RegisterEvent("PLAYER_REGEN_DISABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 manager:RegisterEvent("UNIT_HEALTH")
 manager:RegisterEvent("UNIT_MAXHEALTH")
+manager:RegisterEvent("UI_SCALE_CHANGED")
+manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
         if unit and unit ~= "player" and overlays[unit] then
