@@ -1,0 +1,8 @@
+## Interface: 120007
+## Title: Always In Party
+## Notes: Muestra un marco de party simulado con el jugador como Party 1, incluso si no estás en un grupo real.
+## Author: Copilot
+## Version: 1.0.0
+## SavedVariables: AlwaysInPartyDB
+
+AlwaysInParty.lua

@@ -31,10 +31,6 @@ local function GetHealthBar(frame)
         return
     end
 
-    if IsStatusBar(frame) then
-        return frame
-    end
-
     for _, key in ipairs(HEALTH_BAR_KEYS) do
         local healthBar = frame[key]
         if IsStatusBar(healthBar) then
@@ -42,12 +38,22 @@ local function GetHealthBar(frame)
         end
     end
 
-    for _, child in ipairs({ frame:GetChildren() }) do
-        if IsStatusBar(child) then
-            local name = GetFrameName(child)
-            if name:find("Health") then
-                return child
+    if frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            local healthBar = GetHealthBar(child)
+            if healthBar then
+                return healthBar
             end
+        end
+    end
+
+    if IsStatusBar(frame) then
+        local name = GetFrameName(frame)
+        if name == "" then
+            return frame
+        end
+        if name:find("Health") then
+            return frame
         end
     end
 end
@@ -101,6 +107,51 @@ local function AddOverlay(unit, healthBar)
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
+end
+
+local function TryEnsurePartyFramesVisible()
+    local function EnsureFrameShown(frame)
+        if not frame then
+            return
+        end
+
+        if frame.IsShown then
+            frame:Show()
+        else
+            frame:Show()
+        end
+    end
+
+    if PartyFrame then
+        EnsureFrameShown(PartyFrame)
+        if PartyFrame.Update then
+            PartyFrame:Update()
+        end
+    end
+
+    if CompactPartyFrame then
+        EnsureFrameShown(CompactPartyFrame)
+        if _G.CompactPartyFrame_Update then
+            _G.CompactPartyFrame_Update()
+        end
+    end
+
+    local partyMemberFrame = _G.PartyMemberFrame1
+    if partyMemberFrame then
+        EnsureFrameShown(partyMemberFrame)
+        partyMemberFrame.unit = "player"
+        if _G.PartyMemberFrame_Update then
+            _G.PartyMemberFrame_Update(partyMemberFrame, "player")
+        end
+    end
+
+    local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
+    if compactPartyMemberFrame then
+        EnsureFrameShown(compactPartyMemberFrame)
+        if compactPartyMemberFrame.SetUnit then
+            compactPartyMemberFrame:SetUnit("player")
+        end
+    end
 end
 
 local function GetPlayerFrameHealthBar()
@@ -174,6 +225,8 @@ local function DiscoverFrames()
     if InCombatLockdown() then
         return
     end
+
+    TryEnsurePartyFramesVisible()
 
     local foundHealthBars = setmetatable({}, { __mode = "k" })
     local playerHealthBar = GetPlayerFrameHealthBar()
@@ -258,7 +311,7 @@ local function QueueDiscoverAndUpdate()
 
     lastDiscoveryTime = now
     discoveryPending = true
-    C_Timer.After(0.2, function()
+    C_Timer.After(0.35, function()
         discoveryPending = false
         DiscoverAndUpdate()
     end)
@@ -292,5 +345,6 @@ manager:SetScript("OnEvent", function(_, event, unit)
         return
     end
 
+    TryEnsurePartyFramesVisible()
     QueueDiscoverAndUpdate()
 end)
