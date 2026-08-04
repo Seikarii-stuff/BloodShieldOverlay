@@ -331,6 +331,10 @@ end
 -- Several UI events can arrive together (for example while entering the
 -- world).  Coalescing them avoids repeatedly enumerating every UI frame.
 local function QueueDiscoverAndUpdate()
+    -- Ejecutamos la visibilidad del marco de party SIEMPRE al instante (en combate o fuera de él)
+    TryEnsurePartyFramesVisible()
+
+    -- Si estamos en combate, posponemos SOLO el escaneo pesado de la UI
     if InCombatLockdown() then
         pendingRefresh = true
         return
@@ -372,6 +376,13 @@ manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
 manager:RegisterEvent("PLAYER_REGEN_ENABLED")
+if event == "PLAYER_REGEN_ENABLED" then
+    if pendingRefresh then
+        pendingRefresh = false
+        DiscoverAndUpdate()
+    end
+    return
+end
 manager:RegisterEvent("PLAYER_REGEN_DISABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
