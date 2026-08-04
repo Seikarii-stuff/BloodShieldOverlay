@@ -58,7 +58,15 @@ local function GetUnit(frame)
     end
 
     local name = GetFrameName(frame)
-    if name ~= "" and not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
+    if name == "" then
+        return
+    end
+
+    if not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
+        return
+    end
+
+    if not frame.GetAttribute then
         return
     end
 
@@ -129,6 +137,39 @@ local function GetPersonalResourceHealthBar()
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
+local function TryAddFrameOverlay(frame, foundHealthBars)
+    if not frame then
+        return
+    end
+
+    local unit = GetUnit(frame)
+    if unit and IsSupportedUnit(unit) then
+        local healthBar = GetHealthBar(frame)
+        if healthBar then
+            AddOverlay(unit, healthBar)
+            foundHealthBars[healthBar] = true
+        end
+    end
+end
+
+local function ScanCompactFrames(foundHealthBars)
+    for _, prefix in ipairs({ "CompactPartyFrame", "CompactRaidFrame" }) do
+        for index = 1, 40 do
+            local frame = _G[prefix .. index]
+            if not frame then
+                break
+            end
+
+            TryAddFrameOverlay(frame, foundHealthBars)
+
+            local children = { frame:GetChildren() }
+            for _, child in ipairs(children) do
+                TryAddFrameOverlay(child, foundHealthBars)
+            end
+        end
+    end
+end
+
 local function DiscoverFrames()
     if InCombatLockdown() then
         return
@@ -147,6 +188,8 @@ local function DiscoverFrames()
         foundHealthBars[personalResourceHealthBar] = true
     end
 
+    ScanCompactFrames(foundHealthBars)
+
     local frame
     local scannedFrames = 0
     while true do
@@ -160,14 +203,7 @@ local function DiscoverFrames()
             break
         end
 
-        local unit = GetUnit(frame)
-        if unit and IsSupportedUnit(unit) then
-            local healthBar = GetHealthBar(frame)
-            if healthBar then
-                AddOverlay(unit, healthBar)
-                foundHealthBars[healthBar] = true
-            end
-        end
+        TryAddFrameOverlay(frame, foundHealthBars)
     end
 
     for unit, entries in pairs(overlays) do
