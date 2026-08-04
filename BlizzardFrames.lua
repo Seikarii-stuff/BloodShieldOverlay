@@ -14,7 +14,7 @@ local lastDiscoveryTime = 0
 local pendingRefresh = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "health", "Health" }
-local FRAME_SCAN_LIMIT = 200
+local FRAME_SCAN_LIMIT = 1000
 local DISCOVERY_COOLDOWN = 0.25
 
 local function IsStatusBar(frame)
@@ -66,6 +66,11 @@ end
 -- Attempts to resolve a frame's unit token.
 -- # DEV: This uses both explicit unit fields and name-based Blizzard heuristics.
 local function GetUnit(frame)
+    -- En marcos de party/raid compactos de Blizzard, 'displayedUnit' es más preciso
+    if type(frame.displayedUnit) == "string" then
+        return frame.displayedUnit
+    end
+
     if type(frame.unit) == "string" then
         return frame.unit
     end
@@ -377,14 +382,18 @@ manager:RegisterEvent("UI_SCALE_CHANGED")
 manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-        if unit and unit ~= "player" and overlays[unit] then
-            UpdateUnit(unit)
+        if unit then
+            -- Forzar actualización tanto si la unidad es 'player' como si coincide con la de party
+            if unit == "player" then
+                UpdateUnit("player")
+            end
+            if overlays[unit] then
+                UpdateUnit(unit)
+            end
         end
         return
     end
 
-    -- Only the player's nameplate can affect the Personal Resource Display.
-    -- Ignoring other units prevents a full frame scan when enemies appear.
     if (event == "NAME_PLATE_UNIT_ADDED" or event == "NAME_PLATE_UNIT_REMOVED")
         and (not unit or not UnitIsUnit(unit, "player")) then
         return
