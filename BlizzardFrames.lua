@@ -376,13 +376,6 @@ manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
 manager:RegisterEvent("PLAYER_REGEN_ENABLED")
-if event == "PLAYER_REGEN_ENABLED" then
-    if pendingRefresh then
-        pendingRefresh = false
-        DiscoverAndUpdate()
-    end
-    return
-end
 manager:RegisterEvent("PLAYER_REGEN_DISABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
@@ -391,7 +384,17 @@ manager:RegisterEvent("UNIT_HEALTH")
 manager:RegisterEvent("UNIT_MAXHEALTH")
 manager:RegisterEvent("UI_SCALE_CHANGED")
 manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
+
 manager:SetScript("OnEvent", function(_, event, unit)
+    -- Aquí está tu bloque exacto para cuando sales de combate:
+    if event == "PLAYER_REGEN_ENABLED" then
+        if pendingRefresh then
+            pendingRefresh = false
+            DiscoverAndUpdate()
+        end
+        return
+    end
+
     if event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
         if unit then
             -- Forzar actualización tanto si la unidad es 'player' como si coincide con la de party
