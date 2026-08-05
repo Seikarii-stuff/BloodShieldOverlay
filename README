@@ -1,0 +1,191 @@
+Buscar chats
+Imágenes
+Videos
+Biblioteca
+Nuevo cuaderno
+Crear un SO para Agente IA
+Generación de README para Addon WoW
+Error en Barras de Party WoW
+Macros y Addons para Rango en WoW
+Comando Gestor Tiempos Reutilización WoW
+Alertas de emergencia en España: ES-Alert
+API Blizzard Bloquea Casteos de Jefes
+Pantalla antigua sin luz: diagnóstico
+Ajo y Picor Ocular: ¿Relación?
+Explorando APIs de World of Warcraft
+Addon WoW: Cooldown de Habilidades con Alt+Clic
+El Significado Espiritual de "Ser Tu Luna"
+Ojos irritados por polvo: remedios caseros
+Armadura Dinámica del Guerrero Protección
+Publicar Addon en CurseForge
+Addons para Escudo DK Blood
+Tauren Racial: Vida Base vs. Total
+Gente que al despertar espiritualmente y empezar a comer mejor y cuidarse tanto física como mental y espiritualmente a empezado a ser acosada por animales ,tanto perros domésticos y sociales como salvajes, a que se debe, no se supone que la naturaleza debería de estar a favor y no en contra?
+Macro de WoW: Selección de Objetivo
+Alexa y el apocalipsis zombie
+Pala vs Lanza: Apocalipsis Supervivencia
+que dia empieza la siguiente temporada del wow
+Origen del trabalenguas "El cielo está"
+Nombres Originales Para Dron Comprador
+LoL Classic: ¿Tiene Ranked?
+Por qué no camisetas de fútbol ajustadas
+Evitar atascos de pelo en el lavabo
+Jugar con Menos Jugadores: ¿Es Posible?
+Sentido evolutivo del vello facial humano
+Gol con camiseta rota: Reglas
+WASD en LoL: Posible pero Prohibido
+CS2 Premier Percentil Explicado
+Mercado Steam: Anuncios y Precios
+"Does Not" vs. "Doesn't": Usos
+Béjar, España Según tus lugares (casa) Actualizar ubicación
+Conversación con Gemini
+
+hazme el readme con todos los datos necesarios del addon y funciones y comandos, ademas de revisar el codigo y poner un apartado de posibles futuros updates con mejoras de rendimiento/limpieza de codigo , no arreglues el codigo solo haz el readme, esta es una version definitiva testeada
+
+Your README file is ready
+Ícono de MD
+README
+ MD 
+
+He generado el archivo README.md completo y detallado en base al código de tu versión definitiva. A continuación, te resumo la estructura que se ha incluido en el documento:  
+📄 Contenido resumido del README.md generado:
+
+    Descripción General: Explicación clara de la funcionalidad del addon (overlays sobre la UI nativa de Blizzard y la barra flotante independiente de escudos).  
+
+    Características Principales:
+
+        Overlays transparentes en PlayerFrame, PersonalResourceDisplay, CompactPartyFrame y CompactRaidFrame[cite: 1, 2].
+
+        Barra vertical con soporte para superar el 100% de absorción (hasta 200% o más)[cite: 3].
+
+        Ticks visuales al 50%, 100% y 150%[cite: 3].
+
+        Gestión de colas de escaneo (coalescing) fuera de combate para máximo rendimiento[cite: 2].
+
+        Perfiles independientes por personaje (BloodShieldOverlayProfiles)[cite: 3, 4].
+
+    Estructura del Addon y Funciones:
+
+        Explicación módulo por módulo (Core.lua, AbsorbIndicator.lua, BlizzardFrames.lua, BloodShieldOverlay.lua) detallando las funciones clave como RegisterPlayerUpdateListener, CreateAbsorbOverlay, DiscoverFrames, TryEnsurePartyFramesVisible, etc[cite: 1, 2, 3, 5].
+
+    Comandos de Chat (/shield, /shieldbar, /shields):
+
+        Tabla interactiva con todos los subcomandos (lock, unlock, hide, show, party, reset)[cite: 2, 3, 4].
+
+    Posibles Futuros Updates (Rendimiento y Limpieza de Código):
+
+        Escaneo de UI: Sustitución gradual de EnumerateFrames() por hooks específicos en los controladores de Blizzard (CompactUnitFrame_UpdateAll, NamePlateDriverFrame) para evitar iterar por marcos no relevantes[cite: 2].
+
+        Consolidación de Eventos: Unificación de manejadores UNIT_ABSORB_AMOUNT_CHANGED para evitar redundancias entre módulos y reducir la carga durante combates con spam de escudos/sanación[cite: 2, 5].
+
+        Modernización de GUI: Transición opcional del marco custom a la API nativa Settings.RegisterAddOnCategory de Blizzard.
+
+    Compatibilidad e Instalación: Requisitos de la interfaz por defecto y licencia MIT.  
+
+
+Gemini es una IA y puede cometer errores, incluso con información sobre personas. Tu privacidad y GeminiSe abrirá en una ventana nueva
+
+# Shield Overlay (BloodShieldOverlay)
+
+**Shield Overlay** es un addon ligero, optimizado y modular para **World of Warcraft**, diseñado específicamente para la interfaz original de Blizzard (Default UI). Muestra las barreras de absorción (escudos/absorbs) sobrepuestas directamente en los marcos de unidad del juego (Jugador, Pantalla de Recurso Personal, Grupo y Banda), además de proporcionar una barra vertical flotante altamente personalizable.
+
+Es ideal para clases con mecánicas intensivas de escudos (como el Caballero de la Muerte Sangre con *Escudo de Sangre / Blood Shield*, Sacerdotes Disciplina, Paladines Protección, etc.).
+
+---
+
+## 📋 Características Principales
+
+- **Overlays Integrados en Marcos de Blizzard**: Superpone barras blancas semi-transparentes de absorción directamente en los marcos de salud predeterminados del juego (PlayerFrame, Personal Resource Display, CompactPartyFrames y CompactRaidFrames) [cite: 1, 2].
+- **Barra Externa Flotante Personalizable**: Barra vertical modular que mide tu escudo respecto a tu salud máxima en tiempo real, permitiendo superar visualmente el 100% (hasta un 200% o más) para habilidades que permiten acumular grandes absorciones [cite: 3].
+- **Líneas de Marca (Ticks)**: Marcas visuales de referencia rápida situadas al 50%, 100% y 150% del total de salud [cite: 3].
+- **Menú de Configuración Integrado**: Interfaz gráfica rápida accesible para ajustar dimensiones, porcentaje máximo y visibilidad sin necesidad de editar código [cite: 3].
+- **Persistencia por Personaje**: Configuración guardada independientemente para cada personaje (`BloodShieldOverlayProfiles`) [cite: 3, 4].
+- **Gestión Out-of-Combat y Coalescencia de Eventos**: Análisis ligero de marcos y actualizaciones grupales programadas para garantizar 0 latencia o congelamientos (*stutters*) durante el combate [cite: 2].
+- **Modo "AlwaysInParty" / Visibilidad Forzada**: Garantiza que los marcos de grupo/party se mantengan visibles aun cuando estés jugando en solitario [cite: 2].
+
+---
+
+## 🛠️ Estructura del Addon y Funciones
+
+El proyecto sigue una arquitectura desacoplada y modular distribuida en los siguientes archivos [cite: 4]:
+
+### 1. `Core.lua` (Despachador de Eventos)
+Módulo central encargado de abstraer las actualizaciones de escudos del jugador sin acoplarse directamente a la interfaz [cite: 5].
+- **`core.RegisterPlayerUpdateListener(listener)`**: Registra funciones callback que se ejecutan automáticamente cada vez que la salud o absorción del jugador cambian (`UNIT_HEALTH`, `UNIT_MAXHEALTH`, `UNIT_ABSORB_AMOUNT_CHANGED`) [cite: 5].
+
+### 2. `AbsorbIndicator.lua` (Helper de Capas de Absorción)
+Contiene la lógica matemática y visual base para renderizar overlays de absorción sobre cualquier `StatusBar` de salud [cite: 1].
+- **`addon.CreateAbsorbOverlay(healthBar)`**: Crea una StatusBar blanca semi-transparente (`OVERLAY_ALPHA = 0.35`) con rellenado invertido (*ReverseFill*) anclada a la barra de vida [cite: 1].
+- **`addon.UpdateAbsorbOverlay(overlay, absorb, maxHealth)`**: Actualiza el rango (`0` a `maxHealth`) y el valor de absorción actual de la barra overlay [cite: 1].
+
+### 3. `BlizzardFrames.lua` (Descubrimiento y Vinculación de Marcos)
+Se encarga de escanear la UI de Blizzard, detectar marcos válidos y asignar los overlays respetando las restricciones de combate [cite: 2].
+- **`TryEnsurePartyFramesVisible()`**: Muestra y fuerza la actualización de los marcos de grupo (`PartyFrame`, `CompactPartyFrame`, `PartyMemberFrame1`, etc.) cuando estás solo o en grupo, y los oculta automáticamente si entras a una banda (Raid) [cite: 2].
+- **`DiscoverFrames()`**: Escanea de forma recursiva los marcos de jugador, recursos personales y listas de grupo/banda compactas para anclar los overlays [cite: 2].
+- **`QueueDiscoverAndUpdate()`**: Sistema de cola (*coalescing*) con temporizador (`C_Timer.After`) y tiempo de recarga (*cooldown*) de 0.25s para prevenir escaneos excesivos de la UI durante eventos continuos [cite: 2].
+- **`addon.RequestRefresh()`**: Expone el refresco completo de marcos para ser llamado externamente o mediante comandos [cite: 2].
+
+### 4. `BloodShieldOverlay.lua` (Barra Flotante y Menú GUI)
+Gestiona la barra flotante configurable del jugador y el menú gráfico de opciones `/shield` [cite: 3].
+- **`CreateBar()`**: Inicializa la StatusBar flotante vertical en `UIParent` [cite: 3].
+- **`CreateConfigMenu()`**: Construye la ventana de diálogo interactiva con inputs numéricos para modificar ancho, alto y límite de absorción [cite: 3].
+- **`UpdateTickMarks()`**: Reposiciona o esconde las líneas divisorias (50%, 100%, 150%) según la altura y el multiplicador máximo (*capMultiplier*) configurado [cite: 3].
+
+---
+
+## 💻 Comandos de Chat (Slash Commands)
+
+Puedes acceder a las opciones del addon utilizando cualquiera de los siguientes comandos [cite: 3]:
+- `/shield`
+- `/shieldbar`
+- `/shields`
+
+| Comando | Descripción |
+| :--- | :--- |
+| `/shield` | Abre la ventana gráfica de configuración [cite: 3]. |
+| `/shield unlock` (o `/shield move`) | Desbloquea la barra flotante para poder arrastrarla libremente por la pantalla [cite: 3]. |
+| `/shield lock` | Bloquea la barra flotante en su posición actual y oculta el menú [cite: 3]. |
+| `/shield hide` | Oculta la barra flotante externa para el personaje actual [cite: 3]. |
+| `/shield show` | Muestra la barra flotante externa para el personaje actual [cite: 3]. |
+| `/shield party` | Fuerza un refresco y re-escaneo inmediato de los marcos de grupo/party (útil si desaparecen tras usar el Edit Mode) [cite: 2, 3, 4]. |
+| `/shield reset` | Restablece todos los ajustes del personaje actual a los valores por defecto [cite: 3]. |
+
+---
+
+## 🚀 Análisis de Código y Posibles Futuros Updates
+
+Tras revisar detalladamente el código fuente de la versión actual, se han identificado las siguientes áreas de mejora para futuras actualizaciones enfocadas en **rendimiento**, **limpieza de código** y **compatibilidad**:
+
+### 1. Optimización del Escaneo de Marcos (`BlizzardFrames.lua`)
+- **Sustituir `EnumerateFrames()`**: En la función `DiscoverFrames()`, se realiza una iteración global con `EnumerateFrames()` limitada a 1000 iteraciones [cite: 2]. Esto escanea multitud de frames irrelevantes (botones, texturas, ventanas del sistema).
+  - *Futura mejora*: Sustituir la búsqueda genérica por hooks específicos (`hooksecurefunc`) en los gestores de marcos de Blizzard (`CompactUnitFrame_UpdateAll`, `NamePlateDriverFrame`) para registrar únicamente los marcos cuando se crean o muestran.
+- **Uso de Caches Dinámicas**: Evitar llamar recursivamente a `GetChildren()` [cite: 2] repetidamente durante los re-escaneos. Se puede guardar una tabla débil (*weak key table*) de marcos ya procesados para omitir re-evaluaciones de jerarquía.
+
+### 2. Gestión de Eventos y Throttle (`Core.lua` & `BlizzardFrames.lua`)
+- **Consolidación de Listeners de Eventos**: Actualmente tanto `Core.lua` como `BlizzardFrames.lua` registran eventos idénticos como `UNIT_HEALTH`, `UNIT_MAXHEALTH` y `UNIT_ABSORB_AMOUNT_CHANGED` [cite: 2, 5].
+  - *Futura mejora*: Centralizar el manejo de estos eventos exclusivamente en `Core.lua` y notificar a los demás módulos mediante el patrón observador existente (`RegisterPlayerUpdateListener`) [cite: 5].
+- **Control de Frecuencia (Throttling)**: Durante combates intensos con sanación continua o absorciones periódicas, `UNIT_ABSORB_AMOUNT_CHANGED` puede ejecutarse docenas de veces por segundo [cite: 2]. Implementar un micro-throttle (p. ej. limitar actualizaciones visuales a 30 FPS / 0.033s) reduciría aún más la carga sobre el renderizador visual de WoW.
+
+### 3. Limpieza de Estructura y UI (`BloodShieldOverlay.lua`)
+- **Migración a la API de Opciones Modernas**: La GUI del menú utiliza un marco flotante propio con `BackdropTemplate` e `InputBoxTemplate` tradicionales [cite: 3].
+  - *Futura mejora*: Integrar las opciones dentro de la interfaz oficial de Blizzard usando `Settings.RegisterAddOnCategory` (introducida en Dragonflight y continuada en The War Within) para ofrecer una experiencia visual nativa.
+- **Limpieza de Referencias Globales Inutilizadas**: Limpiar variables que no se usan o unificar la declaración de tablas principales (`local addon = _G.BloodShieldOverlay or {}`) [cite: 1, 2, 3, 5] para evitar re-definiciones redundantes entre archivos.
+
+---
+
+## ⚙️ Requisitos e Instalación
+
+- **Versión de WoW**: Diseñado y probado para la interfaz moderna de World of Warcraft (Interface `120007`) [cite: 4].
+- **Compatibilidad**: Diseñado exclusivamente para la interfaz predeterminada de Blizzard (*Default UI*). No está garantizado su correcto funcionamiento con addons de marcos de unidad de terceros (como ElvUI, Tukui, Shadowed Unit Frames, PitBull, etc.) [cite: 4].
+
+### Instalación:
+1. Descarga el archivo comprimido del addon.
+2. Extrae la carpeta `BloodShieldOverlay` en tu directorio de addons de World of Warcraft:
+   `World of Warcraft\_retail_\Interface\AddOns\`
+3. Reinicia el juego o recarga la interfaz con `/reload`.
+
+---
+
+## 📜 Licencia
+
+Este proyecto está bajo la Licencia **MIT** [cite: 6]. Consulta el archivo `LICENSE` para más información [cite: 6].
