@@ -65,5 +65,5 @@
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
 ---
-**Versión**: 1.3 Release  
+**Versión**: 1.4 Release  
 **Autor**: Seikarii  
