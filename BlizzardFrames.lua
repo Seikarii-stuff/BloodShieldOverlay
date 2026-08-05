@@ -3,25 +3,39 @@
 -- # Module: Frame discovery and overlay attachment.
 -- # This file owns the logic that finds Blizzard unit frames and attaches absorb overlays.
 
-local addon = _G.BloodShieldOverlay
+local addon = _G.BloodShieldOverlay or {}
+_G.BloodShieldOverlay = addon
 local manager = CreateFrame("Frame")
--- A unit can have more than one visible health bar.  In particular, the player
--- can have both PlayerFrame and the Personal Resource Display enabled.
+
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
+local healthBarCache = setmetatable({}, { __mode = "k" })
+local foundHealthBars = setmetatable({}, { __mode = "k" })
 local discoveryPending = false
-local lastDiscoveryTime = 0
 local pendingRefresh = false
 
-local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "health", "Health" }
-local FRAME_SCAN_LIMIT = 1000
-local DISCOVERY_COOLDOWN = 0.25
+local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
+
+local function IsForbiddenFrame(frame)
+    if not frame then return true end
+    if frame.IsForbidden then
+        local ok, forbidden = pcall(frame.IsForbidden, frame)
+        if ok and forbidden then
+            return true
+        end
+    end
+    return false
+end
 
 local function IsStatusBar(frame)
-    return frame and frame.GetObjectType and frame:GetObjectType() == "StatusBar"
+    if IsForbiddenFrame(frame) then return false end
+    return frame.GetObjectType and frame:GetObjectType() == "StatusBar"
 end
 
 local function GetFrameName(frame)
+    if IsForbiddenFrame(frame) or not frame.GetName then
+        return ""
+    end
     local ok, name = pcall(frame.GetName, frame)
     if ok and type(name) == "string" then
         return name
@@ -29,80 +43,83 @@ local function GetFrameName(frame)
     return ""
 end
 
--- Traverses a frame and its descendants to find the first health status bar.
--- # DEV: This is intentionally recursive to support nested Blizzard frame layouts.
 local function GetHealthBar(frame)
-    if not frame then
-        return
+    if IsForbiddenFrame(frame) then
+        return nil
     end
 
+    local cached = healthBarCache[frame]
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local healthBar = nil
     for _, key in ipairs(HEALTH_BAR_KEYS) do
-        local healthBar = frame[key]
-        if IsStatusBar(healthBar) then
-            return healthBar
-        end
-    end
-
-    if frame.GetChildren then
-        for _, child in ipairs({ frame:GetChildren() }) do
-            local healthBar = GetHealthBar(child)
-            if healthBar then
-                return healthBar
+        local bar = frame[key]
+        if IsStatusBar(bar) then
+            healthBar = bar
+            break
+        elseif bar and not IsForbiddenFrame(bar) then
+            for _, subKey in ipairs(HEALTH_BAR_KEYS) do
+                local subBar = bar[subKey]
+                if IsStatusBar(subBar) then
+                    healthBar = subBar
+                    break
+                end
             end
+            if healthBar then break end
         end
     end
 
-    if IsStatusBar(frame) then
+    if not healthBar and IsStatusBar(frame) then
         local name = GetFrameName(frame)
-        if name == "" then
-            return frame
-        end
-        if name:find("Health") then
-            return frame
+        if name == "" or name:find("Health") then
+            healthBar = frame
         end
     end
+
+    healthBarCache[frame] = healthBar or false
+    return healthBar
 end
 
--- Attempts to resolve a frame's unit token.
--- # DEV: This uses both explicit unit fields and name-based Blizzard heuristics.
 local function GetUnit(frame)
-    -- En marcos de party/raid compactos de Blizzard, 'displayedUnit' es más preciso
-    if type(frame.displayedUnit) == "string" then
+    if IsForbiddenFrame(frame) then
+        return nil
+    end
+
+    if type(frame.displayedUnit) == "string" and frame.displayedUnit ~= "" then
         return frame.displayedUnit
     end
 
-    if type(frame.unit) == "string" then
+    if type(frame.unit) == "string" and frame.unit ~= "" then
         return frame.unit
     end
 
+    if frame.GetAttribute then
+        local ok, unit = pcall(frame.GetAttribute, frame, "unit")
+        if ok and type(unit) == "string" and unit ~= "" then
+            return unit
+        end
+    end
+
     local name = GetFrameName(frame)
-    if name == "" then
-        return
+    if name ~= "" then
+        if not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
+            return nil
+        end
     end
 
-    if not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
-        return
-    end
-
-    if not frame.GetAttribute then
-        return
-    end
-
-    local ok, unit = pcall(frame.GetAttribute, frame, "unit")
-    if ok and type(unit) == "string" then
-        return unit
-    end
+    return nil
 end
 
 local function IsSupportedUnit(unit)
+    if type(unit) ~= "string" then return false end
     local inRaid = IsInRaid and IsInRaid()
-    
+
     if inRaid then
-        -- En Raid ignoramos los marcos de party para evitar duplicados
-        return unit == "player" or unit:match("^raid%d+$")
+        return unit == "player" or (unit:find("^raid%d+$") ~= nil)
     else
-        -- Estando solo o en party, aceptamos player y party
-        return unit == "player" or unit:match("^party%d+$")
+        return unit == "player" or (unit:find("^party%d+$") ~= nil)
     end
 end
 
@@ -129,13 +146,10 @@ local function AddOverlay(unit, healthBar)
     overlays[unit][healthBar] = entry
 end
 
--- Ensures party-related native Blizzard frames are visible and updated.
--- # DEV: This is separate from overlay creation so refresh logic can stay isolated.
 local function TryEnsurePartyFramesVisible()
     local inRaid = IsInRaid and IsInRaid()
     local inGroup = IsInGroup and IsInGroup()
 
-    -- 1. Si estamos en RAID: Ocultamos marcos de party para que solo salga la Raid
     if inRaid then
         if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
         if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
@@ -143,11 +157,10 @@ local function TryEnsurePartyFramesVisible()
     end
 
     local function EnsureFrameShown(frame)
-        if not frame then return end
+        if IsForbiddenFrame(frame) then return end
         if frame.Show then frame:Show() end
     end
 
-    -- 2. Si estamos en PARTY o SOLOS: Mostramos el marco de party
     if PartyFrame then
         EnsureFrameShown(PartyFrame)
         if PartyFrame.Update then PartyFrame:Update() end
@@ -161,8 +174,6 @@ local function TryEnsurePartyFramesVisible()
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         EnsureFrameShown(partyMemberFrame)
-        -- Si no estamos en grupo (estamos solos), forzamos "player" en party1
-        -- Si ESTAMOS en grupo, respetamos la unidad asignada por el juego
         if not inGroup then
             partyMemberFrame.unit = "player"
         end
@@ -180,15 +191,9 @@ local function TryEnsurePartyFramesVisible()
     end
 end
 
--- Expose the party refresh helper so the main addon can invoke it without owning
--- the party-frame discovery logic itself.
 addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
 
--- # DEV: The main addon should not need to know the details of unit frame discovery.
 local function GetPlayerFrameHealthBar()
-    -- The modern PlayerFrame does not expose its health bar directly.  It is
-    -- nested inside the new content frame, so the generic frame scan cannot
-    -- reliably discover it.
     local content = PlayerFrame and PlayerFrame.PlayerFrameContent
     local main = content and content.PlayerFrameContentMain
     local healthBarArea = main and main.HealthBarArea
@@ -196,31 +201,26 @@ local function GetPlayerFrameHealthBar()
 end
 
 local function GetPersonalResourceHealthBar()
-    -- Retail's Personal Resource Display has its own top-level frame.  This
-    -- explicit path works even when the player nameplate is not enumerable.
     local container = PersonalResourceDisplayFrame and PersonalResourceDisplayFrame.HealthBarsContainer
     local healthBar = container and (container.healthBar or container.HealthBar)
     if IsStatusBar(healthBar) then
         return healthBar
     end
 
-    -- Older UI layouts expose the same display as the player's nameplate.
     if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then
-        return
+        return nil
     end
 
     local nameplate = C_NamePlate.GetNamePlateForUnit("player")
     if not nameplate then
-        return
+        return nil
     end
 
-    -- Blizzard uses UnitFrame on current Retail builds.  unitFrame is kept as
-    -- a fallback for older frame implementations and third-party nameplates.
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
-local function TryAddFrameOverlay(frame, foundHealthBars)
-    if not frame then
+local function TryAddFrameOverlay(frame)
+    if IsForbiddenFrame(frame) then
         return
     end
 
@@ -234,19 +234,72 @@ local function TryAddFrameOverlay(frame, foundHealthBars)
     end
 end
 
-local function ScanCompactFrames(foundHealthBars)
-    for _, prefix in ipairs({ "CompactPartyFrame", "CompactRaidFrame" }) do
-        for index = 1, 40 do
-            local frame = _G[prefix .. index]
-            if not frame then
-                break
+local function ScanContainerChildren(container)
+    if not container or IsForbiddenFrame(container) then return end
+
+    TryAddFrameOverlay(container)
+
+    if container.memberFrames then
+        for _, member in ipairs(container.memberFrames) do
+            if member and not IsForbiddenFrame(member) then
+                TryAddFrameOverlay(member)
             end
+        end
+    end
 
-            TryAddFrameOverlay(frame, foundHealthBars)
+    if container.flowFrames then
+        for _, member in ipairs(container.flowFrames) do
+            if member and not IsForbiddenFrame(member) then
+                TryAddFrameOverlay(member)
+            end
+        end
+    end
 
-            local children = { frame:GetChildren() }
+    if container.GetChildren then
+        local ok, children = pcall(function() return { container:GetChildren() } end)
+        if ok and children then
             for _, child in ipairs(children) do
-                TryAddFrameOverlay(child, foundHealthBars)
+                if child and not IsForbiddenFrame(child) then
+                    TryAddFrameOverlay(child)
+                    if child.GetChildren then
+                        local okSub, subChildren = pcall(function() return { child:GetChildren() } end)
+                        if okSub and subChildren then
+                            for _, subChild in ipairs(subChildren) do
+                                if subChild and not IsForbiddenFrame(subChild) then
+                                    TryAddFrameOverlay(subChild)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function ScanCompactFrames()
+    -- 1. Modern Retail PartyFrame, CompactPartyFrame & CompactRaidFrameContainer
+    ScanContainerChildren(PartyFrame)
+    ScanContainerChildren(CompactPartyFrame)
+    ScanContainerChildren(CompactRaidFrameContainer)
+
+    -- 2. Direct global Blizzard unit frame references
+    for index = 1, 40 do
+        local frame = _G["CompactRaidFrame" .. index]
+            or _G["CompactPartyFrameMemberFrame" .. index]
+            or _G["PartyMemberFrame" .. index]
+            or _G["CompactPartyFrame" .. index]
+        if frame and not IsForbiddenFrame(frame) then
+            TryAddFrameOverlay(frame)
+        end
+    end
+
+    -- 3. CompactRaidGroup slots
+    for group = 1, 8 do
+        for slot = 1, 5 do
+            local frame = _G["CompactRaidGroup" .. group .. "Slot" .. slot]
+            if frame and not IsForbiddenFrame(frame) then
+                TryAddFrameOverlay(frame)
             end
         end
     end
@@ -259,7 +312,11 @@ local function DiscoverFrames()
 
     TryEnsurePartyFramesVisible()
 
-    local foundHealthBars = setmetatable({}, { __mode = "k" })
+    -- Reset foundHealthBars set without table allocation
+    for k in pairs(foundHealthBars) do
+        foundHealthBars[k] = nil
+    end
+
     local playerHealthBar = GetPlayerFrameHealthBar()
     if playerHealthBar then
         AddOverlay("player", playerHealthBar)
@@ -272,23 +329,7 @@ local function DiscoverFrames()
         foundHealthBars[personalResourceHealthBar] = true
     end
 
-    ScanCompactFrames(foundHealthBars)
-
-    local frame
-    local scannedFrames = 0
-    while true do
-        frame = EnumerateFrames(frame)
-        if not frame then
-            break
-        end
-
-        scannedFrames = scannedFrames + 1
-        if scannedFrames > FRAME_SCAN_LIMIT then
-            break
-        end
-
-        TryAddFrameOverlay(frame, foundHealthBars)
-    end
+    ScanCompactFrames()
 
     for unit, entries in pairs(overlays) do
         for healthBar, entry in pairs(entries) do
@@ -328,39 +369,34 @@ local function DiscoverAndUpdate()
     UpdateAll()
 end
 
--- Several UI events can arrive together (for example while entering the
--- world).  Coalescing them avoids repeatedly enumerating every UI frame.
-local function QueueDiscoverAndUpdate()
-    -- Ejecutamos la visibilidad del marco de party SIEMPRE al instante (en combate o fuera de él)
+local QueueDiscoverAndUpdate
+
+local function OnDiscoveryTimer()
+    discoveryPending = false
+    DiscoverAndUpdate()
+    if pendingRefresh then
+        pendingRefresh = false
+        QueueDiscoverAndUpdate()
+    end
+end
+
+QueueDiscoverAndUpdate = function()
     TryEnsurePartyFramesVisible()
 
-    -- Si estamos en combate, posponemos SOLO el escaneo pesado de la UI
     if InCombatLockdown() then
         pendingRefresh = true
         return
     end
 
     if discoveryPending then
+        pendingRefresh = true
         return
     end
 
-    local now = GetTime()
-    if not pendingRefresh and now - lastDiscoveryTime < DISCOVERY_COOLDOWN then
-        return
-    end
-
-    pendingRefresh = false
-    lastDiscoveryTime = now
     discoveryPending = true
-    C_Timer.After(0.35, function()
-        discoveryPending = false
-        pendingRefresh = false
-        DiscoverAndUpdate()
-    end)
+    C_Timer.After(0.05, OnDiscoveryTimer)
 end
 
--- Requests a full refresh of party/raid frame discovery and overlay updates.
--- This is used both by the main addon events and by the /shield party command.
 addon.RequestRefresh = function()
     TryEnsurePartyFramesVisible()
     if QueueDiscoverAndUpdate then
@@ -368,9 +404,36 @@ addon.RequestRefresh = function()
     end
 end
 
-addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
-    UpdateUnit("player", absorb, maxHealth)
+addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
+    if overlays[unit] then
+        UpdateUnit(unit, absorb, maxHealth)
+    end
 end)
+
+-- Register Blizzard frame update hooks to catch dynamically created or updated unit frames
+if hooksecurefunc then
+    local function OnCompactUnitFrameUpdated(frame)
+        if InCombatLockdown() or IsForbiddenFrame(frame) then return end
+        local unit = GetUnit(frame)
+        if unit and IsSupportedUnit(unit) then
+            local healthBar = GetHealthBar(frame)
+            if healthBar then
+                AddOverlay(unit, healthBar)
+                UpdateUnit(unit)
+            end
+        end
+    end
+
+    if _G.CompactUnitFrame_UpdateAll then
+        hooksecurefunc("CompactUnitFrame_UpdateAll", OnCompactUnitFrameUpdated)
+    end
+    if _G.CompactUnitFrame_SetUpFrame then
+        hooksecurefunc("CompactUnitFrame_SetUpFrame", OnCompactUnitFrameUpdated)
+    end
+    if _G.CompactUnitFrame_UpdateUnit then
+        hooksecurefunc("CompactUnitFrame_UpdateUnit", OnCompactUnitFrameUpdated)
+    end
+end
 
 manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -379,31 +442,14 @@ manager:RegisterEvent("PLAYER_REGEN_ENABLED")
 manager:RegisterEvent("PLAYER_REGEN_DISABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-manager:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
-manager:RegisterEvent("UNIT_HEALTH")
-manager:RegisterEvent("UNIT_MAXHEALTH")
 manager:RegisterEvent("UI_SCALE_CHANGED")
 manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 
 manager:SetScript("OnEvent", function(_, event, unit)
-    -- Aquí está tu bloque exacto para cuando sales de combate:
     if event == "PLAYER_REGEN_ENABLED" then
         if pendingRefresh then
             pendingRefresh = false
             DiscoverAndUpdate()
-        end
-        return
-    end
-
-    if event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-        if unit then
-            -- Forzar actualización tanto si la unidad es 'player' como si coincide con la de party
-            if unit == "player" then
-                UpdateUnit("player")
-            end
-            if overlays[unit] then
-                UpdateUnit(unit)
-            end
         end
         return
     end

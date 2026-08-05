@@ -7,9 +7,10 @@
 -- Tick marks at 50% / 100% / 150% make it easy to read at a glance.
 
 local ADDON_NAME = "BloodShieldOverlay"
-local core = _G.BloodShieldOverlay
+local addon = _G.BloodShieldOverlay or {}
+_G.BloodShieldOverlay = addon
 
-local addon = CreateFrame("Frame")
+local eventFrame = CreateFrame("Frame")
 local bar
 local menuFrame
 local tickLines = {}
@@ -404,7 +405,7 @@ local function UpdateBar(absorb, maxHP)
     end
 end
 
-core.RegisterPlayerUpdateListener(UpdateBar)
+addon.RegisterPlayerUpdateListener(UpdateBar)
 
 local function OnEvent(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -418,8 +419,8 @@ local function OnEvent(self, event, arg1)
     -- # DEV: Party frame refresh is delegated to BlizzardFrames.lua.
 
     if event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PARTY_INVITE_REQUEST" or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
-        if core.RefreshPartyFrames then
-            C_Timer.After(0.2, core.RefreshPartyFrames)
+        if addon.RefreshPartyFrames then
+            C_Timer.After(0.2, addon.RefreshPartyFrames)
         end
     end
 end
@@ -467,11 +468,11 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         print("BloodShieldOverlay settings reset to defaults.")
         return
     elseif msg == "party" then
-        if core.RequestRefresh then
-            core.RequestRefresh()
+        if addon.RequestRefresh then
+            addon.RequestRefresh()
             print("BloodShieldOverlay: party frames refreshed.")
-        elseif core.RefreshPartyFrames then
-            core.RefreshPartyFrames()
+        elseif addon.RefreshPartyFrames then
+            addon.RefreshPartyFrames()
             print("BloodShieldOverlay: party frames refreshed.")
         else
             print("BloodShieldOverlay: party refresh unavailable.")
@@ -489,12 +490,12 @@ SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 SLASH_BLOODSHIELDOVERLAY3 = "/shields"
 
-addon:RegisterEvent("ADDON_LOADED")
-addon:RegisterEvent("PLAYER_LOGIN")
-addon:RegisterEvent("PLAYER_ENTERING_WORLD")
-addon:RegisterEvent("GROUP_ROSTER_UPDATE")
-addon:RegisterEvent("PARTY_INVITE_REQUEST")
-addon:RegisterEvent("PARTY_LEADER_CHANGED")
-addon:RegisterEvent("PLAYER_REGEN_ENABLED")
-addon:RegisterEvent("PLAYER_REGEN_DISABLED")
-addon:SetScript("OnEvent", OnEvent)
+eventFrame:RegisterEvent("ADDON_LOADED")
+eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+eventFrame:RegisterEvent("PARTY_INVITE_REQUEST")
+eventFrame:RegisterEvent("PARTY_LEADER_CHANGED")
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+eventFrame:SetScript("OnEvent", OnEvent)
