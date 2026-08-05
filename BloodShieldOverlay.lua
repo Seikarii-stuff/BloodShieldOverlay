@@ -1,10 +1,5 @@
 -- BloodShieldOverlay.lua
 -- Movable absorb bar for the player with slash command /shield.
---
--- The bar represents the player's absorb shield as a percentage of max
--- health (not an absolute number), and can visually exceed 100% for
--- mechanics that let absorbs overshoot current health (e.g. Blood Shield).
--- Tick marks at 50% / 100% / 150% make it easy to read at a glance.
 
 local ADDON_NAME = "BloodShieldOverlay"
 local addon = _G.BloodShieldOverlay or {}
@@ -15,10 +10,6 @@ local bar
 local menuFrame
 local tickLines = {}
 
--- # DEV: Main addon module owns the bar UI and configuration behavior.
--- # DEV: Frame discovery and absorb overlay rendering are delegated to other modules.
-
--- Fractions of max health at which we draw a tick mark on the bar.
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
 
@@ -30,17 +21,12 @@ local DEFAULTS = {
     width = 18,
     height = 150,
     locked = true,
-    -- Kept per character: false means the external bar remains visible.
     hideExternalBar = false,
-    -- How much overshoot the bar can display, expressed as a multiple of
-    -- max health. 2.0 = the bar tops out at 200% of max health.
     capMultiplier = 2.0,
 }
 
--- Runtime reference to the current character profile.
 local config = {}
 
--- Config and saved-variable helpers.
 local function GetProfileKey()
     local playerName = UnitName("player") or "Player"
     local realmName = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Unknown"
@@ -88,7 +74,6 @@ local function CopySettings(source)
     return copy
 end
 
--- Ensures the current character has its own profile with every expected setting.
 local function EnsureConfig()
     local profiles = EnsureProfileStore()
     local profileKey = GetProfileKey()
@@ -127,9 +112,7 @@ local function GetAbsorbAmount(unit)
 end
 
 local function SaveBarPosition()
-    if not bar then
-        return
-    end
+    if not bar then return end
     local point, _, relativePoint, xOffset, yOffset = bar:GetPoint()
     config.point = point
     config.relativePoint = relativePoint
@@ -138,9 +121,7 @@ local function SaveBarPosition()
 end
 
 local function UpdateBarLock()
-    if not bar then
-        return
-    end
+    if not bar then return end
     bar:EnableMouse(not config.locked)
     bar:SetMovable(not config.locked)
     if config.locked then
@@ -158,13 +139,8 @@ local function UpdateBarLock()
     end
 end
 
--- Repositions the 50% / 100% / 150% tick marks to match the bar's current
--- height and cap multiplier. Ticks beyond the current cap are hidden rather
--- than clamped to the edge.
 local function UpdateTickMarks()
-    if not bar then
-        return
-    end
+    if not bar then return end
 
     local capMultiplier = config.capMultiplier or DEFAULTS.capMultiplier
     local totalHeight = bar:GetHeight()
@@ -196,16 +172,13 @@ local function CreateTickMarks()
 end
 
 local function CreateBar()
-    if bar then
-        return
-    end
+    if bar then return end
 
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
     bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
     bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
     bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     bar:SetStatusBarColor(1.0, 1.0, 1.0, 1.0)
-    -- Keep the bar below most opened panels so profession and other windows cover it.
     bar:SetFrameStrata("LOW")
     bar:SetFrameLevel(1)
     bar:SetOrientation("VERTICAL")
@@ -221,9 +194,7 @@ local function CreateBar()
 end
 
 local function UpdateExternalBarVisibility()
-    if not bar then
-        return
-    end
+    if not bar then return end
 
     if config.hideExternalBar then
         bar:Hide()
@@ -232,11 +203,8 @@ local function UpdateExternalBarVisibility()
     end
 end
 
--- UI creation for the slash-command configuration menu.
 local function CreateConfigMenu()
-    if menuFrame then
-        return
-    end
+    if menuFrame then return end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
     menuFrame:SetSize(320, 260)
@@ -360,11 +328,8 @@ local function CreateConfigMenu()
     end)
 end
 
--- Keeps the settings menu in sync after /shield reset changes config.
 local function RefreshConfigMenuFields()
-    if not menuFrame then
-        return
-    end
+    if not menuFrame then return end
     menuFrame.widthEdit:SetText(tostring(config.width or DEFAULTS.width))
     menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
@@ -378,12 +343,8 @@ local function ShowConfigMenu()
 end
 
 local function UpdateBar(absorb, maxHP)
-    if not bar then
-        CreateBar()
-    end
-    if not bar then
-        return
-    end
+    if not bar then CreateBar() end
+    if not bar then return end
 
     if config.hideExternalBar then
         bar:Hide()
@@ -408,15 +369,10 @@ end
 addon.RegisterPlayerUpdateListener(UpdateBar)
 
 local function OnEvent(self, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
-        EnsureConfig()
-        UpdateBar()
-    elseif event == "PLAYER_LOGIN" then
+    if event == "PLAYER_LOGIN" then
         EnsureConfig()
         UpdateBar()
     end
-
-    -- # DEV: Party frame refresh is delegated to BlizzardFrames.lua.
 
     if event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PARTY_INVITE_REQUEST" or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
         if addon.RefreshPartyFrames then
@@ -490,7 +446,6 @@ SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 SLASH_BLOODSHIELDOVERLAY3 = "/shields"
 
-eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")

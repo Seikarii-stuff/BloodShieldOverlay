@@ -1,7 +1,5 @@
 -- Absorb overlays for Blizzard's player, personal-resource, party, and raid frames.
 -- Frames are discovered out of combat; combat updates only change overlay values.
--- # Module: Frame discovery and overlay attachment.
--- # This file owns the logic that finds Blizzard unit frames and attaches absorb overlays.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -44,9 +42,7 @@ local function GetFrameName(frame)
 end
 
 local function GetHealthBar(frame)
-    if IsForbiddenFrame(frame) then
-        return nil
-    end
+    if IsForbiddenFrame(frame) then return nil end
 
     local cached = healthBarCache[frame]
     if cached ~= nil then
@@ -83,9 +79,7 @@ local function GetHealthBar(frame)
 end
 
 local function GetUnit(frame)
-    if IsForbiddenFrame(frame) then
-        return nil
-    end
+    if IsForbiddenFrame(frame) then return nil end
 
     if type(frame.displayedUnit) == "string" and frame.displayedUnit ~= "" then
         return frame.displayedUnit
@@ -133,9 +127,7 @@ local function AddOverlay(unit, healthBar)
         overlaysByHealthBar[healthBar] = entry
     end
 
-    if entry.unit == unit then
-        return
-    end
+    if entry.unit == unit then return end
 
     if entry.unit and overlays[entry.unit] then
         overlays[entry.unit][healthBar] = nil
@@ -147,6 +139,12 @@ local function AddOverlay(unit, healthBar)
 end
 
 local function TryEnsurePartyFramesVisible()
+    -- CRITICAL FIX: Abort immediately if in combat to avoid action blocked errors on protected Blizzard frames
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
+
     local inRaid = IsInRaid and IsInRaid()
     local inGroup = IsInGroup and IsInGroup()
 
@@ -203,26 +201,18 @@ end
 local function GetPersonalResourceHealthBar()
     local container = PersonalResourceDisplayFrame and PersonalResourceDisplayFrame.HealthBarsContainer
     local healthBar = container and (container.healthBar or container.HealthBar)
-    if IsStatusBar(healthBar) then
-        return healthBar
-    end
+    if IsStatusBar(healthBar) then return healthBar end
 
-    if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then
-        return nil
-    end
+    if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return nil end
 
     local nameplate = C_NamePlate.GetNamePlateForUnit("player")
-    if not nameplate then
-        return nil
-    end
+    if not nameplate then return nil end
 
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
 local function TryAddFrameOverlay(frame)
-    if IsForbiddenFrame(frame) then
-        return
-    end
+    if IsForbiddenFrame(frame) then return end
 
     local unit = GetUnit(frame)
     if unit and IsSupportedUnit(unit) then
@@ -278,23 +268,23 @@ local function ScanContainerChildren(container)
 end
 
 local function ScanCompactFrames()
-    -- 1. Modern Retail PartyFrame, CompactPartyFrame & CompactRaidFrameContainer
     ScanContainerChildren(PartyFrame)
     ScanContainerChildren(CompactPartyFrame)
     ScanContainerChildren(CompactRaidFrameContainer)
 
-    -- 2. Direct global Blizzard unit frame references
+    -- Early-exit iteration optimization
     for index = 1, 40 do
         local frame = _G["CompactRaidFrame" .. index]
             or _G["CompactPartyFrameMemberFrame" .. index]
             or _G["PartyMemberFrame" .. index]
             or _G["CompactPartyFrame" .. index]
-        if frame and not IsForbiddenFrame(frame) then
-            TryAddFrameOverlay(frame)
+        if frame then
+            if not IsForbiddenFrame(frame) then
+                TryAddFrameOverlay(frame)
+            end
         end
     end
 
-    -- 3. CompactRaidGroup slots
     for group = 1, 8 do
         for slot = 1, 5 do
             local frame = _G["CompactRaidGroup" .. group .. "Slot" .. slot]
@@ -306,13 +296,10 @@ local function ScanCompactFrames()
 end
 
 local function DiscoverFrames()
-    if InCombatLockdown() then
-        return
-    end
+    if InCombatLockdown() then return end
 
     TryEnsurePartyFramesVisible()
 
-    -- Reset foundHealthBars set without table allocation
     for k in pairs(foundHealthBars) do
         foundHealthBars[k] = nil
     end
@@ -347,9 +334,7 @@ end
 
 local function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
-    if not entries then
-        return
-    end
+    if not entries then return end
 
     absorb = absorb or UnitGetTotalAbsorbs(unit)
     maxHealth = maxHealth or UnitHealthMax(unit)
@@ -410,7 +395,6 @@ addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
     end
 end)
 
--- Register Blizzard frame update hooks to catch dynamically created or updated unit frames
 if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
@@ -435,7 +419,6 @@ if hooksecurefunc then
     end
 end
 
--- Edit Mode exit handling to restore Always-In-Party frames when exiting Edit Mode
 local function OnEditModeExit()
     C_Timer.After(0.2, function()
         TryEnsurePartyFramesVisible()
