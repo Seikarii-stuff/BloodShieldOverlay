@@ -435,6 +435,26 @@ if hooksecurefunc then
     end
 end
 
+-- Edit Mode exit handling to restore Always-In-Party frames when exiting Edit Mode
+local function OnEditModeExit()
+    C_Timer.After(0.2, function()
+        TryEnsurePartyFramesVisible()
+        QueueDiscoverAndUpdate()
+    end)
+end
+
+if EventRegistry and EventRegistry.RegisterCallback then
+    pcall(function()
+        EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon)
+    end)
+end
+
+if EditModeManagerFrame and EditModeManagerFrame.HookScript then
+    pcall(function()
+        EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
+    end)
+end
+
 manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -444,6 +464,7 @@ manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:RegisterEvent("UI_SCALE_CHANGED")
 manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
+manager:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_REGEN_ENABLED" then

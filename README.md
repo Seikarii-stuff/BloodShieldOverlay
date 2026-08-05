@@ -64,8 +64,6 @@
 - **Futura Idea de Mejora**:
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
-  - *Nota adicional*: Al abrir el edit mode el (*Always-In-Party*) desaparece y hay que hacer /reload o /shield party ,tras intentar arreglarlo de varias maneras solo conseguias maneras burdas (como checkear cada 20 secs si se esta mostrando el addon) y los comandos con el modo edit de blizzard no funcionaban correctamente asique se queda como bug conocido, ya lo arreglare cuando lo vea molesto, de momento es algo pasable.
-
 ---
 **Versión**: 1.3 Release  
 **Autor**: Seikarii  

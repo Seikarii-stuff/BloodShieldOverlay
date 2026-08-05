@@ -1,6 +1,6 @@
 ## Interface: 120007
 ## Title: Shield Overlay
-## Notes: /shield to move, /shield reset to default, /shield hide/show to show/hide the shield bar, /shield party to refresh party frames, 20%-200% functional shield bar, shows shield overlays in raid/player/party frames. The addon also has mode AlwaysInParty ,in case it disappears type /shield party (it happens when u enter edit mode). Minimal addon for blizzard original raid/party UI, dont attempt to use with other UIs.
+## Notes: /shield to move, /shield reset to default, /shield hide/show to show/hide the shield bar, /shield party to refresh party frames, 20%-200% functional shield bar, shows shield overlays in raid/player/party frames. The addon also has mode AlwaysInParty ,in case it disappears type /shield party (if you are in combat it wont show until you leave combat). Minimal addon for blizzard original raid/party UI, dont attempt to use with other UIs.
 ## Author: Seikarii
 ## Version: 1.3
 ## IconTexture: 237540
