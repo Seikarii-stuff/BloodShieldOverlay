@@ -1,5 +1,4 @@
 -- Absorb overlays for Blizzard's player, personal-resource, party, and raid frames.
--- Frames are discovered out of combat; combat updates only change overlay values.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -16,11 +15,8 @@ local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Heal
 
 local function IsForbiddenFrame(frame)
     if not frame then return true end
-    if frame.IsForbidden then
-        local ok, forbidden = pcall(frame.IsForbidden, frame)
-        if ok and forbidden then
-            return true
-        end
+    if frame.IsForbidden and frame:IsForbidden() then
+        return true
     end
     return false
 end
@@ -34,8 +30,8 @@ local function GetFrameName(frame)
     if IsForbiddenFrame(frame) or not frame.GetName then
         return ""
     end
-    local ok, name = pcall(frame.GetName, frame)
-    if ok and type(name) == "string" then
+    local name = frame:GetName()
+    if type(name) == "string" then
         return name
     end
     return ""
@@ -90,8 +86,8 @@ local function GetUnit(frame)
     end
 
     if frame.GetAttribute then
-        local ok, unit = pcall(frame.GetAttribute, frame, "unit")
-        if ok and type(unit) == "string" and unit ~= "" then
+        local unit = frame:GetAttribute("unit")
+        if type(unit) == "string" and unit ~= "" then
             return unit
         end
     end
@@ -139,7 +135,6 @@ local function AddOverlay(unit, healthBar)
 end
 
 local function TryEnsurePartyFramesVisible()
-    -- CRITICAL FIX: Abort immediately if in combat to avoid action blocked errors on protected Blizzard frames
     if InCombatLockdown() then
         pendingRefresh = true
         return
@@ -224,6 +219,7 @@ local function TryAddFrameOverlay(frame)
     end
 end
 
+-- FIX: Zero-allocation container scanning replacing closures/tables and pcall
 local function ScanContainerChildren(container)
     if not container or IsForbiddenFrame(container) then return end
 
@@ -246,19 +242,17 @@ local function ScanContainerChildren(container)
     end
 
     if container.GetChildren then
-        local ok, children = pcall(function() return { container:GetChildren() } end)
-        if ok and children then
-            for _, child in ipairs(children) do
-                if child and not IsForbiddenFrame(child) then
-                    TryAddFrameOverlay(child)
-                    if child.GetChildren then
-                        local okSub, subChildren = pcall(function() return { child:GetChildren() } end)
-                        if okSub and subChildren then
-                            for _, subChild in ipairs(subChildren) do
-                                if subChild and not IsForbiddenFrame(subChild) then
-                                    TryAddFrameOverlay(subChild)
-                                end
-                            end
+        local numChildren = select("#", container:GetChildren())
+        for i = 1, numChildren do
+            local child = select(i, container:GetChildren())
+            if child and not IsForbiddenFrame(child) then
+                TryAddFrameOverlay(child)
+                if child.GetChildren then
+                    local numSub = select("#", child:GetChildren())
+                    for j = 1, numSub do
+                        local subChild = select(j, child:GetChildren())
+                        if subChild and not IsForbiddenFrame(subChild) then
+                            TryAddFrameOverlay(subChild)
                         end
                     end
                 end
@@ -272,7 +266,6 @@ local function ScanCompactFrames()
     ScanContainerChildren(CompactPartyFrame)
     ScanContainerChildren(CompactRaidFrameContainer)
 
-    -- Early-exit iteration optimization
     for index = 1, 40 do
         local frame = _G["CompactRaidFrame" .. index]
             or _G["CompactPartyFrameMemberFrame" .. index]
@@ -300,9 +293,8 @@ local function DiscoverFrames()
 
     TryEnsurePartyFramesVisible()
 
-    for k in pairs(foundHealthBars) do
-        foundHealthBars[k] = nil
-    end
+    -- Reuse table without allocations
+    table.wipe(foundHealthBars)
 
     local playerHealthBar = GetPlayerFrameHealthBar()
     if playerHealthBar then
@@ -318,12 +310,14 @@ local function DiscoverFrames()
 
     ScanCompactFrames()
 
+    -- Clean up dead frame references
     for unit, entries in pairs(overlays) do
         for healthBar, entry in pairs(entries) do
             if not foundHealthBars[healthBar] then
                 entry.overlay:Hide()
                 entry.unit = nil
                 entries[healthBar] = nil
+                overlaysByHealthBar[healthBar] = nil
             end
         end
         if not next(entries) then
@@ -336,8 +330,8 @@ local function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
     if not entries then return end
 
-    absorb = absorb or UnitGetTotalAbsorbs(unit)
-    maxHealth = maxHealth or UnitHealthMax(unit)
+    absorb = absorb or UnitGetTotalAbsorbs(unit) or 0
+    maxHealth = maxHealth or UnitHealthMax(unit) or 1
     for _, entry in pairs(entries) do
         addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
     end
@@ -389,11 +383,25 @@ addon.RequestRefresh = function()
     end
 end
 
-addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
-    if overlays[unit] then
-        UpdateUnit(unit, absorb, maxHealth)
-    end
-end)
+if addon.RegisterUnitUpdateListener then
+    addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
+        if overlays[unit] then
+            UpdateUnit(unit, absorb, maxHealth)
+        end
+    end)
+end
+
+-- Centralized combat/regen listener callback
+if addon.RegisterRegenListener then
+    addon.RegisterRegenListener(function(event)
+        if event == "PLAYER_REGEN_ENABLED" then
+            if pendingRefresh then
+                pendingRefresh = false
+                DiscoverAndUpdate()
+            end
+        end
+    end)
+end
 
 if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
@@ -441,8 +449,6 @@ end
 manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
-manager:RegisterEvent("PLAYER_REGEN_ENABLED")
-manager:RegisterEvent("PLAYER_REGEN_DISABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:RegisterEvent("UI_SCALE_CHANGED")
@@ -450,16 +456,26 @@ manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 manager:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 manager:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_REGEN_ENABLED" then
-        if pendingRefresh then
-            pendingRefresh = false
-            DiscoverAndUpdate()
+    -- FIX: Purgar referencias muertas explícitamente en el desmantelamiento de Nameplates
+    if event == "NAME_PLATE_UNIT_REMOVED" then
+        if unit then
+            local nameplate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
+            if nameplate then
+                local bar = GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame or nameplate)
+                if bar and overlaysByHealthBar[bar] then
+                    local entry = overlaysByHealthBar[bar]
+                    entry.overlay:Hide()
+                    if entry.unit and overlays[entry.unit] then
+                        overlays[entry.unit][bar] = nil
+                    end
+                    overlaysByHealthBar[bar] = nil
+                end
+            end
         end
         return
     end
 
-    if (event == "NAME_PLATE_UNIT_ADDED" or event == "NAME_PLATE_UNIT_REMOVED")
-        and (not unit or not UnitIsUnit(unit, "player")) then
+    if event == "NAME_PLATE_UNIT_ADDED" and (not unit or not UnitIsUnit(unit, "player")) then
         return
     end
 

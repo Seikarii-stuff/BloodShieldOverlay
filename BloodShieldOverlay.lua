@@ -1,11 +1,9 @@
--- BloodShieldOverlay.lua
 -- Movable absorb bar for the player with slash command /shield.
 
 local ADDON_NAME = "BloodShieldOverlay"
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
-local eventFrame = CreateFrame("Frame")
 local bar
 local menuFrame
 local tickLines = {}
@@ -74,6 +72,7 @@ local function CopySettings(source)
     return copy
 end
 
+-- FIX: Safe migration and profile handling without configuration desync
 local function EnsureConfig()
     local profiles = EnsureProfileStore()
     local profileKey = GetProfileKey()
@@ -366,20 +365,16 @@ local function UpdateBar(absorb, maxHP)
     end
 end
 
-addon.RegisterPlayerUpdateListener(UpdateBar)
-
-local function OnEvent(self, event, arg1)
-    if event == "PLAYER_LOGIN" then
-        EnsureConfig()
-        UpdateBar()
-    end
-
-    if event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PARTY_INVITE_REQUEST" or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
-        if addon.RefreshPartyFrames then
-            C_Timer.After(0.2, addon.RefreshPartyFrames)
-        end
-    end
+if addon.RegisterPlayerUpdateListener then
+    addon.RegisterPlayerUpdateListener(UpdateBar)
 end
+
+local initFrame = CreateFrame("Frame")
+initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:SetScript("OnEvent", function()
+    EnsureConfig()
+    UpdateBar()
+end)
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
     msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
@@ -445,12 +440,3 @@ end
 SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 SLASH_BLOODSHIELDOVERLAY3 = "/shields"
-
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-eventFrame:RegisterEvent("PARTY_INVITE_REQUEST")
-eventFrame:RegisterEvent("PARTY_LEADER_CHANGED")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-eventFrame:SetScript("OnEvent", OnEvent)

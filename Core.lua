@@ -1,12 +1,12 @@
 -- Shared event dispatcher for player and unit absorb updates.
--- # DEV: This core module decouples absorption updates from UI and frame discovery.
--- # DEV: Other modules can register listeners without depending directly on the WoW event system.
+-- Decouples absorption updates from UI and frame discovery.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 local playerListeners = {}
 local unitListeners = {}
+local regenListeners = {}
 local pendingUnits = {}
 local processingUnits = {}
 local isThrottleScheduled = false
@@ -14,6 +14,7 @@ local eventFrame = CreateFrame("Frame")
 
 local THROTTLE_INTERVAL = 0.033 -- ~30 FPS micro-throttle for visual updates
 
+-- Export functions guaranteed on initial execution
 function addon.RegisterPlayerUpdateListener(listener)
     if type(listener) == "function" then
         table.insert(playerListeners, listener)
@@ -26,10 +27,14 @@ function addon.RegisterUnitUpdateListener(listener)
     end
 end
 
-local function FlushUpdates()
-    isThrottleScheduled = false
+function addon.RegisterRegenListener(listener)
+    if type(listener) == "function" then
+        table.insert(regenListeners, listener)
+    end
+end
 
-    -- Move pending updates to processing table without allocating a new table
+local function FlushUpdates()
+    -- Move pending updates to processing table without allocating new tables
     for unit in pairs(pendingUnits) do
         processingUnits[unit] = true
         pendingUnits[unit] = nil
@@ -50,6 +55,9 @@ local function FlushUpdates()
             end
         end
     end
+
+    -- FIX: Reset flag at the end to avoid chained executions during loop processing
+    isThrottleScheduled = false
 end
 
 local function ScheduleUnitUpdate(unit)
@@ -64,6 +72,16 @@ end
 eventFrame:RegisterEvent("UNIT_HEALTH")
 eventFrame:RegisterEvent("UNIT_MAXHEALTH")
 eventFrame:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
-eventFrame:SetScript("OnEvent", function(_, _, unit)
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+
+eventFrame:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+        for i = 1, #regenListeners do
+            regenListeners[i](event)
+        end
+        return
+    end
+
     ScheduleUnitUpdate(unit)
 end)
