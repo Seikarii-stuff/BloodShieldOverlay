@@ -21,7 +21,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 
 ### 1. Zero-Allocation Event Throttling (`Core.lua`)
 - **Micro-Throttled Flush Loop:** Rapidly firing Blizzard events (`UNIT_HEALTH`, `UNIT_ABSORB_AMOUNT_CHANGED`) do not trigger immediate UI re-renders. Instead, affected units are flagged in a pre-allocated key-value table (`pendingUnits`).
-- **30 FPS Execution Bucket:** A single timer (`C_Timer.After(0.033, FlushUpdates)`) batches pending updates into a discrete frame window.
+- **30 FPS Execution Bucket:** An on-demand `OnUpdate` accumulator batches pending updates into a discrete ~0.033-second window. Its script is installed only while work is pending and removed immediately after the queue drains; no recurring timer objects are created.
 - **Table Recycling:** The engine moves keys between `pendingUnits` and `processingUnits` without re-creating or instantiating new tables during runtime:
   ```lua
   for unit in pairs(pendingUnits) do
@@ -29,6 +29,12 @@ This section details the architectural patterns and Lua techniques utilized thro
       pendingUnits[unit] = nil
   end
   ```
+- **Re-entrant Safety:** If a listener queues a unit while a flush is running, the driver remains active for one further bucket instead of dropping that update.
+
+### 1.1 Hot-Path Lookup Elimination (`Core.lua`, `BlizzardFrames.lua`)
+- Frequently called WoW API functions and Lua helpers are captured as local upvalues, avoiding repeated `_G` lookups in event, update, and discovery paths.
+- `ScanCompactFrames` walks a one-time static cache of Blizzard frame names. The hot scan performs `_G[name]` resolution only; it does not concatenate frame-name strings.
+- Supported units use fixed lookup tables for `player`, `party1`–`party4`, and `raid1`–`raid40`, avoiding pattern matching during scans and secure hooks.
 
 ### 2. Weak-Key Tables for Garbage Collector Friendly Caching (`BlizzardFrames.lua`)
 - Frame resolution (`GetHealthBar`, `GetUnit`) uses weak-table caching (`setmetatable({}, { __mode = "k" })`).
@@ -50,7 +56,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 
 ### 6. Minimalist Render Engine (`AbsorbIndicator.lua`, `BloodShieldOverlay.lua`)
 - Render textures rely on native status bar primitives (`Interface\Buttons\WHITE8x8`).
-- Uses zero frame `OnUpdate` polling scripts. The addon remains entirely dormant (0% CPU usage) until relevant game events fire.
+- The only `OnUpdate` script is the demand-driven throttle controller in `Core.lua`; it is removed whenever the pending-unit queue is empty. The addon otherwise remains event-driven.
 - Overlay elements are set to `EnableMouse(false)`, removing them from the client's hit-testing pass.
 
 ---
