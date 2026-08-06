@@ -4,6 +4,15 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
+-- Keep hot-path API and standard-library lookups out of _G.
+local CreateFrame = CreateFrame
+local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitHealthMax = UnitHealthMax
+local next = next
+local pairs = pairs
+local type = type
+local table_insert = table.insert
+
 local playerListeners = {}
 local unitListeners = {}
 local regenListeners = {}
@@ -11,25 +20,26 @@ local pendingUnits = {}
 local processingUnits = {}
 local isThrottleScheduled = false
 local eventFrame = CreateFrame("Frame")
+local throttleElapsed = 0
 
 local THROTTLE_INTERVAL = 0.033 -- ~30 FPS micro-throttle for visual updates
 
 -- Export functions guaranteed on initial execution
 function addon.RegisterPlayerUpdateListener(listener)
     if type(listener) == "function" then
-        table.insert(playerListeners, listener)
+        table_insert(playerListeners, listener)
     end
 end
 
 function addon.RegisterUnitUpdateListener(listener)
     if type(listener) == "function" then
-        table.insert(unitListeners, listener)
+        table_insert(unitListeners, listener)
     end
 end
 
 function addon.RegisterRegenListener(listener)
     if type(listener) == "function" then
-        table.insert(regenListeners, listener)
+        table_insert(regenListeners, listener)
     end
 end
 
@@ -56,8 +66,21 @@ local function FlushUpdates()
         end
     end
 
-    -- FIX: Reset flag at the end to avoid chained executions during loop processing
-    isThrottleScheduled = false
+    -- A listener can indirectly queue another update while this flush runs.
+    -- Keep the driver active in that case so no update is silently lost.
+    if next(pendingUnits) then
+        throttleElapsed = 0
+    else
+        isThrottleScheduled = false
+        eventFrame:SetScript("OnUpdate", nil)
+    end
+end
+
+local function OnThrottleUpdate(_, elapsed)
+    throttleElapsed = throttleElapsed + elapsed
+    if throttleElapsed >= THROTTLE_INTERVAL then
+        FlushUpdates()
+    end
 end
 
 local function ScheduleUnitUpdate(unit)
@@ -65,7 +88,8 @@ local function ScheduleUnitUpdate(unit)
     pendingUnits[unit] = true
     if not isThrottleScheduled then
         isThrottleScheduled = true
-        C_Timer.After(THROTTLE_INTERVAL, FlushUpdates)
+        throttleElapsed = 0
+        eventFrame:SetScript("OnUpdate", OnThrottleUpdate)
     end
 end
 

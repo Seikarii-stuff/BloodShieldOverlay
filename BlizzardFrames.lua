@@ -2,6 +2,23 @@
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
+
+-- Local aliases avoid repeated global-table lookups in frame discovery/update paths.
+local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitHealthMax = UnitHealthMax
+local UnitIsUnit = UnitIsUnit
+local hooksecurefunc = hooksecurefunc
+local ipairs = ipairs
+local next = next
+local pairs = pairs
+local select = select
+local type = type
+local table_wipe = table.wipe
+local string_find = string.find
 local manager = CreateFrame("Frame")
 
 local overlays = {}
@@ -12,6 +29,34 @@ local discoveryPending = false
 local pendingRefresh = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
+local PARTY_UNITS = { player = true }
+local RAID_UNITS = { player = true }
+local COMPACT_FRAME_NAMES = {}
+local compactFrameNameCount = 0
+
+for index = 1, 4 do
+    PARTY_UNITS["party" .. index] = true
+end
+
+for index = 1, 40 do
+    RAID_UNITS["raid" .. index] = true
+
+    compactFrameNameCount = compactFrameNameCount + 1
+    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactRaidFrame" .. index
+    compactFrameNameCount = compactFrameNameCount + 1
+    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactPartyFrameMemberFrame" .. index
+    compactFrameNameCount = compactFrameNameCount + 1
+    COMPACT_FRAME_NAMES[compactFrameNameCount] = "PartyMemberFrame" .. index
+    compactFrameNameCount = compactFrameNameCount + 1
+    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactPartyFrame" .. index
+end
+
+for group = 1, 8 do
+    for slot = 1, 5 do
+        compactFrameNameCount = compactFrameNameCount + 1
+        COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactRaidGroup" .. group .. "Slot" .. slot
+    end
+end
 
 local function IsForbiddenFrame(frame)
     if not frame then return true end
@@ -65,7 +110,7 @@ local function GetHealthBar(frame)
 
     if not healthBar and IsStatusBar(frame) then
         local name = GetFrameName(frame)
-        if name == "" or name:find("Health") then
+        if name == "" or string_find(name, "Health", 1, true) then
             healthBar = frame
         end
     end
@@ -94,7 +139,7 @@ local function GetUnit(frame)
 
     local name = GetFrameName(frame)
     if name ~= "" then
-        if not (name:find("PlayerFrame") or name:find("Party") or name:find("Raid") or name:find("Unit") or name:find("NamePlate")) then
+        if not (string_find(name, "PlayerFrame", 1, true) or string_find(name, "Party", 1, true) or string_find(name, "Raid", 1, true) or string_find(name, "Unit", 1, true) or string_find(name, "NamePlate", 1, true)) then
             return nil
         end
     end
@@ -107,10 +152,9 @@ local function IsSupportedUnit(unit)
     local inRaid = IsInRaid and IsInRaid()
 
     if inRaid then
-        return unit == "player" or (unit:find("^raid%d+$") ~= nil)
-    else
-        return unit == "player" or (unit:find("^party%d+$") ~= nil)
+        return RAID_UNITS[unit] == true
     end
+    return PARTY_UNITS[unit] == true
 end
 
 local function AddOverlay(unit, healthBar)
@@ -266,24 +310,10 @@ local function ScanCompactFrames()
     ScanContainerChildren(CompactPartyFrame)
     ScanContainerChildren(CompactRaidFrameContainer)
 
-    for index = 1, 40 do
-        local frame = _G["CompactRaidFrame" .. index]
-            or _G["CompactPartyFrameMemberFrame" .. index]
-            or _G["PartyMemberFrame" .. index]
-            or _G["CompactPartyFrame" .. index]
-        if frame then
-            if not IsForbiddenFrame(frame) then
-                TryAddFrameOverlay(frame)
-            end
-        end
-    end
-
-    for group = 1, 8 do
-        for slot = 1, 5 do
-            local frame = _G["CompactRaidGroup" .. group .. "Slot" .. slot]
-            if frame and not IsForbiddenFrame(frame) then
-                TryAddFrameOverlay(frame)
-            end
+    for index = 1, compactFrameNameCount do
+        local frame = _G[COMPACT_FRAME_NAMES[index]]
+        if frame and not IsForbiddenFrame(frame) then
+            TryAddFrameOverlay(frame)
         end
     end
 end
@@ -294,7 +324,7 @@ local function DiscoverFrames()
     TryEnsurePartyFramesVisible()
 
     -- Reuse table without allocations
-    table.wipe(foundHealthBars)
+    table_wipe(foundHealthBars)
 
     local playerHealthBar = GetPlayerFrameHealthBar()
     if playerHealthBar then
