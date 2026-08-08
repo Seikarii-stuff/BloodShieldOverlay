@@ -263,7 +263,8 @@ local function TryAddFrameOverlay(frame)
     end
 end
 
--- FIX: Zero-allocation container scanning replacing closures/tables and pcall
+-- Container scanning keeps the WoW child list call deterministic and avoids
+-- resolving the same child collection once per index.
 local function ScanContainerChildren(container)
     if not container or IsForbiddenFrame(container) then return end
 
@@ -286,15 +287,15 @@ local function ScanContainerChildren(container)
     end
 
     if container.GetChildren then
-        local numChildren = select("#", container:GetChildren())
-        for i = 1, numChildren do
-            local child = select(i, container:GetChildren())
+        local children = { container:GetChildren() }
+        for i = 1, #children do
+            local child = children[i]
             if child and not IsForbiddenFrame(child) then
                 TryAddFrameOverlay(child)
                 if child.GetChildren then
-                    local numSub = select("#", child:GetChildren())
-                    for j = 1, numSub do
-                        local subChild = select(j, child:GetChildren())
+                    local subChildren = { child:GetChildren() }
+                    for j = 1, #subChildren do
+                        local subChild = subChildren[j]
                         if subChild and not IsForbiddenFrame(subChild) then
                             TryAddFrameOverlay(subChild)
                         end
@@ -465,15 +466,11 @@ local function OnEditModeExit()
 end
 
 if EventRegistry and EventRegistry.RegisterCallback then
-    pcall(function()
-        EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon)
-    end)
+    EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon)
 end
 
 if EditModeManagerFrame and EditModeManagerFrame.HookScript then
-    pcall(function()
-        EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
-    end)
+    EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
 end
 
 manager:RegisterEvent("PLAYER_LOGIN")

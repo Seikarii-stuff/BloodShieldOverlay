@@ -16,10 +16,10 @@
   - Integración limpia sobre `PlayerFrame`, `PersonalResourceDisplayFrame`, `PartyFrame`, `CompactPartyFrame` y `CompactRaidFrame`.
   - Compatible con el modo marco de party forzado estando solo (*Always-In-Party*).
 
-- **Arquitectura de Alto Rendimiento (Zero-Allocation)**:
-  - **Zero asignaciones de memoria en combate**: Eliminada la creación de tablas o funciones anónimas durante el procesamiento de eventos rápidos (`UNIT_ABSORB_AMOUNT_CHANGED`, `UNIT_HEALTH`).
+- **Arquitectura de Alto Rendimiento**:
+  - El procesamiento de eventos rápidos (`UNIT_ABSORB_AMOUNT_CHANGED`, `UNIT_HEALTH`) usa un throttle bajo demanda y reutiliza sus colas internas; la creación de overlays queda limitada a los ciclos de descubrimiento.
   - **Micro-Throttle (30 FPS / ~0.033s)**: Agrupa las ráfagas intensas de curación/absorción en combate a ~30 FPS para evitar sobrecargar el renderizador visual de WoW.
-  - **Escaneo Inteligente sin `EnumerateFrames()`**: Acceso directo O(1) con caché de clave débil (*weak-table*) para descubrir marcos sin bucles globales pesados.
+  - **Escaneo Inteligente sin `EnumerateFrames()`**: Acceso dirigido con caché de clave débil (*weak-table*) para descubrir marcos sin recorrer todos los frames globales.
 
 ---
 

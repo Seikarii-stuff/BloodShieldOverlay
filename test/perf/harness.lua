@@ -1,6 +1,6 @@
 -- Minimal WoW API simulator for offline smoke tests.
 local M = {}
-local unpack_values = unpack
+local unpack_values = _G.unpack or table.unpack
 
 _G = _G
 _G.table.wipe = _G.table.wipe or function(t) for k in pairs(t) do t[k] = nil end end
@@ -17,6 +17,7 @@ local absorbs = { player = 250, party1 = 100, raid1 = 200 }
 local inCombat = false
 local inRaid = false
 local inGroup = false
+local getChildrenCalls = 0
 
 local function frame_method(self, name, fn)
     self[name] = fn
@@ -29,7 +30,10 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "GetObjectType", function(self) return self.objectType end)
     frame_method(frame, "GetName", function(self) return self.name end)
     frame_method(frame, "IsForbidden", function() return false end)
-    frame_method(frame, "GetChildren", function(self) return unpack_values(self.children) end)
+    frame_method(frame, "GetChildren", function(self)
+        getChildrenCalls = getChildrenCalls + 1
+        return unpack_values(self.children)
+    end)
     frame_method(frame, "GetAttribute", function(self, key) return self[key] end)
     frame_method(frame, "SetScript", function(self, event, fn) self.scripts[event] = fn end)
     frame_method(frame, "GetScript", function(self, event) return self.scripts[event] end)
@@ -115,5 +119,7 @@ function M.flush_timers()
     local pending = timers; timers = {}
     for _, fn in ipairs(pending) do fn() end
 end
+function M.reset_get_children_calls() getChildrenCalls = 0 end
+function M.get_children_calls() return getChildrenCalls end
 function M.frames() return frames end
 return M

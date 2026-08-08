@@ -18,12 +18,12 @@ El benchmark mide dispatch de eventos, actualizaciones del overlay, operaciones 
 
 Se contabiliza como “código junior” una construcción que introduce riesgo funcional o mantenimiento innecesario (duplicación, API insegura, manejo incompleto de errores o comentarios que afirman garantías no verificadas), no el estilo deliberadamente simple.
 
-Hallazgos iniciales confirmados:
+Hallazgos iniciales confirmados y estado:
 
-1. `BlizzardFrames.lua`: `ScanContainerChildren` llama `container:GetChildren()` dos veces por índice y por nivel. Es trabajo redundante en un camino de descubrimiento y contradice la afirmación de cero coste; **1 bloque junior**.
-2. `BlizzardFrames.lua`: `pcall` alrededor de callbacks de `EventRegistry`/`HookScript` oculta errores reales y dificulta diagnóstico; **2 bloques junior**.
-3. `BloodShieldOverlay.lua`: los handlers de arrastre del menú pasan métodos sin wrapper (`menuFrame.StartMoving`/`StopMovingOrSizing`), acoplando implícitamente la firma del callback a la API; **2 bloques junior**.
-4. `BloodShieldOverlay.lua`: `SaveBarPosition` persiste offsets sin validar que `GetPoint()` haya devuelto una posición completa; **1 bloque junior**.
-5. `README.md`/`AGENTS.md`: afirmaciones absolutas de “0 bugs”, “0 B/s” y “cero asignaciones” no están respaldadas por tests ni medición reproducible; **1 bloque documental junior**.
+1. `BlizzardFrames.lua`: llamadas redundantes a `GetChildren`; **resuelto** usando una lista capturada por nivel.
+2. `BlizzardFrames.lua`: `pcall` silenciosos alrededor de callbacks; **resuelto** dejando que los errores sean visibles durante desarrollo/carga.
+3. `BloodShieldOverlay.lua`: handlers de arrastre sin wrapper explícito; **resuelto** con callbacks que reciben `self` de forma segura.
+4. `BloodShieldOverlay.lua`: `SaveBarPosition` sin validación; **resuelto** rechazando puntos incompletos o offsets no numéricos.
+5. `README.md`/`AGENTS.md`: afirmaciones absolutas de rendimiento; **resuelto** sustituyéndolas por medición y límites explícitos.
 
-**Total provisional: 7 bloques de código/documentación junior.** Se mantiene separado de bugs funcionales y no se modifica producción sin una petición explícita de refactor.
+**Total original: 7 bloques de código/documentación junior. Estado: 7/7 corregidos.** El smoke test pasó 19 assertions y el benchmark ahora incluye dispatch, overlay y descubrimiento de frames.

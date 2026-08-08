@@ -8,10 +8,10 @@ This repository serves as a **battle-tested reference implementation (0 bugs, pe
 
 ## 📊 Performance Benchmarks
 
-- **Memory Footprint:** ~80 KB (Static baseline across extended raid sessions)
-- **CPU Footprint:** ~0.01% execution footprint under heavy 40-man combat conditions
-- **Garbage Generation:** 0 B/s in idle/combat steady-state (zero transient memory allocations in hot paths)
-- **Taint / Lockdown Violations:** 0 (Full combat lockdown isolation & protected frame guards)
+- **Memory Footprint:** Validate with the synthetic benchmark in `test/benchmark/benchmark.lua`; values vary by client build and UI state.
+- **CPU Footprint:** Validate with the synthetic benchmark and in-client profiling under the target raid composition.
+- **Garbage Generation:** Hot event dispatch reuses its queues; discovery and UI construction may allocate as frames change.
+- **Taint / Lockdown Violations:** All state-changing discovery paths guard combat lockdown; verify protected-frame behavior in the target client build.
 
 ---
 
@@ -46,9 +46,9 @@ This section details the architectural patterns and Lua techniques utilized thro
 - Operations during combat are queued via `pendingRefresh = true` and deferred safely until `PLAYER_REGEN_ENABLED` triggers.
 - Explicit `IsForbiddenFrame` calls safeguard against protected or secure frame access errors.
 
-### 4. Zero-Closure Recursive Container Scanning
-- Container scanning (`ScanContainerChildren`, `ScanCompactFrames`) uses direct, iterative loops over child tables and index bounds instead of closures (`pcall(function() ... end)` or `forEach` equivalents).
-- Eliminates function instantiation overhead during UI discovery cycles.
+### 4. Bounded Container Scanning
+- Container scanning (`ScanContainerChildren`, `ScanCompactFrames`) uses bounded child lists and direct loops.
+- Discovery is not a combat-frame loop; allocations are measured by the benchmark rather than claimed as zero.
 
 ### 5. Event Bus Decoupling
 - Uses a centralized, subscription-based dispatcher (`RegisterUnitUpdateListener`, `RegisterPlayerUpdateListener`, `RegisterRegenListener`).
@@ -63,7 +63,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 
 ## 💡 Why Use This Repository as a Template?
 
-1. **Production-Proven:** Tested in high-density mythic raiding and PvP environments with 0 reported memory leaks or script errors.
+1. **Production-Oriented:** The offline suite covers loading and representative event/UI paths; in-client validation is still required for each Retail/PTR build.
 2. **Clean Modularity:** Core updates, frame discovery, rendering, and UI config are decoupled into discrete, easily readable files.
 3. **Copy-Paste Architecture:** The frame discovery engine in `BlizzardFrames.lua` provides a blueprint for targeting Blizzard frames across modern retail interface updates.
 

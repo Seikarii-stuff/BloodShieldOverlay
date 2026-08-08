@@ -113,6 +113,10 @@ end
 local function SaveBarPosition()
     if not bar then return end
     local point, _, relativePoint, xOffset, yOffset = bar:GetPoint()
+    if type(point) ~= "string" or type(relativePoint) ~= "string"
+        or type(xOffset) ~= "number" or type(yOffset) ~= "number" then
+        return
+    end
     config.point = point
     config.relativePoint = relativePoint
     config.xOffset = xOffset
@@ -219,8 +223,12 @@ local function CreateConfigMenu()
     menuFrame:SetMovable(true)
     menuFrame:EnableMouse(true)
     menuFrame:RegisterForDrag("LeftButton")
-    menuFrame:SetScript("OnDragStart", menuFrame.StartMoving)
-    menuFrame:SetScript("OnDragStop", menuFrame.StopMovingOrSizing)
+    menuFrame:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    menuFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+    end)
 
     local title = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", menuFrame, "TOP", 0, -12)

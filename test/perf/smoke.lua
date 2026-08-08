@@ -50,7 +50,7 @@ SlashCmdList.BLOODSHIELDOVERLAY("party")
 SlashCmdList.BLOODSHIELDOVERLAY("")
 wow.flush_timers()
 check(type(BloodShieldOverlayProfiles) == "table", "profile store was not created")
-check(BloodShieldOverlayConfig and BloodShieldOverlayConfig.widthEdit, "configuration menu was not created")
+check(_G.BloodShieldOverlayConfig and _G.BloodShieldOverlayConfig.widthEdit, "configuration menu was not created")
 
 -- Exercise player-frame discovery and combat-deferred refresh paths.
 local content = wow.new_frame("Frame", "PlayerFrameContent")
@@ -63,6 +63,16 @@ main.HealthBarArea = area
 wow.set_group(false, false)
 addon.RequestRefresh()
 wow.flush_timers()
+local partyContainer = wow.new_frame("Frame", "SmokePartyContainer")
+local partyMember = wow.new_frame("Frame", "SmokePartyMember", partyContainer)
+partyMember.displayedUnit = "party1"
+partyMember.healthBar = wow.new_frame("StatusBar", "SmokePartyHealthBar", partyMember)
+PartyFrame = partyContainer
+wow.set_group(true, false)
+wow.reset_get_children_calls()
+addon.RequestRefresh()
+wow.flush_timers()
+check(wow.get_children_calls() == 2, "container discovery called GetChildren more than once per level")
 wow.set_combat(true)
 addon.RequestRefresh()
 wow.set_combat(false)

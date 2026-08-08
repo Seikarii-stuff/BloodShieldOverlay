@@ -1,7 +1,10 @@
 iterations=100000
-dispatch_seconds=0.431000
-dispatch_ops_per_second=232018.56
-overlay_seconds=0.031000
-overlay_ops_per_second=3225806.45
+dispatch_seconds=0.435000
+dispatch_ops_per_second=229885.06
+overlay_seconds=0.030000
+overlay_ops_per_second=3333333.33
+discovery_iterations=1000
+discovery_seconds=0.028000
+discovery_ops_per_second=35714.29
 listener_updates=100000
-heap_delta_kb=15.82
+heap_delta_kb=15.84
