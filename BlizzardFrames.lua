@@ -264,7 +264,21 @@ local function TryAddFrameOverlay(frame)
 end
 
 -- Container scanning keeps the WoW child list call deterministic and avoids
--- resolving the same child collection once per index.
+-- resolving the same child collection once per index. Varargs stay on the
+-- Lua stack, avoiding a temporary table on each discovery pass.
+local function ScanChildren(depth, ...)
+    local childCount = select("#", ...)
+    for index = 1, childCount do
+        local child = select(index, ...)
+        if child and not IsForbiddenFrame(child) then
+            TryAddFrameOverlay(child)
+            if depth < 2 and child.GetChildren then
+                ScanChildren(depth + 1, child:GetChildren())
+            end
+        end
+    end
+end
+
 local function ScanContainerChildren(container)
     if not container or IsForbiddenFrame(container) then return end
 
@@ -286,24 +300,7 @@ local function ScanContainerChildren(container)
         end
     end
 
-    if container.GetChildren then
-        local children = { container:GetChildren() }
-        for i = 1, #children do
-            local child = children[i]
-            if child and not IsForbiddenFrame(child) then
-                TryAddFrameOverlay(child)
-                if child.GetChildren then
-                    local subChildren = { child:GetChildren() }
-                    for j = 1, #subChildren do
-                        local subChild = subChildren[j]
-                        if subChild and not IsForbiddenFrame(subChild) then
-                            TryAddFrameOverlay(subChild)
-                        end
-                    end
-                end
-            end
-        end
-    end
+    if container.GetChildren then ScanChildren(1, container:GetChildren()) end
 end
 
 local function ScanCompactFrames()

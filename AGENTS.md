@@ -8,8 +8,8 @@ This repository serves as a **battle-tested reference implementation (0 bugs, pe
 
 ## 📊 Performance Benchmarks
 
-- **Memory Footprint:** Validate with the synthetic benchmark in `test/benchmark/benchmark.lua`; values vary by client build and UI state.
-- **CPU Footprint:** Validate with the synthetic benchmark and in-client profiling under the target raid composition.
+- **Memory Footprint:** The latest synthetic run reports `heap_delta_kb=15.84` after 100,000 dispatches; values vary by client build and UI state.
+- **CPU Footprint:** The latest synthetic run reports `226757.37` dispatch operations/second, `3333333.33` overlay operations/second and `35714.29` discovery operations/second.
 - **Garbage Generation:** Hot event dispatch reuses its queues; discovery and UI construction may allocate as frames change.
 - **Taint / Lockdown Violations:** All state-changing discovery paths guard combat lockdown; verify protected-frame behavior in the target client build.
 
@@ -58,6 +58,12 @@ This section details the architectural patterns and Lua techniques utilized thro
 - Render textures rely on native status bar primitives (`Interface\Buttons\WHITE8x8`).
 - The only `OnUpdate` script is the demand-driven throttle controller in `Core.lua`; it is removed whenever the pending-unit queue is empty. The addon otherwise remains event-driven.
 - Overlay elements are set to `EnableMouse(false)`, removing them from the client's hit-testing pass.
+
+### 7. Test and Benchmark Workflow
+- Offline smoke test: `lua test/perf/smoke.lua` — validates loading, public APIs, event coalescing, profile/menu initialization, combat-deferred refresh and bounded frame discovery. Current result: **PASS, 19 assertions**.
+- Synthetic benchmark: `lua test/benchmark/benchmark.lua 100000` — measures dispatch, overlay updates, discovery throughput, listener count and Lua heap delta.
+- Generated result: `test/result/benchmark-latest.txt`.
+- The harness is intentionally offline and does not replace in-client PTR/Retail validation with protected frames, Edit Mode and 40-player raid layouts.
 
 ---
 
