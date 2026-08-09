@@ -137,13 +137,6 @@ local function GetUnit(frame)
         end
     end
 
-    local name = GetFrameName(frame)
-    if name ~= "" then
-        if not (string_find(name, "PlayerFrame", 1, true) or string_find(name, "Party", 1, true) or string_find(name, "Raid", 1, true) or string_find(name, "Unit", 1, true) or string_find(name, "NamePlate", 1, true)) then
-            return nil
-        end
-    end
-
     return nil
 end
 
@@ -317,7 +310,10 @@ local function ScanCompactFrames()
 end
 
 local function DiscoverFrames()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
 
     TryEnsurePartyFramesVisible()
 
@@ -390,12 +386,12 @@ local function OnDiscoveryTimer()
 end
 
 QueueDiscoverAndUpdate = function()
-    TryEnsurePartyFramesVisible()
-
     if InCombatLockdown() then
         pendingRefresh = true
         return
     end
+
+    TryEnsurePartyFramesVisible()
 
     if discoveryPending then
         pendingRefresh = true
@@ -407,7 +403,6 @@ QueueDiscoverAndUpdate = function()
 end
 
 addon.RequestRefresh = function()
-    TryEnsurePartyFramesVisible()
     if QueueDiscoverAndUpdate then
         QueueDiscoverAndUpdate()
     end
@@ -457,8 +452,13 @@ if hooksecurefunc then
     end
 end
 
+local editModeExitPending = false
+
 local function OnEditModeExit()
+    if editModeExitPending then return end
+    editModeExitPending = true
     C_Timer.After(0.2, function()
+        editModeExitPending = false
         TryEnsurePartyFramesVisible()
         QueueDiscoverAndUpdate()
     end)
@@ -505,6 +505,5 @@ manager:SetScript("OnEvent", function(_, event, unit)
         return
     end
 
-    TryEnsurePartyFramesVisible()
     QueueDiscoverAndUpdate()
 end)

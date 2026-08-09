@@ -1,15 +1,15 @@
 # 🚀 Agent & Developer Guide: BloodShieldOverlay Architecture
 
-Welcome to **BloodShieldOverlay**, a high-performance, ultra-lightweight World of Warcraft addon engineered for maximum execution speed, zero memory bloat, and rock-solid stability across thousands of hours of gameplay.
+Welcome to **BloodShieldOverlay**, a high-performance, ultra-lightweight World of Warcraft addon designed for low overhead and stable operation across modern Retail UI layouts.
 
-This repository serves as a **battle-tested reference implementation (0 bugs, peak performance)** for high-efficiency Lua development in the World of Warcraft client environment.
+This repository documents a performance-oriented implementation of common high-efficiency Lua patterns for the World of Warcraft client environment. Offline benchmarks are synthetic and do not establish in-client correctness or performance guarantees.
 
 ---
 
 ## 📊 Performance Benchmarks
 
-- **Memory Footprint:** The latest synthetic run reports `heap_delta_kb=15.84` after 100,000 dispatches; values vary by client build and UI state.
-- **CPU Footprint:** The latest synthetic run reports `226757.37` dispatch operations/second, `3333333.33` overlay operations/second and `35714.29` discovery operations/second.
+- **Memory Footprint:** Synthetic measurements are recorded in `test/result/benchmark-latest.txt`; values vary by Lua runtime, client build and UI state.
+- **CPU Footprint:** Synthetic throughput measurements are recorded in `test/result/benchmark-latest.txt`; they are comparative signals, not production guarantees.
 - **Garbage Generation:** Hot event dispatch reuses its queues; discovery and UI construction may allocate as frames change.
 - **Taint / Lockdown Violations:** All state-changing discovery paths guard combat lockdown; verify protected-frame behavior in the target client build.
 
@@ -56,7 +56,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 
 ### 6. Minimalist Render Engine (`AbsorbIndicator.lua`, `PlayerBar.lua`, `BloodShieldOverlay.lua`)
 - Render textures rely on native status bar primitives (`Interface\Buttons\WHITE8x8`).
-- The only `OnUpdate` script is the demand-driven throttle controller in `Core.lua`; it is removed whenever the pending-unit queue is empty. The addon otherwise remains event-driven.
+- `Core.lua` uses a demand-driven `OnUpdate` throttle for absorb updates, and `PlayerBar.lua` uses a separate 10 Hz `OnUpdate` only while a special resource pip is charging. Both scripts are removed when their work is complete; the addon otherwise remains event-driven.
 - Overlay elements are set to `EnableMouse(false)`, removing them from the client's hit-testing pass.
 
 ### 7. Test and Benchmark Workflow

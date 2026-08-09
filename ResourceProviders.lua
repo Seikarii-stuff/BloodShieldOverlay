@@ -41,7 +41,7 @@ local function CreatePowerProvider(powerType)
                 progress[index] = ready and 1 or 0
                 SetCircle(circles[index], progress[index], 1, progress[index], ready)
             end
-            return maximum
+            return maximum, false
         end,
     }
 end
@@ -75,7 +75,8 @@ local function CreateEssenceProvider(powerType)
                     SetCircle(circles[index], 0, 1, 0, false)
                 end
             end
-            return maximum
+            local charging = readyCount < maximum and start and duration and duration > 0
+            return maximum, charging and true or false
         end,
     }
 end
@@ -85,6 +86,7 @@ local function CreateRuneProvider()
         GetMax = function() return RUNE_COUNT end,
         Update = function(_, progress, circles, now)
             now = now or GetTime()
+            local charging = false
             for index = 1, RUNE_COUNT do
                 local start, duration, ready = GetRuneCooldown(index)
                 local circle = circles[index]
@@ -95,12 +97,13 @@ local function CreateRuneProvider()
                     local value = math_max(0, math_min(1, (now - start) / duration))
                     progress[index] = value
                     SetCircle(circle, value, duration, now - start, false)
+                    charging = true
                 else
                     progress[index] = 0
                     SetCircle(circle, 0, 1, 0, false)
                 end
             end
-            return RUNE_COUNT
+            return RUNE_COUNT, charging
         end,
     }
 end

@@ -127,6 +127,26 @@ end
 local specialResourceProvider, SPECIAL_POWER_TOKEN = addon.CreateSpecialResourceProvider(
     playerClass, powerTypes
 )
+local UpdateSpecialResources
+local specialTicker = CreateFrame("Frame")
+local specialElapsed = 0
+local SPECIAL_TICK = 0.1
+
+local function OnSpecialTick(_, elapsed)
+    specialElapsed = specialElapsed + elapsed
+    if specialElapsed < SPECIAL_TICK then return end
+    specialElapsed = 0
+    UpdateSpecialResources()
+end
+
+local function SetSpecialTicking(active)
+    if active then
+        specialTicker:SetScript("OnUpdate", OnSpecialTick)
+    else
+        specialElapsed = 0
+        specialTicker:SetScript("OnUpdate", nil)
+    end
+end
 
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
@@ -209,19 +229,31 @@ local function SortSpecialResources(count)
     end
 end
 
-local function UpdateSpecialResources()
-    if not specialResourceContainer or not specialResourceContainer:IsShown() then return end
+UpdateSpecialResources = function()
+    if not specialResourceContainer then return end
+
+    if not config.showSpecialResources or config.hideExternalBar
+        or config.resourceDisplay == "none" then
+        UpdateSpecialResourcesLayout()
+        SetSpecialTicking(false)
+        return
+    end
 
     for index = 1, MAX_SPECIAL_CIRCLES do
         specialProgress[index] = 0
     end
 
+    local isCharging = false
     if specialResourceProvider then
-        local count = specialResourceProvider:Update(specialProgress, specialCircles, GetTime())
+        local count, charging = specialResourceProvider:Update(
+            specialProgress, specialCircles, GetTime()
+        )
         SortSpecialResources(count)
+        isCharging = charging and true or false
     end
 
     UpdateSpecialResourcesLayout()
+    SetSpecialTicking(isCharging)
 end
 
 addon.UpdateSpecialResourcesLayout = UpdateSpecialResourcesLayout
@@ -290,7 +322,6 @@ local function UpdateExternalBarVisibility()
         bar:Show()
         if healthBar and config.showHealth then healthBar:Show() end
         UpdateResourceBarLayout()
-        UpdateSpecialResourcesLayout()
         UpdateSpecialResources()
     end
 end
@@ -347,7 +378,6 @@ local function UpdateBar(absorb, maxHP)
         resourceBar:Hide()
     end
 
-    UpdateSpecialResourcesLayout()
     UpdateSpecialResources()
 end
 
@@ -469,7 +499,6 @@ local function CreateConfigMenu()
     specialResCheck.Text:SetText("Show special resources (circles)")
     specialResCheck:SetScript("OnClick", function(self)
         config.showSpecialResources = self:GetChecked() and true or false
-        UpdateSpecialResourcesLayout()
         UpdateSpecialResources()
     end)
     menuFrame.specialResCheck = specialResCheck
