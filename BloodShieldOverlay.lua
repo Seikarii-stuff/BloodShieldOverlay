@@ -1,6 +1,5 @@
 -- Movable absorb bar for the player with slash command /shield.
 
-local ADDON_NAME = "BloodShieldOverlay"
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -27,6 +26,8 @@ local DEFAULTS = {
     showHealth = false,
     resourceDisplay = "left", -- "left", "right", "none"
 }
+
+local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 
 local config = {}
 
@@ -66,7 +67,7 @@ local function ApplyDefaults(db)
     if type(db.showHealth) ~= "boolean" then
         db.showHealth = DEFAULTS.showHealth
     end
-    if type(db.resourceDisplay) ~= "string" then
+    if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then
         db.resourceDisplay = DEFAULTS.resourceDisplay
     end
 
@@ -450,8 +451,6 @@ local function CreateConfigMenu()
 
         if bar then
             bar:SetSize(width, height)
-            UpdateTickMarks()
-            UpdateResourceBarLayout()
         end
         UpdateBar()
     end)
@@ -459,7 +458,7 @@ local function CreateConfigMenu()
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(90, 24)
     unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
-    unlock:Text("Unlock")
+    unlock:SetText("Unlock")
     unlock:SetScript("OnClick", function()
         config.locked = false
         UpdateBarLock()
@@ -547,8 +546,6 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
             bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
             bar:SetSize(config.width, config.height)
             UpdateBarLock()
-            UpdateTickMarks()
-            UpdateResourceBarLayout()
         end
         RefreshConfigMenuFields()
         UpdateBar()

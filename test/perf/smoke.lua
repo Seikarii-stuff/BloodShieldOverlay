@@ -8,6 +8,7 @@ end
 
 wow.load()
 local addon = BloodShieldOverlay
+wow.fire("PLAYER_LOGIN")
 check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API missing")
 check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API missing")
 check(type(addon.RegisterRegenListener) == "function", "regen listener API missing")
@@ -50,7 +51,33 @@ SlashCmdList.BLOODSHIELDOVERLAY("party")
 SlashCmdList.BLOODSHIELDOVERLAY("")
 wow.flush_timers()
 check(type(BloodShieldOverlayProfiles) == "table", "profile store was not created")
-check(_G.BloodShieldOverlayConfig and _G.BloodShieldOverlayConfig.widthEdit, "configuration menu was not created")
+check(_G["BloodShieldOverlayConfig"] and _G["BloodShieldOverlayConfig"].widthEdit, "configuration menu was not created")
+
+local configMenu = _G["BloodShieldOverlayConfig"]
+local bar = _G["BloodShieldOverlayBar"]
+check(bar and bar.resourceBar == nil, "bar should not expose implementation details")
+check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag handler")
+
+-- Regression test for the historical unlock-button crash: Button:Text is not
+-- a WoW API; CreateConfigMenu must complete and its handler must be callable.
+local unlockButton
+for _, frame in ipairs(wow.frames()) do
+    if frame.parent == configMenu and frame.text == "Unlock" then
+        unlockButton = frame
+        break
+    end
+end
+check(unlockButton and unlockButton:GetScript("OnClick"), "unlock button was not created")
+unlockButton:GetScript("OnClick")(unlockButton)
+check(bar.movable == true and bar.mouseEnabled == true, "unlock handler failed")
+
+configMenu.healthCheck:SetChecked(true)
+configMenu.healthCheck:GetScript("OnClick")(configMenu.healthCheck)
+check(configMenu.healthCheck:GetChecked() == true, "health toggle failed")
+configMenu.resButton:GetScript("OnClick")(configMenu.resButton)
+check(configMenu.resButton.text == "Right", "resource layout toggle failed")
+configMenu.resButton:GetScript("OnClick")(configMenu.resButton)
+check(configMenu.resButton.text == "None", "resource layout second toggle failed")
 
 -- Exercise player-frame discovery and combat-deferred refresh paths.
 local content = wow.new_frame("Frame", "PlayerFrameContent")

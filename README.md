@@ -11,6 +11,7 @@
   - Marcas visuales (*tick marks*) al **50%, 100% y 150%**.
   - Totalmente desplazable, redimensionable y configurable mediante interfaz gráfica (`/shield`).
   - Almacenamiento de perfiles independiente por personaje.
+  - Barra de salud opcional superpuesta y barra de recurso personal configurable a la izquierda, derecha o desactivada.
 
 - **Overlays en Marcos Nativos de Blizzard**:
   - Integración limpia sobre `PlayerFrame`, `PersonalResourceDisplayFrame`, `PartyFrame`, `CompactPartyFrame` y `CompactRaidFrame`.
@@ -20,6 +21,7 @@
   - El procesamiento de eventos rápidos (`UNIT_ABSORB_AMOUNT_CHANGED`, `UNIT_HEALTH`) usa un throttle bajo demanda y reutiliza sus colas internas; la creación de overlays queda limitada a los ciclos de descubrimiento.
   - **Micro-Throttle (30 FPS / ~0.033s)**: Agrupa las ráfagas intensas de curación/absorción en combate a ~30 FPS para evitar sobrecargar el renderizador visual de WoW.
   - **Escaneo Inteligente sin `EnumerateFrames()`**: Acceso dirigido con caché de clave débil (*weak-table*) para descubrir marcos sin recorrer todos los frames globales.
+  - La barra personal solo usa el `OnUpdate` compartido y throttled del dispatcher; no crea un bucle de renderizado propio.
 
 ---
 
@@ -39,19 +41,31 @@
 
 ## 📁 Estructura del Proyecto
 
-1. **[`Core.lua`]
+1. **[Core.lua](Core.lua)**
    - Centralizador de eventos de salud y absorciones.
    - Sistema de micro-throttle (~30 FPS) y patrón observador con asignaciones nulas de memoria.
 
-2. **[`BloodShieldOverlay.lua`
+2. **[BloodShieldOverlay.lua](BloodShieldOverlay.lua)**
    - Control de la barra de absorción independiente del jugador.
    - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`) y menú de ajustes.
 
-3. **[`AbsorbIndicator.lua`]
+3. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.
 
-4. **[`BlizzardFrames.lua`]
+4. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
+
+## 🧪 Tests offline
+
+El addon incluye un simulador mínimo de la API de WoW para validar los caminos que no requieren el cliente:
+
+- Smoke test: `lua test/perf/smoke.lua`
+  - Comprueba carga, APIs públicas, coalescing de eventos, perfiles, comandos slash, menú, toggles de salud/recurso, descubrimiento y refresco diferido durante combate.
+  - Incluye una regresión del botón **Unlock**, que anteriormente llamaba al método inexistente `Button:Text()`.
+- Benchmark: `lua test/benchmark/benchmark.lua 100000`
+  - Mide dispatch, actualización de overlays, descubrimiento y delta del heap.
+
+Estos tests no sustituyen la validación dentro del cliente PTR/Retail con marcos protegidos, Edit Mode y grupos de 40 jugadores.
 
 ---
 
@@ -65,5 +79,5 @@
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
 ---
-**Versión**: 1.5 Release  
+**Versión**: 1.6 Release
 **Autor**: Seikarii  
