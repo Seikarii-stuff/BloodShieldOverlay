@@ -19,18 +19,24 @@ local SPECIAL_CIRCLE_SIZE = 12
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
 local SPECIAL_POWER_TYPE
+local SPECIAL_POWER_TOKEN
 
 if powerTypes then
     if playerClass == "PALADIN" then
         SPECIAL_POWER_TYPE = powerTypes.HolyPower
+        SPECIAL_POWER_TOKEN = "HOLY_POWER"
     elseif playerClass == "EVOKER" then
         SPECIAL_POWER_TYPE = powerTypes.Essence
+        SPECIAL_POWER_TOKEN = "ESSENCE"
     elseif playerClass == "WARLOCK" then
         SPECIAL_POWER_TYPE = powerTypes.SoulShards
+        SPECIAL_POWER_TOKEN = "SOUL_SHARDS"
     elseif playerClass == "MONK" then
         SPECIAL_POWER_TYPE = powerTypes.Chi
+        SPECIAL_POWER_TOKEN = "CHI"
     elseif playerClass == "ROGUE" or playerClass == "DRUID" then
         SPECIAL_POWER_TYPE = powerTypes.ComboPoints
+        SPECIAL_POWER_TOKEN = "COMBO_POINTS"
     end
 end
 
@@ -241,13 +247,11 @@ end
 
 local specialResourceContainer
 local specialCircles = {}
-local specialProgress = {}
-local specialOrder = {}
 
-for index = 1, MAX_SPECIAL_CIRCLES do
-    specialProgress[index] = 0
-    specialOrder[index] = index
-end
+-- White while charging/empty; snaps to gold the instant a pip is ready/full.
+-- This is the only state that changes per pip; slot identity never does.
+local CHARGING_COLOR = { 1, 1, 1 }
+local READY_COLOR = { 1, 0.82, 0 }
 
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
@@ -305,42 +309,25 @@ local function UpdateSpecialResourcesLayout()
 
     specialResourceContainer:Show()
     for index = 1, MAX_SPECIAL_CIRCLES do
+        -- Slot identity is fixed to `index`: pip N always represents the same
+        -- physical position on the bar and never swaps places with another
+        -- pip. Only its fill/color change. This is what keeps runes/points
+        -- reading as "filling in place" instead of reshuffling as they update.
+        local circle = specialCircles[index]
         if index <= maxPower then
-            local circle = specialCircles[specialOrder[index]]
             circle:SetSize(circleWidth, math.max(1, slotSize - 2))
             circle:ClearAllPoints()
             circle:SetPoint("TOPLEFT", resourceBar, "TOPLEFT", 1,
                 -((index - 1) * slotSize + 1))
             circle:Show()
         else
-            specialCircles[specialOrder[index]]:Hide()
+            circle:Hide()
         end
-    end
-end
-
-local function SortSpecialResources(count)
-    -- Stable insertion sort is intentional: the arrays are tiny and this
-    -- avoids table.sort's comparator closure on the hot event path.
-    for position = 2, count do
-        local candidate = specialOrder[position]
-        local candidateProgress = specialProgress[candidate]
-        local insertAt = position - 1
-
-        while insertAt >= 1
-            and specialProgress[specialOrder[insertAt]] < candidateProgress do
-            specialOrder[insertAt + 1] = specialOrder[insertAt]
-            insertAt = insertAt - 1
-        end
-        specialOrder[insertAt + 1] = candidate
     end
 end
 
 local function UpdateSpecialResources()
     if not specialResourceContainer or not specialResourceContainer:IsShown() then return end
-
-    for index = 1, MAX_SPECIAL_CIRCLES do
-        specialProgress[index] = 0
-    end
 
     if playerClass == "DEATHKNIGHT" then
         local now = GetTime()
@@ -349,32 +336,34 @@ local function UpdateSpecialResources()
             local circle = specialCircles[index]
             circle:SetMinMaxValues(0, 1)
             if ready then
-                specialProgress[index] = 1
                 circle:SetValue(1)
+                circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
             elseif start and duration and duration > 0 then
                 local progress = (now - start) / duration
                 if progress < 0 then progress = 0 end
                 if progress > 1 then progress = 1 end
-                specialProgress[index] = progress
                 circle:SetMinMaxValues(0, duration)
                 circle:SetValue(now - start)
+                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
             else
-                specialProgress[index] = 0
                 circle:SetValue(0)
+                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
             end
         end
-        SortSpecialResources(6)
     elseif SPECIAL_POWER_TYPE then
         local currentPower = UnitPower("player", SPECIAL_POWER_TYPE) or 0
         local maxPower = math.min(UnitPowerMax("player", SPECIAL_POWER_TYPE) or 0, MAX_SPECIAL_CIRCLES)
         for index = 1, maxPower do
             local circle = specialCircles[index]
             circle:SetMinMaxValues(0, 1)
-            local progress = index <= currentPower and 1 or 0
-            specialProgress[index] = progress
-            circle:SetValue(progress)
+            if index <= currentPower then
+                circle:SetValue(1)
+                circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
+            else
+                circle:SetValue(0)
+                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
+            end
         end
-        SortSpecialResources(maxPower)
     end
 
     UpdateSpecialResourcesLayout()
@@ -713,16 +702,25 @@ initFrame:RegisterEvent("UNIT_POWER_UPDATE")
 initFrame:RegisterEvent("UNIT_MAXPOWER")
 initFrame:RegisterEvent("UNIT_POWER_FREQUENT")
 initFrame:RegisterEvent("RUNE_POWER_UPDATE")
-initFrame:SetScript("OnEvent", function(_, event, unit)
+initFrame:SetScript("OnEvent", function(_, event, unit, powerType)
     if event == "PLAYER_LOGIN" then
         EnsureConfig()
         UpdateBar()
-    elseif (event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER"
-        or event == "UNIT_POWER_FREQUENT") and unit == "player" then
-        UpdateBar()
-        UpdateSpecialResources()
     elseif event == "RUNE_POWER_UPDATE" then
         UpdateSpecialResources()
+    elseif unit == "player" and event == "UNIT_MAXPOWER" then
+        -- Rare event; always safe to recompute (pip count can change, e.g. talents).
+        UpdateBar()
+        UpdateSpecialResources()
+    elseif unit == "player" and (event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT") then
+        UpdateBar()
+        -- UNIT_POWER_FREQUENT fires very often for the class's primary
+        -- resource (e.g. Energy/Rage/Mana). Only recompute the special-
+        -- resource pips when the power type that actually changed is the
+        -- one they track, instead of on every unrelated tick.
+        if SPECIAL_POWER_TOKEN and powerType == SPECIAL_POWER_TOKEN then
+            UpdateSpecialResources()
+        end
     end
 end)
 
