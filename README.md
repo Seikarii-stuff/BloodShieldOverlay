@@ -12,6 +12,8 @@
   - Totalmente desplazable, redimensionable y configurable mediante interfaz gráfica (`/shield`).
   - Almacenamiento de perfiles independiente por personaje.
   - Barra de salud opcional superpuesta y barra de recurso personal configurable a la izquierda, derecha o desactivada.
+  - Recursos especiales discretos dentro de la barra vertical de recursos: Poder Sagrado, Esencia, Fragmentos de Alma, Chi, Puntos de Combo y Runas de Caballero de la Muerte.
+  - Los círculos se crean una sola vez y se actualizan mediante `UNIT_POWER_FREQUENT`, `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER` y `RUNE_POWER_UPDATE`.
 
 - **Overlays en Marcos Nativos de Blizzard**:
   - Integración limpia sobre `PlayerFrame`, `PersonalResourceDisplayFrame`, `PartyFrame`, `CompactPartyFrame` y `CompactRaidFrame`.
@@ -34,7 +36,7 @@
 | `/shield lock` | Bloquea la barra en su posición actual. |
 | `/shield hide` | Oculta la barra independiente para el personaje actual. |
 | `/shield show` | Muestra la barra independiente para el personaje actual. |
-| `/shield reset` | Restaura la posición y tamaño por defecto. |
+| `/shield reset` | Restaura la posición, tamaño y opciones por defecto. |
 | `/shield party` | Fuerza un refresco manual del descubrimiento de marcos de party/raid. |
 
 ---
@@ -50,7 +52,7 @@
 
 3. **[PlayerBar.lua](PlayerBar.lua)**
   - Control de las barras standalone de absorción, salud y recurso.
-  - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`), menú de ajustes y comandos `/shield`.
+  - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`), menú de ajustes, recursos especiales y comandos `/shield`.
 
 4. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.

@@ -19,6 +19,8 @@ check(type(addon.CreateAbsorbOverlay) == "function", "overlay factory missing")
 check(type(addon.UpdateAbsorbOverlay) == "function", "overlay updater missing")
 check(type(addon.RefreshPartyFrames) == "function", "party refresh API missing")
 check(type(addon.RequestRefresh) == "function", "refresh API missing")
+check(type(addon.UpdateSpecialResourcesLayout) == "function", "special resource layout API missing")
+check(type(addon.UpdateSpecialResources) == "function", "special resource update API missing")
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -39,6 +41,7 @@ addon.RegisterRegenListener(function(event) regen = regen + 1; check(event == "P
 
 wow.fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
 wow.fire("UNIT_HEALTH", "player")
+wow.fire("UNIT_POWER_FREQUENT", "player")
 wow.tick(0.033)
 check(units == 1 and players == 1, "throttle did not coalesce player events")
 wow.fire("PLAYER_REGEN_ENABLED")
@@ -61,8 +64,16 @@ local bar = _G["BloodShieldOverlayBar"]
 check(bar and bar.resourceBar == nil, "bar should not expose implementation details")
 check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag handler")
 check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
+check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
 check(configMenu.applyButton.point == "LEFT" and configMenu.applyButton.relative == configMenu.capEdit,
     "apply button should be beside the size and cap fields")
+
+configMenu.specialResCheck:SetChecked(false)
+configMenu.specialResCheck:GetScript("OnClick")(configMenu.specialResCheck)
+check(configMenu.specialResCheck:GetChecked() == false, "special resource toggle failed")
+configMenu.specialResCheck:SetChecked(true)
+configMenu.specialResCheck:GetScript("OnClick")(configMenu.specialResCheck)
+check(configMenu.specialResCheck:GetChecked() == true, "special resource re-enable failed")
 
 local originalWidth, originalHeight = bar.width, bar.height
 configMenu.capEdit:SetText("300")

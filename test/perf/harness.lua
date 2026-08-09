@@ -68,6 +68,8 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "CreateTexture", function(self) return new_frame("Texture", nil, self) end)
     frame_method(frame, "CreateFontString", function(self) return new_frame("FontString", nil, self) end)
     frame_method(frame, "SetColorTexture", function(self, r, g, b, a) self.color = { r, g, b, a } end)
+    frame_method(frame, "SetTexture", function(self, texture) self.texture = texture end)
+    frame_method(frame, "SetVertexColor", function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end)
     frame_method(frame, "SetHeight", function(self, value) self.height = value end)
     frame_method(frame, "ClearAllPoints", function(self) self.point = nil end)
     frame_method(frame, "SetText", function(self, value) self.text = value end)
@@ -98,6 +100,10 @@ _G.UnitHealthMax = function(unit) return health[unit] or 0 end
 _G.UnitHealth = function(unit) return health[unit] or 0 end
 _G.UnitPower = function(unit) return power[unit] or 0 end
 _G.UnitPowerMax = function(unit) return maxPower[unit] or 0 end
+_G.UnitClass = function() return "Tester", "PALADIN" end
+_G.Enum = { PowerType = { HolyPower = 9, Essence = 19, SoulShards = 7, Chi = 12, ComboPoints = 4 } }
+_G.GetRuneCooldown = function() return 0, 0, true end
+_G.GetTime = function() return 100 end
 _G.UnitName = function() return "Tester" end
 _G.GetNormalizedRealmName = function() return "Realm" end
 _G.C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }

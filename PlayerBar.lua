@@ -13,6 +13,26 @@ local tickLines = {}
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
 local RESOURCE_BAR_WIDTH = 8
+local MAX_SPECIAL_CIRCLES = 7
+local SPECIAL_CIRCLE_SIZE = 12
+
+local _, playerClass = UnitClass("player")
+local powerTypes = Enum and Enum.PowerType
+local SPECIAL_POWER_TYPE
+
+if powerTypes then
+    if playerClass == "PALADIN" then
+        SPECIAL_POWER_TYPE = powerTypes.HolyPower
+    elseif playerClass == "EVOKER" then
+        SPECIAL_POWER_TYPE = powerTypes.Essence
+    elseif playerClass == "WARLOCK" then
+        SPECIAL_POWER_TYPE = powerTypes.SoulShards
+    elseif playerClass == "MONK" then
+        SPECIAL_POWER_TYPE = powerTypes.Chi
+    elseif playerClass == "ROGUE" or playerClass == "DRUID" then
+        SPECIAL_POWER_TYPE = powerTypes.ComboPoints
+    end
+end
 
 local DEFAULTS = {
     configVersion = 2,
@@ -26,6 +46,7 @@ local DEFAULTS = {
     hideExternalBar = false,
     capMultiplier = 2.0,
     showHealth = true,
+    showSpecialResources = true,
     resourceDisplay = "left", -- "left", "right", "none"
 }
 
@@ -76,6 +97,9 @@ local function ApplyDefaults(db)
     end
     if type(db.showHealth) ~= "boolean" then
         db.showHealth = DEFAULTS.showHealth
+    end
+    if type(db.showSpecialResources) ~= "boolean" then
+        db.showSpecialResources = DEFAULTS.showSpecialResources
     end
     if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then
         db.resourceDisplay = DEFAULTS.resourceDisplay
@@ -215,6 +239,150 @@ local function UpdateResourceBarLayout()
     end
 end
 
+local specialResourceContainer
+local specialCircles = {}
+local specialProgress = {}
+local specialOrder = {}
+
+for index = 1, MAX_SPECIAL_CIRCLES do
+    specialProgress[index] = 0
+    specialOrder[index] = index
+end
+
+local function CreateSpecialResources()
+    if specialResourceContainer or not bar then return end
+
+    specialResourceContainer = CreateFrame("Frame", nil, resourceBar)
+    specialResourceContainer:SetAllPoints(resourceBar)
+
+    for index = 1, MAX_SPECIAL_CIRCLES do
+        local circle = CreateFrame("StatusBar", nil, specialResourceContainer)
+        circle:SetFrameLevel(resourceBar:GetFrameLevel() + 1)
+        circle:SetStatusBarTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+        circle:SetStatusBarColor(1, 1, 1, 1)
+        circle:SetOrientation("VERTICAL")
+
+        local background = circle:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints(circle)
+        background:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+        background:SetVertexColor(0.15, 0.15, 0.15, 0.6)
+
+        circle:EnableMouse(false)
+        circle:Hide()
+        specialCircles[index] = circle
+    end
+end
+
+local function UpdateSpecialResourcesLayout()
+    if not specialResourceContainer then return end
+
+    if not config.showSpecialResources or config.hideExternalBar
+        or config.resourceDisplay == "none" then
+        specialResourceContainer:Hide()
+        return
+    end
+
+    local maxPower = 0
+    if playerClass == "DEATHKNIGHT" then
+        maxPower = 6
+    elseif SPECIAL_POWER_TYPE then
+        maxPower = UnitPowerMax("player", SPECIAL_POWER_TYPE) or 0
+    end
+    maxPower = math.min(maxPower, MAX_SPECIAL_CIRCLES)
+
+    if maxPower <= 0 then
+        specialResourceContainer:Hide()
+        return
+    end
+
+    -- SetAllPoints can report zero before the parent has completed its first
+    -- layout pass. Read the actual resource bar dimensions as the authority.
+    local parentWidth = resourceBar:GetWidth()
+    local parentHeight = resourceBar:GetHeight()
+    local slotSize = math.min(SPECIAL_CIRCLE_SIZE, math.floor(parentHeight / maxPower))
+    if slotSize < 3 then slotSize = 3 end
+    local circleWidth = math.max(2, parentWidth - 2)
+
+    specialResourceContainer:Show()
+    for index = 1, MAX_SPECIAL_CIRCLES do
+        if index <= maxPower then
+            local circle = specialCircles[specialOrder[index]]
+            circle:SetSize(circleWidth, math.max(1, slotSize - 2))
+            circle:ClearAllPoints()
+            circle:SetPoint("TOPLEFT", resourceBar, "TOPLEFT", 1,
+                -((index - 1) * slotSize + 1))
+            circle:Show()
+        else
+            specialCircles[specialOrder[index]]:Hide()
+        end
+    end
+end
+
+local function SortSpecialResources(count)
+    -- Stable insertion sort is intentional: the arrays are tiny and this
+    -- avoids table.sort's comparator closure on the hot event path.
+    for position = 2, count do
+        local candidate = specialOrder[position]
+        local candidateProgress = specialProgress[candidate]
+        local insertAt = position - 1
+
+        while insertAt >= 1
+            and specialProgress[specialOrder[insertAt]] < candidateProgress do
+            specialOrder[insertAt + 1] = specialOrder[insertAt]
+            insertAt = insertAt - 1
+        end
+        specialOrder[insertAt + 1] = candidate
+    end
+end
+
+local function UpdateSpecialResources()
+    if not specialResourceContainer or not specialResourceContainer:IsShown() then return end
+
+    for index = 1, MAX_SPECIAL_CIRCLES do
+        specialProgress[index] = 0
+    end
+
+    if playerClass == "DEATHKNIGHT" then
+        local now = GetTime()
+        for index = 1, 6 do
+            local start, duration, ready = GetRuneCooldown(index)
+            local circle = specialCircles[index]
+            circle:SetMinMaxValues(0, 1)
+            if ready then
+                specialProgress[index] = 1
+                circle:SetValue(1)
+            elseif start and duration and duration > 0 then
+                local progress = (now - start) / duration
+                if progress < 0 then progress = 0 end
+                if progress > 1 then progress = 1 end
+                specialProgress[index] = progress
+                circle:SetMinMaxValues(0, duration)
+                circle:SetValue(now - start)
+            else
+                specialProgress[index] = 0
+                circle:SetValue(0)
+            end
+        end
+        SortSpecialResources(6)
+    elseif SPECIAL_POWER_TYPE then
+        local currentPower = UnitPower("player", SPECIAL_POWER_TYPE) or 0
+        local maxPower = math.min(UnitPowerMax("player", SPECIAL_POWER_TYPE) or 0, MAX_SPECIAL_CIRCLES)
+        for index = 1, maxPower do
+            local circle = specialCircles[index]
+            circle:SetMinMaxValues(0, 1)
+            local progress = index <= currentPower and 1 or 0
+            specialProgress[index] = progress
+            circle:SetValue(progress)
+        end
+        SortSpecialResources(maxPower)
+    end
+
+    UpdateSpecialResourcesLayout()
+end
+
+addon.UpdateSpecialResourcesLayout = UpdateSpecialResourcesLayout
+addon.UpdateSpecialResources = UpdateSpecialResources
+
 local function CreateBar()
     if bar then return end
 
@@ -254,6 +422,8 @@ local function CreateBar()
     rBg:SetColorTexture(0, 0, 0, 0.5)
 
     UpdateResourceBarLayout()
+    CreateSpecialResources()
+    UpdateSpecialResourcesLayout()
 
     bar:SetScript("OnSizeChanged", function()
         UpdateTickMarks()
@@ -271,10 +441,13 @@ local function UpdateExternalBarVisibility()
         bar:Hide()
         if healthBar then healthBar:Hide() end
         if resourceBar then resourceBar:Hide() end
+        if specialResourceContainer then specialResourceContainer:Hide() end
     else
         bar:Show()
         if healthBar and config.showHealth then healthBar:Show() end
         UpdateResourceBarLayout()
+        UpdateSpecialResourcesLayout()
+        UpdateSpecialResources()
     end
 end
 
@@ -286,6 +459,7 @@ local function UpdateBar(absorb, maxHP)
         bar:Hide()
         if healthBar then healthBar:Hide() end
         if resourceBar then resourceBar:Hide() end
+        if specialResourceContainer then specialResourceContainer:Hide() end
         return
     end
 
@@ -328,6 +502,9 @@ local function UpdateBar(absorb, maxHP)
     elseif resourceBar then
         resourceBar:Hide()
     end
+
+    UpdateSpecialResourcesLayout()
+    UpdateSpecialResources()
 end
 
 local function ApplyBarDimensions(width, height, capPercent)
@@ -359,7 +536,7 @@ local function CreateConfigMenu()
     if menuFrame then return end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(480, 310)
+    menuFrame:SetSize(480, 350)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -443,8 +620,18 @@ local function CreateConfigMenu()
     end)
     menuFrame.healthCheck = healthCheck
 
+    local specialResCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
+    specialResCheck:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 0, -4)
+    specialResCheck.Text:SetText("Show special resources (circles)")
+    specialResCheck:SetScript("OnClick", function(self)
+        config.showSpecialResources = self:GetChecked() and true or false
+        UpdateSpecialResourcesLayout()
+        UpdateSpecialResources()
+    end)
+    menuFrame.specialResCheck = specialResCheck
+
     local resLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resLabel:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 2, -10)
+    resLabel:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 2, -10)
     resLabel:SetText("Personal Resource Bar:")
 
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
@@ -502,6 +689,9 @@ local function RefreshConfigMenuFields()
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
     menuFrame.healthCheck:SetChecked(config.showHealth and true or false)
+    if menuFrame.specialResCheck then
+        menuFrame.specialResCheck:SetChecked(config.showSpecialResources and true or false)
+    end
     if menuFrame.resButton and menuFrame.resButton.UpdateText then
         menuFrame.resButton:UpdateText()
     end
@@ -521,12 +711,18 @@ local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("UNIT_POWER_UPDATE")
 initFrame:RegisterEvent("UNIT_MAXPOWER")
+initFrame:RegisterEvent("UNIT_POWER_FREQUENT")
+initFrame:RegisterEvent("RUNE_POWER_UPDATE")
 initFrame:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_LOGIN" then
         EnsureConfig()
         UpdateBar()
-    elseif (event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER") and unit == "player" then
+    elseif (event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER"
+        or event == "UNIT_POWER_FREQUENT") and unit == "player" then
         UpdateBar()
+        UpdateSpecialResources()
+    elseif event == "RUNE_POWER_UPDATE" then
+        UpdateSpecialResources()
     end
 end)
 
