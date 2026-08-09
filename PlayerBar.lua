@@ -1,5 +1,5 @@
 -- Standalone player absorption, health, resource bars, and configuration UI.
--- Public slash commands and SavedVariables remain owned by BloodShieldOverlay.
+-- Rendering and menu orchestration for the standalone player bar.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -11,135 +11,15 @@ local menuFrame
 local tickLines = {}
 
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
-local MIN_CAP_PERCENT = 20
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
 local SPECIAL_CIRCLE_SIZE = 12
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
-local profileKey
-
-local DEFAULTS = {
-    configVersion = 2,
-    point = "BOTTOM",
-    relativePoint = "BOTTOM",
-    xOffset = 100,
-    yOffset = 450,
-    width = 18,
-    height = 150,
-    locked = true,
-    hideExternalBar = false,
-    capMultiplier = 2.0,
-    showHealth = true,
-    showSpecialResources = true,
-    resourceDisplay = "left", -- "left", "right", "none"
-}
-
-local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
-
+local DEFAULTS = addon.PlayerBarConfig.GetDefaults and addon.PlayerBarConfig.GetDefaults() or {}
+local MIN_CAP_PERCENT = addon.PlayerBarConfig.GetMinCapPercent()
 local config = {}
-
-local function BuildProfileKey()
-    local playerName = UnitName("player") or "Player"
-    local realmName = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Unknown"
-    return string.format("%s-%s", playerName, realmName)
-end
-
-local function GetProfileKey()
-    if not profileKey then
-        profileKey = BuildProfileKey()
-    end
-    return profileKey
-end
-
-local function EnsureProfileStore()
-    if type(BloodShieldOverlayProfiles) ~= "table" then
-        BloodShieldOverlayProfiles = {}
-    end
-    return BloodShieldOverlayProfiles
-end
-
-local function ApplyDefaults(db)
-    db = db or {}
-    local isLegacyProfile = db.configVersion == nil and db.showHealth == false
-    for key, value in pairs(DEFAULTS) do
-        if db[key] == nil then
-            db[key] = value
-        end
-    end
-
-    -- The previous release defaulted this option to false. Migrate that
-    -- implicit legacy value once, while preserving an explicit choice made
-    -- after this version.
-    if isLegacyProfile then
-        db.showHealth = true
-    end
-
-    if type(db.width) ~= "number" or db.width <= 0 then
-        db.width = DEFAULTS.width
-    end
-    if type(db.height) ~= "number" or db.height <= 0 then
-        db.height = DEFAULTS.height
-    end
-    if type(db.capMultiplier) ~= "number" or db.capMultiplier < MIN_CAP_PERCENT / 100 then
-        db.capMultiplier = DEFAULTS.capMultiplier
-    end
-    if type(db.hideExternalBar) ~= "boolean" then
-        db.hideExternalBar = DEFAULTS.hideExternalBar
-    end
-    if type(db.showHealth) ~= "boolean" then
-        db.showHealth = DEFAULTS.showHealth
-    end
-    if type(db.showSpecialResources) ~= "boolean" then
-        db.showSpecialResources = DEFAULTS.showSpecialResources
-    end
-    if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then
-        db.resourceDisplay = DEFAULTS.resourceDisplay
-    end
-
-    return db
-end
-
-local function CopySettings(source)
-    local copy = {}
-    if type(source) == "table" then
-        for key, value in pairs(source) do
-            copy[key] = value
-        end
-    end
-    return copy
-end
-
-local function EnsureConfig()
-    local profiles = EnsureProfileStore()
-    local profileKey = GetProfileKey()
-
-    if not profiles[profileKey] then
-        if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
-            profiles[profileKey] = CopySettings(BloodShieldOverlayDB)
-        else
-            profiles[profileKey] = {}
-        end
-    end
-
-    config = ApplyDefaults(profiles[profileKey])
-    profiles[profileKey] = config
-    BloodShieldOverlayProfiles = profiles
-end
-
-local function ResetConfig()
-    local profiles = EnsureProfileStore()
-    local profileKey = GetProfileKey()
-
-    config = {}
-    for key, value in pairs(DEFAULTS) do
-        config[key] = value
-    end
-
-    profiles[profileKey] = config
-    BloodShieldOverlayProfiles = profiles
-end
 
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then
@@ -244,79 +124,9 @@ end
 
 -- White while charging/empty; snaps to gold the instant a pip is ready/full.
 -- This is the only state that changes per pip; slot identity never does.
-local CHARGING_COLOR = { 1, 1, 1 }
-local READY_COLOR = { 1, 0.82, 0 }
-
-local function CreatePowerResourceProvider(powerType, powerToken)
-    return {
-        token = powerToken,
-        GetMax = function()
-            return UnitPowerMax("player", powerType) or 0
-        end,
-        Update = function()
-            local currentPower = UnitPower("player", powerType) or 0
-            local maxPower = math.min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
-
-            for index = 1, maxPower do
-                local circle = specialCircles[index]
-                circle:SetMinMaxValues(0, 1)
-                if index <= currentPower then
-                    specialProgress[index] = 1
-                    circle:SetValue(1)
-                    circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
-                else
-                    circle:SetValue(0)
-                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-                end
-            end
-
-            return maxPower
-        end,
-    }
-end
-
-local ResourceProviders = {
-    DEATHKNIGHT = {
-        GetMax = function() return 6 end,
-        Update = function()
-            local now = GetTime()
-            for index = 1, 6 do
-                local start, duration, ready = GetRuneCooldown(index)
-                local circle = specialCircles[index]
-                circle:SetMinMaxValues(0, 1)
-                if ready then
-                    specialProgress[index] = 1
-                    circle:SetValue(1)
-                    circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
-                elseif start and duration and duration > 0 then
-                    local progress = (now - start) / duration
-                    if progress < 0 then progress = 0 end
-                    if progress > 1 then progress = 1 end
-                    specialProgress[index] = progress
-                    circle:SetMinMaxValues(0, duration)
-                    circle:SetValue(now - start)
-                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-                else
-                    circle:SetValue(0)
-                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-                end
-            end
-
-            return 6
-        end,
-    },
-}
-
-if powerTypes then
-    ResourceProviders.PALADIN = CreatePowerResourceProvider(powerTypes.HolyPower, "HOLY_POWER")
-    ResourceProviders.EVOKER = CreatePowerResourceProvider(powerTypes.Essence, "ESSENCE")
-    ResourceProviders.WARLOCK = CreatePowerResourceProvider(powerTypes.SoulShards, "SOUL_SHARDS")
-    ResourceProviders.MONK = CreatePowerResourceProvider(powerTypes.Chi, "CHI")
-    ResourceProviders.ROGUE = CreatePowerResourceProvider(powerTypes.ComboPoints, "COMBO_POINTS")
-    ResourceProviders.DRUID = CreatePowerResourceProvider(powerTypes.ComboPoints, "COMBO_POINTS")
-end
-
-local specialResourceProvider = ResourceProviders[playerClass]
+local specialResourceProvider = addon.CreateResourceProviders(
+    playerClass, powerTypes, specialCircles, specialProgress, MAX_SPECIAL_CIRCLES
+)
 local SPECIAL_POWER_TOKEN = specialResourceProvider and specialResourceProvider.token
 
 local function CreateSpecialResources()
@@ -739,10 +549,7 @@ local function ShowConfigMenu()
 end
 
 addon.RegisterInitializer(function()
-    if not profileKey then
-        profileKey = BuildProfileKey()
-    end
-    EnsureConfig()
+    config = addon.PlayerBarConfig.Initialize()
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end)
@@ -771,37 +578,21 @@ initFrame:SetScript("OnEvent", function(_, event, unit, powerType)
     end
 end)
 
-addon.HandleSlashCommand = function(msg)
-    msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
-
-    if msg == "" then
-        ShowConfigMenu()
-        return
-    elseif msg == "lock" then
-        config.locked = true
+addon.PlayerBarAPI = {
+    ShowConfigMenu = ShowConfigMenu,
+    IsLocked = function() return config.locked end,
+    SetLocked = function(locked)
+        config.locked = locked and true or false
         UpdateBarLock()
-        print("BloodShieldOverlay locked.")
-        return
-    elseif msg == "unlock" or msg == "move" then
-        config.locked = false
-        UpdateBarLock()
-        print("BloodShieldOverlay is unlocked. Drag to move, then type /shield lock.")
-        return
-    elseif msg == "hide" then
-        config.hideExternalBar = true
+    end,
+    SetHidden = function(hidden)
+        config.hideExternalBar = hidden and true or false
         UpdateExternalBarVisibility()
         RefreshConfigMenuFields()
-        print("BloodShieldOverlay external bar hidden.")
-        return
-    elseif msg == "show" then
-        config.hideExternalBar = false
-        UpdateExternalBarVisibility()
-        UpdateBar()
-        RefreshConfigMenuFields()
-        print("BloodShieldOverlay external bar shown.")
-        return
-    elseif msg == "reset" then
-        ResetConfig()
+        if not hidden then UpdateBar() end
+    end,
+    Reset = function()
+        config = addon.PlayerBarConfig.Reset()
         if bar then
             bar:ClearAllPoints()
             bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
@@ -810,24 +601,5 @@ addon.HandleSlashCommand = function(msg)
         end
         RefreshConfigMenuFields()
         UpdateBar()
-        print("BloodShieldOverlay settings reset to defaults.")
-        return
-    elseif msg == "party" then
-        if addon.RequestRefresh then
-            addon.RequestRefresh()
-            print("BloodShieldOverlay: party frames refreshed.")
-        elseif addon.RefreshPartyFiles or addon.RefreshPartyFrames then
-            (addon.RefreshPartyFiles or addon.RefreshPartyFrames)()
-            print("BloodShieldOverlay: party frames refreshed.")
-        else
-            print("BloodShieldOverlay: party refresh unavailable.")
-        end
-        return
-    end
-
-    if config.locked then
-        print("BloodShieldOverlay is locked. Use /shield unlock to move it.")
-    else
-        print("BloodShieldOverlay is unlocked. Drag the bar to move it, then use /shield lock.")
-    end
-end
+    end,
+}

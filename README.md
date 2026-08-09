@@ -51,13 +51,21 @@
   - Bootstrap del namespace del addon y punto de entrada mínimo.
 
 3. **[PlayerBar.lua](PlayerBar.lua)**
-  - Control de las barras standalone de absorción, salud y recurso.
-  - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`), menú de ajustes, recursos especiales y comandos `/shield`.
+  - Control de las barras standalone de absorción, salud y recurso, y coordinación del menú de ajustes.
 
-4. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
+4. **[Configuration.lua](Configuration.lua)**
+  - Defaults, migración y perfiles almacenados (`BloodShieldOverlayProfiles`).
+
+5. **[ResourceProviders.lua](ResourceProviders.lua)**
+  - Proveedores extensibles para recursos especiales de clase y runas de Caballero de la Muerte.
+
+6. **[Commands.lua](Commands.lua)**
+  - Adaptador de comandos `/shield`; delega las operaciones de UI en la API de `PlayerBar.lua`.
+
+7. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.
 
-5. **[BlizzardFrames.lua](BlizzardFrames.lua)**
+8. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
 
 ## 🧪 Tests offline

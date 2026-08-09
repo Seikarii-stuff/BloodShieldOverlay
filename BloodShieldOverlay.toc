@@ -9,5 +9,8 @@
 BloodShieldOverlay.lua
 Core.lua
 AbsorbIndicator.lua
+Configuration.lua
+ResourceProviders.lua
 PlayerBar.lua
+Commands.lua
 BlizzardFrames.lua
