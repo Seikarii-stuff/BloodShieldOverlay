@@ -304,9 +304,6 @@ local function UpdateExternalBarVisibility()
 
     if config.hideExternalBar then
         bar:Hide()
-        if healthBar then healthBar:Hide() end
-        if resourceBar then resourceBar:Hide() end
-        if specialResourceContainer then specialResourceContainer:Hide() end
     else
         bar:Show()
         if healthBar and config.showHealth then healthBar:Show() end
@@ -321,9 +318,6 @@ local function UpdateBar(absorb, maxHP)
 
     if config.hideExternalBar then
         bar:Hide()
-        if healthBar then healthBar:Hide() end
-        if resourceBar then resourceBar:Hide() end
-        if specialResourceContainer then specialResourceContainer:Hide() end
         return
     end
 

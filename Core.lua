@@ -4,6 +4,32 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
+-- Shared discovery cache reused by Blizzard-frame integrations.
+local compactFrameNames = addon.COMPACT_FRAME_NAMES or {}
+addon.COMPACT_FRAME_NAMES = compactFrameNames
+
+if not addon.COMPACT_FRAME_NAMES_INITIALIZED then
+    local nameCount = 0
+    for index = 1, 40 do
+        nameCount = nameCount + 1
+        compactFrameNames[nameCount] = "CompactRaidFrame" .. index
+        nameCount = nameCount + 1
+        compactFrameNames[nameCount] = "CompactPartyFrameMemberFrame" .. index
+        nameCount = nameCount + 1
+        compactFrameNames[nameCount] = "PartyMemberFrame" .. index
+        nameCount = nameCount + 1
+        compactFrameNames[nameCount] = "CompactPartyFrame" .. index
+    end
+    for group = 1, 8 do
+        for slot = 1, 5 do
+            nameCount = nameCount + 1
+            compactFrameNames[nameCount] = "CompactRaidGroup" .. group .. "Slot" .. slot
+        end
+    end
+    addon.COMPACT_FRAME_NAME_COUNT = nameCount
+    addon.COMPACT_FRAME_NAMES_INITIALIZED = true
+end
+
 -- Keep hot-path API and standard-library lookups out of _G.
 local CreateFrame = CreateFrame
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
@@ -23,6 +49,14 @@ local eventFrame = CreateFrame("Frame")
 local throttleElapsed = 0
 
 local THROTTLE_INTERVAL = 0.033 -- ~30 FPS micro-throttle for visual updates
+
+local relevantUnits = { player = true }
+for index = 1, 4 do
+    relevantUnits["party" .. index] = true
+end
+for index = 1, 40 do
+    relevantUnits["raid" .. index] = true
+end
 
 -- Export functions guaranteed on initial execution
 function addon.RegisterPlayerUpdateListener(listener)
@@ -84,7 +118,7 @@ local function OnThrottleUpdate(_, elapsed)
 end
 
 local function ScheduleUnitUpdate(unit)
-    if not unit then return end
+    if not unit or not relevantUnits[unit] then return end
     pendingUnits[unit] = true
     if not isThrottleScheduled then
         isThrottleScheduled = true

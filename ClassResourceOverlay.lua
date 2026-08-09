@@ -39,17 +39,8 @@ local enabled = true
 local refreshScheduled = false
 local eventFrame
 
-local COMPACT_FRAME_NAMES = {}
-local compactFrameNameCount = 0
-
-for index = 1, 40 do
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactRaidFrame" .. index
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactPartyFrameMemberFrame" .. index
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "PartyMemberFrame" .. index
-end
+local COMPACT_FRAME_NAMES = addon.COMPACT_FRAME_NAMES
+local compactFrameNameCount = addon.COMPACT_FRAME_NAME_COUNT
 
 local function IsForbidden(frame)
     return not frame or (frame.IsForbidden and frame:IsForbidden())
@@ -65,6 +56,15 @@ local function IsResourceStatusBar(child)
     local name = child.GetName and child:GetName() or ""
     return name == "" or name:find("Power", 1, true)
         or name:find("Mana", 1, true) or name:find("Resource", 1, true)
+end
+
+local function FindResourceStatusBar(...)
+    local childCount = select("#", ...)
+    for index = 1, childCount do
+        local child = select(index, ...)
+        if IsResourceStatusBar(child) then return child end
+    end
+    return nil
 end
 
 local function GetUnit(frame)
@@ -112,47 +112,30 @@ local function GetResourceBar(frame)
     if IsStatusBar(bar) then return bar end
 
     if frame.GetChildren then
-        -- Inspect the first 12 direct children; deeper traversal belongs to
-        -- FindPlayerFrame, which applies the bounded hierarchy scan.
-        local child1, child2, child3, child4, child5, child6,
-            child7, child8, child9, child10, child11, child12 = frame:GetChildren()
-        if IsResourceStatusBar(child1) then return child1 end
-        if IsResourceStatusBar(child2) then return child2 end
-        if IsResourceStatusBar(child3) then return child3 end
-        if IsResourceStatusBar(child4) then return child4 end
-        if IsResourceStatusBar(child5) then return child5 end
-        if IsResourceStatusBar(child6) then return child6 end
-        if IsResourceStatusBar(child7) then return child7 end
-        if IsResourceStatusBar(child8) then return child8 end
-        if IsResourceStatusBar(child9) then return child9 end
-        if IsResourceStatusBar(child10) then return child10 end
-        if IsResourceStatusBar(child11) then return child11 end
-        if IsResourceStatusBar(child12) then return child12 end
+        return FindResourceStatusBar(frame:GetChildren())
     end
 
     return nil
 end
 
-local function FindPlayerFrame(frame, depth)
+local FindPlayerFrame
+
+local function FindPlayerFrameChildren(depth, ...)
+    local childCount = select("#", ...)
+    for index = 1, childCount do
+        local found = FindPlayerFrame(select(index, ...), depth)
+        if found then return found end
+    end
+    return nil
+end
+
+FindPlayerFrame = function(frame, depth)
     if IsForbidden(frame) then return nil end
     if IsPlayerUnit(frame) then return frame end
     if not frame.GetChildren or (depth or 0) >= 2 then return nil end
 
-    local child1, child2, child3, child4, child5, child6,
-        child7, child8, child9, child10, child11, child12 = frame:GetChildren()
     local nextDepth = (depth or 0) + 1
-    local found = FindPlayerFrame(child1, nextDepth); if found then return found end
-    found = FindPlayerFrame(child2, nextDepth); if found then return found end
-    found = FindPlayerFrame(child3, nextDepth); if found then return found end
-    found = FindPlayerFrame(child4, nextDepth); if found then return found end
-    found = FindPlayerFrame(child5, nextDepth); if found then return found end
-    found = FindPlayerFrame(child6, nextDepth); if found then return found end
-    found = FindPlayerFrame(child7, nextDepth); if found then return found end
-    found = FindPlayerFrame(child8, nextDepth); if found then return found end
-    found = FindPlayerFrame(child9, nextDepth); if found then return found end
-    found = FindPlayerFrame(child10, nextDepth); if found then return found end
-    found = FindPlayerFrame(child11, nextDepth); if found then return found end
-    return FindPlayerFrame(child12, nextDepth)
+    return FindPlayerFrameChildren(nextDepth, frame:GetChildren())
 end
 
 local function FindPlayerResourceBar()

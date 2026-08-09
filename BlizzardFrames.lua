@@ -31,8 +31,8 @@ local pendingRefresh = false
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
 local RAID_UNITS = { player = true }
-local COMPACT_FRAME_NAMES = {}
-local compactFrameNameCount = 0
+local COMPACT_FRAME_NAMES = addon.COMPACT_FRAME_NAMES
+local compactFrameNameCount = addon.COMPACT_FRAME_NAME_COUNT
 
 for index = 1, 4 do
     PARTY_UNITS["party" .. index] = true
@@ -40,22 +40,6 @@ end
 
 for index = 1, 40 do
     RAID_UNITS["raid" .. index] = true
-
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactRaidFrame" .. index
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactPartyFrameMemberFrame" .. index
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "PartyMemberFrame" .. index
-    compactFrameNameCount = compactFrameNameCount + 1
-    COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactPartyFrame" .. index
-end
-
-for group = 1, 8 do
-    for slot = 1, 5 do
-        compactFrameNameCount = compactFrameNameCount + 1
-        COMPACT_FRAME_NAMES[compactFrameNameCount] = "CompactRaidGroup" .. group .. "Slot" .. slot
-    end
 end
 
 local function IsForbiddenFrame(frame)

@@ -1,6 +1,6 @@
 iterations=100000
-dispatch_seconds=0.362000
-dispatch_ops_per_second=276243.09
+dispatch_seconds=0.370000
+dispatch_ops_per_second=270270.27
 overlay_seconds=0.031000
 overlay_ops_per_second=3225806.45
 discovery_iterations=1000
