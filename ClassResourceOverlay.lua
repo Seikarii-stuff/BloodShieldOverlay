@@ -38,6 +38,9 @@ local refreshPending = false
 local refreshScheduled = false
 local pipWidth = FALLBACK_PIP_WIDTH
 local layoutWidth = FALLBACK_PIP_WIDTH * MAX_PIPS + PIP_GAP * (MAX_PIPS - 1)
+local resourceElapsed = 0
+local RESOURCE_TICK = 0.2
+local eventFrame
 
 local RESOURCE_BAR_KEYS = {
     "powerBar", "PowerBar", "powerbar",
@@ -199,16 +202,38 @@ local function AttachTo(bar)
     overlay:Show()
 end
 
-local function UpdatePips()
-    if not overlay or not currentBar then return end
+local UpdatePips
+
+local function OnResourceTick(_, elapsed)
+    resourceElapsed = resourceElapsed + elapsed
+    if resourceElapsed < RESOURCE_TICK then return end
+    resourceElapsed = 0
+    UpdatePips()
+end
+
+local function SetResourceTicking(active)
+    if active then
+        eventFrame:SetScript("OnUpdate", OnResourceTick)
+    else
+        resourceElapsed = 0
+        eventFrame:SetScript("OnUpdate", nil)
+    end
+end
+
+UpdatePips = function()
+    if not overlay or not currentBar then
+        SetResourceTicking(false)
+        return
+    end
 
     local maximum = math_min(resourceProvider:GetMax() or 0, MAX_PIPS)
     if maximum <= 0 then
         overlay:Hide()
+        SetResourceTicking(false)
         return
     end
 
-    resourceProvider:Update(progress, pips, GetTime())
+    local _, charging = resourceProvider:Update(progress, pips, GetTime())
     addon.SortSpecialResources(progress, pipOrder, maximum)
 
     -- Protected compact bars can return a secret width. Secret values may be
@@ -238,6 +263,11 @@ local function UpdatePips()
             pip:Hide()
         end
     end
+
+    -- Runes and Evoker Essence expose a cooldown fraction, not a new power
+    -- event for every visual step. Keep a demand-driven ticker only while a
+    -- pip is charging; completed/instant resources remain event-driven.
+    SetResourceTicking(charging and true or false)
 end
 
 local function Locate()
@@ -265,7 +295,7 @@ local function ScheduleLocate()
     end)
 end
 
-local eventFrame = CreateFrame("Frame")
+eventFrame = CreateFrame("Frame")
 eventFrame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
 eventFrame:RegisterUnitEvent("UNIT_MAXPOWER", "player")
 eventFrame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
