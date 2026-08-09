@@ -7,13 +7,13 @@ _G.BloodShieldOverlay = addon
 local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local GetRuneCooldown = GetRuneCooldown
-local UnitPowerBarTimerInfo = UnitPowerBarTimerInfo
 local GetTime = GetTime
 local math_min = math.min
 local math_max = math.max
 
 local MAX_SPECIAL_CIRCLES = 7
 local RUNE_COUNT = 6
+local ESSENCE_CHARGE_DURATION = 4
 local CHARGING_COLOR = { 1, 1, 1 }
 local READY_COLOR = { 1, 0.82, 0 }
 
@@ -47,6 +47,9 @@ local function CreatePowerProvider(powerType)
 end
 
 local function CreateEssenceProvider(powerType)
+    local chargeStart
+    local previousReadyCount
+
     return {
         GetMax = function()
             return math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
@@ -55,19 +58,24 @@ local function CreateEssenceProvider(powerType)
             local current = UnitPower("player", powerType) or 0
             local maximum = math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
             local readyCount = math_min(current, maximum)
-            local start, duration, modRate
 
-            if UnitPowerBarTimerInfo then
-                start, duration, modRate = UnitPowerBarTimerInfo("player", powerType)
+            -- Essence does not expose a reliable per-tick timer event. Start
+            -- a fixed four-second visual charge whenever the confirmed ready
+            -- count changes; the next UNIT_POWER_UPDATE turns that pip yellow.
+            if maximum <= 0 or readyCount >= maximum then
+                chargeStart = nil
+            elseif previousReadyCount ~= readyCount or not chargeStart then
+                chargeStart = now
             end
+            previousReadyCount = readyCount
 
             for index = 1, maximum do
                 if index <= readyCount then
                     progress[index] = 1
                     SetCircle(circles[index], 1, 1, 1, true)
-                elseif index == readyCount + 1 and start and duration and duration > 0 then
-                    local elapsed = (now - start) * (modRate or 1)
-                    local value = math_max(0, math_min(1, elapsed / duration))
+                elseif index == readyCount + 1 and chargeStart then
+                    local elapsed = math_max(0, now - chargeStart)
+                    local value = math_min(1, elapsed / ESSENCE_CHARGE_DURATION)
                     progress[index] = value
                     SetCircle(circles[index], value, 1, value, false)
                 else
@@ -75,7 +83,7 @@ local function CreateEssenceProvider(powerType)
                     SetCircle(circles[index], 0, 1, 0, false)
                 end
             end
-            local charging = readyCount < maximum and start and duration and duration > 0
+            local charging = readyCount < maximum and chargeStart ~= nil
             return maximum, charging and true or false
         end,
     }
