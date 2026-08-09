@@ -5,11 +5,14 @@ local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 local bar
+local healthBar
+local resourceBar
 local menuFrame
 local tickLines = {}
 
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local MIN_CAP_PERCENT = 20
+local RESOURCE_BAR_WIDTH = 8
 
 local DEFAULTS = {
     point = "BOTTOM",
@@ -21,6 +24,8 @@ local DEFAULTS = {
     locked = true,
     hideExternalBar = false,
     capMultiplier = 2.0,
+    showHealth = false,
+    resourceDisplay = "left", -- "left", "right", "none"
 }
 
 local config = {}
@@ -58,6 +63,12 @@ local function ApplyDefaults(db)
     if type(db.hideExternalBar) ~= "boolean" then
         db.hideExternalBar = DEFAULTS.hideExternalBar
     end
+    if type(db.showHealth) ~= "boolean" then
+        db.showHealth = DEFAULTS.showHealth
+    end
+    if type(db.resourceDisplay) ~= "string" then
+        db.resourceDisplay = DEFAULTS.resourceDisplay
+    end
 
     return db
 end
@@ -72,7 +83,6 @@ local function CopySettings(source)
     return copy
 end
 
--- FIX: Safe migration and profile handling without configuration desync
 local function EnsureConfig()
     local profiles = EnsureProfileStore()
     local profileKey = GetProfileKey()
@@ -174,6 +184,26 @@ local function CreateTickMarks()
     UpdateTickMarks()
 end
 
+local function UpdateResourceBarLayout()
+    if not resourceBar or not bar then return end
+    resourceBar:ClearAllPoints()
+    local mode = config.resourceDisplay or DEFAULTS.resourceDisplay
+
+    if mode == "left" then
+        resourceBar:SetPoint("TOPRIGHT", bar, "TOPLEFT", -2, 0)
+        resourceBar:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -2, 0)
+        resourceBar:SetWidth(RESOURCE_BAR_WIDTH)
+        resourceBar:Show()
+    elseif mode == "right" then
+        resourceBar:SetPoint("TOPLEFT", bar, "TOPRIGHT", 2, 0)
+        resourceBar:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", 2, 0)
+        resourceBar:SetWidth(RESOURCE_BAR_WIDTH)
+        resourceBar:Show()
+    else
+        resourceBar:Hide()
+    end
+end
+
 local function CreateBar()
     if bar then return end
 
@@ -186,11 +216,38 @@ local function CreateBar()
     bar:SetFrameLevel(1)
     bar:SetOrientation("VERTICAL")
     bar:SetReverseFill(false)
+
     local bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
 
-    bar:SetScript("OnSizeChanged", UpdateTickMarks)
+    -- Barra de Salud (Roja)
+    healthBar = CreateFrame("StatusBar", nil, bar)
+    healthBar:SetAllPoints(bar)
+    healthBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    healthBar:SetStatusBarColor(0.85, 0.15, 0.15, 0.85)
+    healthBar:SetOrientation("VERTICAL")
+    healthBar:SetReverseFill(false)
+    healthBar:SetFrameLevel(bar:GetFrameLevel())
+
+    -- Barra de Recursos Personales (Azul, Vertical, Ancho 8)
+    resourceBar = CreateFrame("StatusBar", nil, bar)
+    resourceBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    resourceBar:SetStatusBarColor(0.0, 0.5, 1.0, 0.9) -- Azul
+    resourceBar:SetOrientation("VERTICAL")
+    resourceBar:SetReverseFill(false)
+    resourceBar:SetFrameLevel(bar:GetFrameLevel())
+
+    local rBg = resourceBar:CreateTexture(nil, "BACKGROUND")
+    rBg:SetAllPoints(resourceBar)
+    rBg:SetColorTexture(0, 0, 0, 0.5)
+
+    UpdateResourceBarLayout()
+
+    bar:SetScript("OnSizeChanged", function()
+        UpdateTickMarks()
+        UpdateResourceBarLayout()
+    end)
 
     CreateTickMarks()
     UpdateBarLock()
@@ -201,8 +258,64 @@ local function UpdateExternalBarVisibility()
 
     if config.hideExternalBar then
         bar:Hide()
+        if healthBar then healthBar:Hide() end
+        if resourceBar then resourceBar:Hide() end
     else
         bar:Show()
+        if healthBar and config.showHealth then healthBar:Show() end
+        UpdateResourceBarLayout()
+    end
+end
+
+local function UpdateBar(absorb, maxHP)
+    if not bar then CreateBar() end
+    if not bar then return end
+
+    if config.hideExternalBar then
+        bar:Hide()
+        if healthBar then healthBar:Hide() end
+        if resourceBar then resourceBar:Hide() end
+        return
+    end
+
+    bar:Show()
+
+    absorb = absorb or GetAbsorbAmount("player")
+    maxHP = maxHP or UnitHealthMax("player") or 1
+    local currentHP = UnitHealth("player") or maxHP
+
+    if healthBar then
+        if config.showHealth then
+            healthBar:Show()
+            healthBar:SetMinMaxValues(0, maxHP)
+            healthBar:SetValue(currentHP)
+        else
+            healthBar:Hide()
+        end
+    end
+
+    local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
+    if displayMax > 0 then
+        bar:SetMinMaxValues(0, displayMax)
+        bar:SetValue(absorb)
+    else
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
+    end
+
+    -- Actualización segura de la Barra de Recursos (Maná, Poder Rúnico, Ira, Enfoque, etc.)
+    if resourceBar and config.resourceDisplay ~= "none" then
+        resourceBar:Show()
+        local curPower = UnitPower("player") or 0
+        local maxPower = UnitPowerMax("player") or 1
+        
+        -- Si maxPower es 0 evitar divisiones/mínimos erróneos
+        if maxPower <= 0 then maxPower = 1 end
+
+        resourceBar:SetMinMaxValues(0, maxPower)
+        resourceBar:SetValue(curPower)
+    elseif resourceBar then
+        resourceBar:Hide()
     end
 end
 
@@ -210,7 +323,7 @@ local function CreateConfigMenu()
     if menuFrame then return end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(320, 260)
+    menuFrame:SetSize(320, 310)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -238,48 +351,40 @@ local function CreateConfigMenu()
     info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 16, -40)
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
     info:SetJustifyH("LEFT")
-    info:SetText("Click Unlock to drag the absorb bar. Click Lock to anchor it again. Use /shield reset to restore defaults. Settings are stored separately for each character.")
+    info:SetText("Click Unlock to drag the bar. Click Lock to anchor. Use /shield reset for defaults.")
 
     local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -16)
+    widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -12)
     widthLabel:SetText("Width:")
 
     local widthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
     widthEdit:SetSize(50, 24)
     widthEdit:SetPoint("LEFT", widthLabel, "RIGHT", 12, 0)
     widthEdit:SetAutoFocus(false)
-    widthEdit:SetText(tostring(config.width or DEFAULTS.width))
     menuFrame.widthEdit = widthEdit
 
     local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -14)
+    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -12)
     heightLabel:SetText("Height:")
 
     local heightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
     heightEdit:SetSize(50, 24)
     heightEdit:SetPoint("LEFT", heightLabel, "RIGHT", 12, 0)
     heightEdit:SetAutoFocus(false)
-    heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.heightEdit = heightEdit
 
     local capLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    capLabel:SetPoint("TOPLEFT", heightLabel, "BOTTOMLEFT", 0, -14)
+    capLabel:SetPoint("TOPLEFT", heightLabel, "BOTTOMLEFT", 0, -12)
     capLabel:SetText("Max %:")
 
     local capEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
     capEdit:SetSize(50, 24)
     capEdit:SetPoint("LEFT", capLabel, "RIGHT", 12, 0)
     capEdit:SetAutoFocus(false)
-    capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
     menuFrame.capEdit = capEdit
 
-    local capHint = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    capHint:SetPoint("LEFT", capEdit, "RIGHT", 8, 0)
-    capHint:SetText("top of the bar,\ne.g. 200")
-    capHint:SetJustifyH("LEFT")
-
     local visibilityCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    visibilityCheck:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", -2, -12)
+    visibilityCheck:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", -2, -8)
     visibilityCheck.Text:SetText("Hide external shield bar")
     visibilityCheck:SetScript("OnClick", function(self)
         config.hideExternalBar = self:GetChecked() and true or false
@@ -287,9 +392,43 @@ local function CreateConfigMenu()
     end)
     menuFrame.visibilityCheck = visibilityCheck
 
+    local healthCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
+    healthCheck:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 0, -4)
+    healthCheck.Text:SetText("Show health bar (red, 100% base)")
+    healthCheck:SetScript("OnClick", function(self)
+        config.showHealth = self:GetChecked() and true or false
+        UpdateBar()
+    end)
+    menuFrame.healthCheck = healthCheck
+
+    local resLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resLabel:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 2, -10)
+    resLabel:SetText("Personal Resource Bar:")
+
+    local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    resButton:SetSize(90, 24)
+    resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
+    resButton.UpdateText = function(self)
+        local mode = config.resourceDisplay or "left"
+        self:SetText(mode:gsub("^%l", string.upper))
+    end
+    resButton:SetScript("OnClick", function(self)
+        if config.resourceDisplay == "left" then
+            config.resourceDisplay = "right"
+        elseif config.resourceDisplay == "right" then
+            config.resourceDisplay = "none"
+        else
+            config.resourceDisplay = "left"
+        end
+        self:UpdateText()
+        UpdateResourceBarLayout()
+        UpdateBar()
+    end)
+    menuFrame.resButton = resButton
+
     local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     applyButton:SetSize(90, 24)
-    applyButton:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 2, -10)
+    applyButton:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -12)
     applyButton:SetText("Apply")
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
@@ -301,7 +440,7 @@ local function CreateConfigMenu()
             return
         end
         if not (capPercent and capPercent >= MIN_CAP_PERCENT) then
-            print(string.format("BloodShieldOverlay: Max %% must be a number of at least %d.", MIN_CAP_PERCENT))
+            print(string.format("BloodShieldOverlay: Max %% must be at least %d.", MIN_CAP_PERCENT))
             return
         end
 
@@ -312,20 +451,22 @@ local function CreateConfigMenu()
         if bar then
             bar:SetSize(width, height)
             UpdateTickMarks()
+            UpdateResourceBarLayout()
         end
+        UpdateBar()
     end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    unlock:SetSize(100, 24)
+    unlock:SetSize(90, 24)
     unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
-    unlock:SetText("Unlock")
+    unlock:Text("Unlock")
     unlock:SetScript("OnClick", function()
         config.locked = false
         UpdateBarLock()
     end)
 
     local lock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    lock:SetSize(100, 24)
+    lock:SetSize(90, 24)
     lock:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
     lock:SetText("Lock")
     lock:SetScript("OnClick", function()
@@ -341,6 +482,10 @@ local function RefreshConfigMenuFields()
     menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
+    menuFrame.healthCheck:SetChecked(config.showHealth and true or false)
+    if menuFrame.resButton and menuFrame.resButton.UpdateText then
+        menuFrame.resButton:UpdateText()
+    end
 end
 
 local function ShowConfigMenu()
@@ -349,39 +494,21 @@ local function ShowConfigMenu()
     menuFrame:Show()
 end
 
-local function UpdateBar(absorb, maxHP)
-    if not bar then CreateBar() end
-    if not bar then return end
-
-    if config.hideExternalBar then
-        bar:Hide()
-        return
-    end
-
-    bar:Show()
-
-    absorb = absorb or GetAbsorbAmount("player")
-    maxHP = maxHP or UnitHealthMax("player") or 1
-    local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
-
-    if displayMax > 0 then
-        bar:SetMinMaxValues(0, displayMax)
-        bar:SetValue(absorb)
-    else
-        bar:SetMinMaxValues(0, 1)
-        bar:SetValue(0)
-    end
-end
-
 if addon.RegisterPlayerUpdateListener then
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:SetScript("OnEvent", function()
-    EnsureConfig()
-    UpdateBar()
+initFrame:RegisterEvent("UNIT_POWER_UPDATE")
+initFrame:RegisterEvent("UNIT_MAXPOWER")
+initFrame:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_LOGIN" then
+        EnsureConfig()
+        UpdateBar()
+    elseif (event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER") and unit == "player" then
+        UpdateBar()
+    end
 end)
 
 SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
@@ -398,20 +525,20 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
     elseif msg == "unlock" or msg == "move" then
         config.locked = false
         UpdateBarLock()
-        print("BloodShieldOverlay unlocked. Drag the bar to move it, then type /shield lock.")
+        print("BloodShieldOverlay is unlocked. Drag to move, then type /shield lock.")
         return
     elseif msg == "hide" then
         config.hideExternalBar = true
         UpdateExternalBarVisibility()
         RefreshConfigMenuFields()
-        print("BloodShieldOverlay external bar hidden for this character.")
+        print("BloodShieldOverlay external bar hidden.")
         return
     elseif msg == "show" then
         config.hideExternalBar = false
         UpdateExternalBarVisibility()
         UpdateBar()
         RefreshConfigMenuFields()
-        print("BloodShieldOverlay external bar shown for this character.")
+        print("BloodShieldOverlay external bar shown.")
         return
     elseif msg == "reset" then
         ResetConfig()
@@ -421,6 +548,7 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
             bar:SetSize(config.width, config.height)
             UpdateBarLock()
             UpdateTickMarks()
+            UpdateResourceBarLayout()
         end
         RefreshConfigMenuFields()
         UpdateBar()
@@ -430,8 +558,8 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         if addon.RequestRefresh then
             addon.RequestRefresh()
             print("BloodShieldOverlay: party frames refreshed.")
-        elseif addon.RefreshPartyFrames then
-            addon.RefreshPartyFrames()
+        elseif addon.RefreshPartyFiles or addon.RefreshPartyFrames then
+            (addon.RefreshPartyFiles or addon.RefreshPartyFrames)()
             print("BloodShieldOverlay: party frames refreshed.")
         else
             print("BloodShieldOverlay: party refresh unavailable.")
