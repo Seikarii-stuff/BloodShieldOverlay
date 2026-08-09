@@ -15,6 +15,32 @@ local MAX_RESOURCES = 7
 local RUNE_COUNT = 6
 local ESSENCE_CHARGE_DURATION = 4
 
+-- Shared rendering step for both the standalone bar's vertical circles
+-- (PlayerBar.lua) and the group-frame horizontal pips (ClassResourceOverlay.lua).
+-- Fills progressBuf from the provider state, applies value/color to each pip
+-- in `pips`, sorts orderBuf by progress, and returns the clamped pip count.
+-- Positioning/sizing stays with the caller since the two layouts differ.
+function addon.RenderResourcePips(state, pips, progressBuf, orderBuf, maxCount)
+    local count = math_min(state.maximum or 0, maxCount)
+
+    for index = 1, maxCount do
+        local value = state.progress[index] or 0
+        progressBuf[index] = value
+
+        local pip = pips[index]
+        pip:SetMinMaxValues(0, 1)
+        pip:SetValue(value)
+        if value >= 1 then
+            pip:SetStatusBarColor(1, 0.82, 0, 1)
+        else
+            pip:SetStatusBarColor(1, 1, 1, 1)
+        end
+    end
+
+    addon.SortSpecialResources(progressBuf, orderBuf, count)
+    return count
+end
+
 function addon.SortSpecialResources(progress, order, count)
     for position = 2, count do
         local candidate = order[position]

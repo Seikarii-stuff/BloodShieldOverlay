@@ -11,6 +11,13 @@ local menuFrame
 local tickLines = {}
 local resourceThresholdLine
 
+-- Cached as upvalues, consistent with ResourceProviders.lua and
+-- ClassResourceOverlay.lua, since UpdateSpecialResourcesLayout runs on the
+-- ~30 Hz shared throttle and the 10 Hz resource-charging ticker.
+local math_min = math.min
+local math_max = math.max
+local math_floor = math.floor
+
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
 local RESOURCE_THRESHOLD = 0.28
 local RESOURCE_BAR_WIDTH = 8
@@ -141,7 +148,6 @@ end
 local specialResourceProvider = addon.GetSpecialResourceProvider(
     playerClass, powerTypes
 )
-local SortSpecialResources = addon.SortSpecialResources
 local UpdateSpecialResources
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
@@ -177,7 +183,7 @@ local function UpdateSpecialResourcesLayout()
     end
 
     local maxPower = specialResourceProvider and specialResourceProvider.GetMax() or 0
-    maxPower = math.min(maxPower, MAX_SPECIAL_CIRCLES)
+    maxPower = math_min(maxPower, MAX_SPECIAL_CIRCLES)
 
     if maxPower <= 0 then
         specialResourceContainer:Hide()
@@ -188,15 +194,15 @@ local function UpdateSpecialResourcesLayout()
     -- layout pass. Read the actual resource bar dimensions as the authority.
     local parentWidth = resourceBar:GetWidth()
     local parentHeight = resourceBar:GetHeight()
-    local slotSize = math.min(SPECIAL_CIRCLE_SIZE, math.floor(parentHeight / maxPower))
+    local slotSize = math_min(SPECIAL_CIRCLE_SIZE, math_floor(parentHeight / maxPower))
     if slotSize < 3 then slotSize = 3 end
-    local circleWidth = math.max(2, parentWidth - 2)
+    local circleWidth = math_max(2, parentWidth - 2)
 
     specialResourceContainer:Show()
     for index = 1, MAX_SPECIAL_CIRCLES do
         local circle = specialCircles[specialOrder[index]]
         if index <= maxPower then
-            circle:SetSize(circleWidth, math.max(1, slotSize - 2))
+            circle:SetSize(circleWidth, math_max(1, slotSize - 2))
             circle:ClearAllPoints()
             circle:SetPoint("TOPLEFT", resourceBar, "TOPLEFT", 1,
                 -((index - 1) * slotSize + 1))
@@ -216,26 +222,15 @@ UpdateSpecialResources = function()
         return
     end
 
-    for index = 1, MAX_SPECIAL_CIRCLES do
-        specialProgress[index] = 0
-    end
-
     if specialResourceProvider then
         local state = specialResourceProvider:GetState()
-        local count = state.maximum
+        -- Shared with ClassResourceOverlay.lua's pip rendering: fills
+        -- progress/order and applies value/color/sort to each circle.
+        addon.RenderResourcePips(state, specialCircles, specialProgress, specialOrder, MAX_SPECIAL_CIRCLES)
+    else
         for index = 1, MAX_SPECIAL_CIRCLES do
-            local value = state.progress[index] or 0
-            specialProgress[index] = value
-            local circle = specialCircles[index]
-            circle:SetMinMaxValues(0, 1)
-            circle:SetValue(value)
-            if value >= 1 then
-                circle:SetStatusBarColor(1, 0.82, 0, 1)
-            else
-                circle:SetStatusBarColor(1, 1, 1, 1)
-            end
+            specialProgress[index] = 0
         end
-        SortSpecialResources(specialProgress, specialOrder, count)
     end
 
     UpdateSpecialResourcesLayout()

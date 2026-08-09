@@ -31,25 +31,38 @@ local function EnsureProfileStore()
     return BloodShieldOverlayProfiles
 end
 
+-- One validator per config field instead of a hand-written if/then per key.
+-- Each validator receives the current value and returns true when it's
+-- acceptable; an invalid or missing value falls back to DEFAULTS[key]. This
+-- also means a newly-added config field can't be forgotten: if it's in
+-- DEFAULTS but not in FIELD_VALIDATORS, ApplyDefaults still no-ops it in
+-- (via the DEFAULTS copy above) even without a bespoke range check.
+local function IsPositiveNumber(value) return type(value) == "number" and value > 0 end
+local function IsBoolean(value) return type(value) == "boolean" end
+
+local FIELD_VALIDATORS = {
+    width = IsPositiveNumber,
+    height = IsPositiveNumber,
+    capMultiplier = function(value) return type(value) == "number" and value >= MIN_CAP_PERCENT / 100 end,
+    hideExternalBar = IsBoolean,
+    showHealth = IsBoolean,
+    showSpecialResources = IsBoolean,
+    showClassResourceOverlay = IsBoolean,
+    classResourcePipWidth = function(value) return type(value) == "number" and value >= 4 and value <= 32 end,
+    classResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
+    resourceDisplay = function(value) return type(value) == "string" and RESOURCE_DISPLAY_MODES[value] == true end,
+}
+
 local function ApplyDefaults(db)
     db = db or {}
     local isLegacyProfile = db.configVersion == nil and db.showHealth == false
     for key, value in pairs(DEFAULTS) do if db[key] == nil then db[key] = value end end
     if isLegacyProfile then db.showHealth = true end
-    if type(db.width) ~= "number" or db.width <= 0 then db.width = DEFAULTS.width end
-    if type(db.height) ~= "number" or db.height <= 0 then db.height = DEFAULTS.height end
-    if type(db.capMultiplier) ~= "number" or db.capMultiplier < MIN_CAP_PERCENT / 100 then db.capMultiplier = DEFAULTS.capMultiplier end
-    if type(db.hideExternalBar) ~= "boolean" then db.hideExternalBar = DEFAULTS.hideExternalBar end
-    if type(db.showHealth) ~= "boolean" then db.showHealth = DEFAULTS.showHealth end
-    if type(db.showSpecialResources) ~= "boolean" then db.showSpecialResources = DEFAULTS.showSpecialResources end
-    if type(db.showClassResourceOverlay) ~= "boolean" then db.showClassResourceOverlay = DEFAULTS.showClassResourceOverlay end
-    if type(db.classResourcePipWidth) ~= "number" or db.classResourcePipWidth < 4 or db.classResourcePipWidth > 32 then
-        db.classResourcePipWidth = DEFAULTS.classResourcePipWidth
+
+    for key, validator in pairs(FIELD_VALIDATORS) do
+        if not validator(db[key]) then db[key] = DEFAULTS[key] end
     end
-    if type(db.classResourcePipHeight) ~= "number" or db.classResourcePipHeight < 2 or db.classResourcePipHeight > 20 then
-        db.classResourcePipHeight = DEFAULTS.classResourcePipHeight
-    end
-    if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then db.resourceDisplay = DEFAULTS.resourceDisplay end
+
     return db
 end
 

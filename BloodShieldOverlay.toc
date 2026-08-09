@@ -8,6 +8,7 @@
 
 BloodShieldOverlay.lua
 Core.lua
+FrameDiscovery.lua
 AbsorbIndicator.lua
 Configuration.lua
 ResourceProviders.lua

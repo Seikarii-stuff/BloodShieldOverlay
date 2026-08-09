@@ -33,6 +33,13 @@ check(overlay.parent == healthBar and overlay.mouseEnabled == false, "overlay se
 addon.UpdateAbsorbOverlay(overlay, 42, 100)
 check(overlay.min == 0 and overlay.max == 100 and overlay.value == 42 and overlay.shown, "overlay update failed")
 
+-- Retail regression: UnitGetTotalAbsorbs can be a secret number. The addon
+-- must pass it through to StatusBar without comparing or retaining it.
+local secretAbsorb = { __secret = true }
+addon.UpdateAbsorbOverlay(overlay, secretAbsorb, 100)
+check(overlay.value == secretAbsorb and overlay.lastAbsorb == nil and overlay.lastMaxHealth == nil,
+    "secret absorb value was inspected or retained")
+
 local units, players, regen = 0, 0, 0
 addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
     units = units + 1

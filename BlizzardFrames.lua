@@ -31,8 +31,6 @@ local pendingRefresh = false
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
 local RAID_UNITS = { player = true }
-local COMPACT_FRAME_NAMES = addon.COMPACT_FRAME_NAMES
-local compactFrameNameCount = addon.COMPACT_FRAME_NAME_COUNT
 
 for index = 1, 4 do
     PARTY_UNITS["party" .. index] = true
@@ -42,29 +40,13 @@ for index = 1, 40 do
     RAID_UNITS["raid" .. index] = true
 end
 
-local function IsForbiddenFrame(frame)
-    if not frame then return true end
-    if frame.IsForbidden and frame:IsForbidden() then
-        return true
-    end
-    return false
-end
-
-local function IsStatusBar(frame)
-    if IsForbiddenFrame(frame) then return false end
-    return frame.GetObjectType and frame:GetObjectType() == "StatusBar"
-end
-
-local function GetFrameName(frame)
-    if IsForbiddenFrame(frame) or not frame.GetName then
-        return ""
-    end
-    local name = frame:GetName()
-    if type(name) == "string" then
-        return name
-    end
-    return ""
-end
+-- Shared discovery predicates live in FrameDiscovery.lua so this module and
+-- ClassResourceOverlay.lua don't each maintain their own copy.
+local IsForbiddenFrame = addon.IsForbiddenFrame
+local IsStatusBar = addon.IsStatusBar
+local GetFrameName = addon.GetFrameName
+local GetUnit = addon.GetUnit
+local ForEachCompactFrame = addon.ForEachCompactFrame
 
 local function GetHealthBar(frame)
     if IsForbiddenFrame(frame) then return nil end
@@ -101,27 +83,6 @@ local function GetHealthBar(frame)
 
     healthBarCache[frame] = healthBar or false
     return healthBar
-end
-
-local function GetUnit(frame)
-    if IsForbiddenFrame(frame) then return nil end
-
-    if type(frame.displayedUnit) == "string" and frame.displayedUnit ~= "" then
-        return frame.displayedUnit
-    end
-
-    if type(frame.unit) == "string" and frame.unit ~= "" then
-        return frame.unit
-    end
-
-    if frame.GetAttribute then
-        local unit = frame:GetAttribute("unit")
-        if type(unit) == "string" and unit ~= "" then
-            return unit
-        end
-    end
-
-    return nil
 end
 
 local function IsSupportedUnit(unit)
@@ -280,17 +241,22 @@ local function ScanContainerChildren(container)
     if container.GetChildren then ScanChildren(1, container:GetChildren()) end
 end
 
+-- Reused across discovery passes so bounding the compact-frame scan doesn't
+-- allocate a new closure every time (see ForEachCompactFrame below).
+local function HandleCompactFrame(frame)
+    if not IsForbiddenFrame(frame) then
+        TryAddFrameOverlay(frame)
+    end
+end
+
 local function ScanCompactFrames()
     ScanContainerChildren(PartyFrame)
     ScanContainerChildren(CompactPartyFrame)
     ScanContainerChildren(CompactRaidFrameContainer)
 
-    for index = 1, compactFrameNameCount do
-        local frame = _G[COMPACT_FRAME_NAMES[index]]
-        if frame and not IsForbiddenFrame(frame) then
-            TryAddFrameOverlay(frame)
-        end
-    end
+    -- Bounded by the actual group/raid size instead of always resolving all
+    -- ~200 fixed compact-frame names (solo play now does zero lookups here).
+    ForEachCompactFrame(HandleCompactFrame)
 end
 
 local function DiscoverFrames()
@@ -415,6 +381,13 @@ addon.RegisterInitializer(function()
 end)
 
 if hooksecurefunc then
+    -- Blizzard fires CompactUnitFrame_UpdateAll/SetUpFrame/UpdateUnit very
+    -- frequently in raids (every layout refresh, every join/leave, heavy
+    -- healing). Registering the overlay here is cheap, but the absorb value
+    -- itself must go through Core.lua's 30 FPS throttle like every other
+    -- update path -- calling UpdateUnit() directly from this hook would let
+    -- Blizzard's own event storms bypass the coalescing entirely.
+    local ScheduleUnitUpdate = addon.ScheduleUnitUpdate
     local function OnCompactUnitFrameUpdated(frame)
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
         local unit = GetUnit(frame)
@@ -422,7 +395,11 @@ if hooksecurefunc then
             local healthBar = GetHealthBar(frame)
             if healthBar then
                 AddOverlay(unit, healthBar)
-                UpdateUnit(unit)
+                if ScheduleUnitUpdate then
+                    ScheduleUnitUpdate(unit)
+                else
+                    UpdateUnit(unit)
+                end
             end
         end
     end

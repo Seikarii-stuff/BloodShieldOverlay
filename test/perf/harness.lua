@@ -9,6 +9,12 @@ _G.BloodShieldOverlayProfiles = nil
 _G.BloodShieldOverlayDB = nil
 _G.SlashCmdList = {}
 _G.print = _G.print or function() end
+-- Retail exposes this predicate for protected/secret values. The harness
+-- models a secret number with a tagged table so the taint-safe path can be
+-- exercised without requiring a live WoW client.
+_G.issecretvalue = function(value)
+    return type(value) == "table" and value.__secret == true
+end
 
 local frames = {}
 local timers = {}
@@ -19,6 +25,7 @@ local maxPower = { player = 100 }
 local inCombat = false
 local inRaid = false
 local inGroup = false
+local groupMemberCount = 0
 local getChildrenCalls = 0
 
 local function frame_method(self, name, fn)
@@ -103,6 +110,7 @@ _G.hooksecurefunc = function() end
 _G.InCombatLockdown = function() return inCombat end
 _G.IsInGroup = function() return inGroup end
 _G.IsInRaid = function() return inRaid end
+_G.GetNumGroupMembers = function() return groupMemberCount end
 _G.UnitGetTotalAbsorbs = function(unit) return absorbs[unit] or 0 end
 _G.UnitHealthMax = function(unit) return health[unit] or 0 end
 _G.UnitHealth = function(unit) return health[unit] or 0 end
@@ -121,6 +129,7 @@ _G.C_NamePlate = nil
 function M.load()
     dofile("BloodShieldOverlay.lua")
     dofile("Core.lua")
+    dofile("FrameDiscovery.lua")
     dofile("AbsorbIndicator.lua")
     dofile("Configuration.lua")
     dofile("ResourceProviders.lua")
@@ -132,7 +141,10 @@ end
 
 function M.new_frame(...) return new_frame(...) end
 function M.set_combat(value) inCombat = value end
-function M.set_group(group, raid) inGroup, inRaid = group, raid end
+function M.set_group(group, raid, memberCount)
+    inGroup, inRaid = group, raid
+    if memberCount ~= nil then groupMemberCount = memberCount end
+end
 function M.set_values(unit, absorb, maxHealth) absorbs[unit], health[unit] = absorb, maxHealth end
 function M.set_power(unit, current, maximum) power[unit], maxPower[unit] = current, maximum end
 function M.fire(event, unit)

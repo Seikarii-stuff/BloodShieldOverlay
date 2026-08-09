@@ -4,31 +4,8 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
--- Shared discovery cache reused by Blizzard-frame integrations.
-local compactFrameNames = addon.COMPACT_FRAME_NAMES or {}
-addon.COMPACT_FRAME_NAMES = compactFrameNames
-
-if not addon.COMPACT_FRAME_NAMES_INITIALIZED then
-    local nameCount = 0
-    for index = 1, 40 do
-        nameCount = nameCount + 1
-        compactFrameNames[nameCount] = "CompactRaidFrame" .. index
-        nameCount = nameCount + 1
-        compactFrameNames[nameCount] = "CompactPartyFrameMemberFrame" .. index
-        nameCount = nameCount + 1
-        compactFrameNames[nameCount] = "PartyMemberFrame" .. index
-        nameCount = nameCount + 1
-        compactFrameNames[nameCount] = "CompactPartyFrame" .. index
-    end
-    for group = 1, 8 do
-        for slot = 1, 5 do
-            nameCount = nameCount + 1
-            compactFrameNames[nameCount] = "CompactRaidGroup" .. group .. "Slot" .. slot
-        end
-    end
-    addon.COMPACT_FRAME_NAME_COUNT = nameCount
-    addon.COMPACT_FRAME_NAMES_INITIALIZED = true
-end
+-- Compact/raid frame name caches live in FrameDiscovery.lua, shared by every
+-- module that needs to resolve Blizzard's group frames by name.
 
 -- Keep hot-path API and standard-library lookups out of _G.
 local CreateFrame = CreateFrame
@@ -126,6 +103,11 @@ local function ScheduleUnitUpdate(unit)
         eventFrame:SetScript("OnUpdate", OnThrottleUpdate)
     end
 end
+
+-- Exposed so other modules (e.g. the Blizzard compact-frame hooks) can queue
+-- a unit through the same 30 FPS micro-throttle instead of updating the UI
+-- immediately from a hot, frequently-firing callback.
+addon.ScheduleUnitUpdate = ScheduleUnitUpdate
 
 eventFrame:RegisterEvent("UNIT_HEALTH")
 eventFrame:RegisterEvent("UNIT_MAXHEALTH")

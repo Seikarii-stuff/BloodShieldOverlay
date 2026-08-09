@@ -8,8 +8,6 @@ local CreateFrame = CreateFrame
 local UnitClass = UnitClass
 local C_Timer = C_Timer
 local Enum = Enum
-local UnitIsUnit = UnitIsUnit
-local math_min = math.min
 local type = type
 local InCombatLockdown = InCombatLockdown
 
@@ -39,17 +37,15 @@ local enabled = true
 local refreshScheduled = false
 local eventFrame
 
-local COMPACT_FRAME_NAMES = addon.COMPACT_FRAME_NAMES
-local compactFrameNameCount = addon.COMPACT_FRAME_NAME_COUNT
-
-local function IsForbidden(frame)
-    return not frame or (frame.IsForbidden and frame:IsForbidden())
-end
-
-local function IsStatusBar(frame)
-    return not IsForbidden(frame)
-        and frame.GetObjectType and frame:GetObjectType() == "StatusBar"
-end
+-- Discovery predicates and the bounded compact-frame walk are shared with
+-- BlizzardFrames.lua via FrameDiscovery.lua, instead of each module keeping
+-- its own copy (and its own full tree walk) of the same lookup logic.
+local IsForbidden = addon.IsForbiddenFrame
+local IsStatusBar = addon.IsStatusBar
+local GetUnit = addon.GetUnit
+local IsPlayerUnit = addon.IsPlayerUnit
+local FindPlayerFrame = addon.FindPlayerFrame
+local ForEachCompactFrame = addon.ForEachCompactFrame
 
 local function IsResourceStatusBar(child)
     if not IsStatusBar(child) then return false end
@@ -65,28 +61,6 @@ local function FindResourceStatusBar(...)
         if IsResourceStatusBar(child) then return child end
     end
     return nil
-end
-
-local function GetUnit(frame)
-    if IsForbidden(frame) then return nil end
-    if type(frame.displayedUnit) == "string" and frame.displayedUnit ~= "" then
-        return frame.displayedUnit
-    end
-    if type(frame.unit) == "string" and frame.unit ~= "" then
-        return frame.unit
-    end
-    if frame.GetAttribute then
-        local unit = frame:GetAttribute("unit")
-        if type(unit) == "string" and unit ~= "" then return unit end
-    end
-    return nil
-end
-
-local function IsPlayerUnit(frame)
-    local unit = GetUnit(frame)
-    if not unit then return false end
-    if unit == "player" then return true end
-    return UnitIsUnit and UnitIsUnit(unit, "player") or false
 end
 
 local function GetResourceBar(frame)
@@ -118,24 +92,14 @@ local function GetResourceBar(frame)
     return nil
 end
 
-local FindPlayerFrame
-
-local function FindPlayerFrameChildren(depth, ...)
-    local childCount = select("#", ...)
-    for index = 1, childCount do
-        local found = FindPlayerFrame(select(index, ...), depth)
-        if found then return found end
+-- Reused across FindPlayerResourceBar calls so bounding the compact-frame
+-- scan doesn't allocate a new closure every retry/locate pass.
+local foundResourceBar
+local function HandlePlayerCompactFrame(frame)
+    if foundResourceBar then return end
+    if IsPlayerUnit(frame) then
+        foundResourceBar = GetResourceBar(frame)
     end
-    return nil
-end
-
-FindPlayerFrame = function(frame, depth)
-    if IsForbidden(frame) then return nil end
-    if IsPlayerUnit(frame) then return frame end
-    if not frame.GetChildren or (depth or 0) >= 2 then return nil end
-
-    local nextDepth = (depth or 0) + 1
-    return FindPlayerFrameChildren(nextDepth, frame:GetChildren())
 end
 
 local function FindPlayerResourceBar()
@@ -151,13 +115,11 @@ local function FindPlayerResourceBar()
     bar = playerFrame and GetResourceBar(playerFrame)
     if bar then return bar end
 
-    for index = 1, compactFrameNameCount do
-        local frame = _G[COMPACT_FRAME_NAMES[index]]
-        if frame and IsPlayerUnit(frame) then
-            bar = GetResourceBar(frame)
-            if bar then return bar end
-        end
-    end
+    -- Bounded by the actual group/raid size instead of always resolving all
+    -- ~200 fixed compact-frame names (shared with BlizzardFrames.lua).
+    foundResourceBar = nil
+    ForEachCompactFrame(HandlePlayerCompactFrame)
+    if foundResourceBar then return foundResourceBar end
 
     local main = PlayerFrame and PlayerFrame.PlayerFrameContent
     local content = main and main.PlayerFrameContentMain
@@ -228,24 +190,13 @@ UpdatePips = function()
     end
 
     local state = resourceProvider:GetState()
-    local maximum = math_min(state.maximum or 0, MAX_PIPS)
+    -- Shared with PlayerBar.lua's circle rendering: fills progress/order and
+    -- applies value/color/sort to each pip, returning the clamped maximum.
+    local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     if maximum <= 0 then
         overlay:Hide()
         return
     end
-
-    for index = 1, MAX_PIPS do
-        progress[index] = state.progress[index] or 0
-        local pip = pips[index]
-        pip:SetMinMaxValues(0, 1)
-        pip:SetValue(progress[index])
-        if progress[index] >= 1 then
-            pip:SetStatusBarColor(1, 0.82, 0, 1)
-        else
-            pip:SetStatusBarColor(1, 1, 1, 1)
-        end
-    end
-    addon.SortSpecialResources(progress, pipOrder, maximum)
 
     local totalWidth = maximum * pipWidth + (maximum - 1) * PIP_GAP
     overlay:SetSize(totalWidth, pipHeight)
