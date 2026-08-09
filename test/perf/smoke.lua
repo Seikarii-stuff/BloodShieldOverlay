@@ -60,6 +60,16 @@ local configMenu = _G["BloodShieldOverlayConfig"]
 local bar = _G["BloodShieldOverlayBar"]
 check(bar and bar.resourceBar == nil, "bar should not expose implementation details")
 check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag handler")
+check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
+check(configMenu.applyButton.point == "LEFT" and configMenu.applyButton.relative == configMenu.capEdit,
+    "apply button should be beside the size and cap fields")
+
+local originalWidth, originalHeight = bar.width, bar.height
+configMenu.capEdit:SetText("300")
+configMenu.applyButton:GetScript("OnClick")(configMenu.applyButton)
+check(bar.max == 3000, "changing only Max % did not update the shield bar")
+check(bar.width == originalWidth and bar.height == originalHeight,
+    "changing only Max % unexpectedly changed bar dimensions")
 
 -- Regression test for the historical unlock-button crash: Button:Text is not
 -- a WoW API; CreateConfigMenu must complete and its handler must be callable.

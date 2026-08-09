@@ -15,6 +15,7 @@ local MIN_CAP_PERCENT = 20
 local RESOURCE_BAR_WIDTH = 8
 
 local DEFAULTS = {
+    configVersion = 2,
     point = "BOTTOM",
     relativePoint = "BOTTOM",
     xOffset = 100,
@@ -24,7 +25,7 @@ local DEFAULTS = {
     locked = true,
     hideExternalBar = false,
     capMultiplier = 2.0,
-    showHealth = false,
+    showHealth = true,
     resourceDisplay = "left", -- "left", "right", "none"
 }
 
@@ -47,10 +48,18 @@ end
 
 local function ApplyDefaults(db)
     db = db or {}
+    local isLegacyProfile = db.configVersion == nil and db.showHealth == false
     for key, value in pairs(DEFAULTS) do
         if db[key] == nil then
             db[key] = value
         end
+    end
+
+    -- The previous release defaulted this option to false. Migrate that
+    -- implicit legacy value once, while preserving an explicit choice made
+    -- after this version.
+    if isLegacyProfile then
+        db.showHealth = true
     end
 
     if type(db.width) ~= "number" or db.width <= 0 then
@@ -321,11 +330,36 @@ local function UpdateBar(absorb, maxHP)
     end
 end
 
+local function ApplyBarDimensions(width, height, capPercent)
+    if not (width and width > 0 and height and height > 0) then
+        print("BloodShieldOverlay: width and height must be positive numbers.")
+        return false
+    end
+    if not (capPercent and capPercent >= MIN_CAP_PERCENT) then
+        print(string.format("BloodShieldOverlay: Max %% must be at least %d.", MIN_CAP_PERCENT))
+        return false
+    end
+
+    config.width = width
+    config.height = height
+    config.capMultiplier = capPercent / 100
+
+    if bar then
+        bar:SetSize(width, height)
+    end
+
+    -- Re-render even when only Max % changed. SetSize can invoke OnSizeChanged,
+    -- but the cap value itself must always trigger a complete refresh.
+    UpdateBar()
+    UpdateTickMarks()
+    return true
+end
+
 local function CreateConfigMenu()
     if menuFrame then return end
 
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(320, 310)
+    menuFrame:SetSize(480, 310)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -366,7 +400,7 @@ local function CreateConfigMenu()
     menuFrame.widthEdit = widthEdit
 
     local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    heightLabel:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", 0, -12)
+    heightLabel:SetPoint("LEFT", widthEdit, "RIGHT", 12, 0)
     heightLabel:SetText("Height:")
 
     local heightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
@@ -376,7 +410,7 @@ local function CreateConfigMenu()
     menuFrame.heightEdit = heightEdit
 
     local capLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    capLabel:SetPoint("TOPLEFT", heightLabel, "BOTTOMLEFT", 0, -12)
+    capLabel:SetPoint("LEFT", heightEdit, "RIGHT", 12, 0)
     capLabel:SetText("Max %:")
 
     local capEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
@@ -385,8 +419,14 @@ local function CreateConfigMenu()
     capEdit:SetAutoFocus(false)
     menuFrame.capEdit = capEdit
 
+    local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    applyButton:SetSize(70, 24)
+    applyButton:SetPoint("LEFT", capEdit, "RIGHT", 12, 0)
+    applyButton:SetText("Apply")
+    menuFrame.applyButton = applyButton
+
     local visibilityCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    visibilityCheck:SetPoint("TOPLEFT", capLabel, "BOTTOMLEFT", -2, -8)
+    visibilityCheck:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", -2, -8)
     visibilityCheck.Text:SetText("Hide external shield bar")
     visibilityCheck:SetScript("OnClick", function(self)
         config.hideExternalBar = self:GetChecked() and true or false
@@ -428,32 +468,11 @@ local function CreateConfigMenu()
     end)
     menuFrame.resButton = resButton
 
-    local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    applyButton:SetSize(90, 24)
-    applyButton:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -12)
-    applyButton:SetText("Apply")
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
         local height = tonumber(heightEdit:GetText())
         local capPercent = tonumber(capEdit:GetText())
-
-        if not (width and width > 0 and height and height > 0) then
-            print("BloodShieldOverlay: width and height must be positive numbers.")
-            return
-        end
-        if not (capPercent and capPercent >= MIN_CAP_PERCENT) then
-            print(string.format("BloodShieldOverlay: Max %% must be at least %d.", MIN_CAP_PERCENT))
-            return
-        end
-
-        config.width = width
-        config.height = height
-        config.capMultiplier = capPercent / 100
-
-        if bar then
-            bar:SetSize(width, height)
-        end
-        UpdateBar()
+        ApplyBarDimensions(width, height, capPercent)
     end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
