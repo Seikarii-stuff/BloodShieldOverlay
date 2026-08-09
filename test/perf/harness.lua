@@ -110,6 +110,7 @@ _G.UnitPowerMax = function(unit) return maxPower[unit] or 0 end
 _G.UnitClass = function() return "Tester", "PALADIN" end
 _G.Enum = { PowerType = { HolyPower = 9, Essence = 19, SoulShards = 7, Chi = 12, ComboPoints = 4 } }
 _G.GetRuneCooldown = function() return 0, 0, true end
+_G.GetPowerRegen = function() return 0.2, 0.2 end
 _G.GetTime = function() return 100 end
 _G.UnitName = function() return "Tester" end
 _G.GetNormalizedRealmName = function() return "Realm" end

@@ -123,11 +123,10 @@ for index = 1, MAX_SPECIAL_CIRCLES do
 end
 
 -- White while charging/empty; snaps to gold the instant a pip is ready/full.
--- This is the only state that changes per pip; slot identity never does.
-local specialResourceProvider = addon.CreateResourceProviders(
-    playerClass, powerTypes, specialCircles, specialProgress, MAX_SPECIAL_CIRCLES
+-- Class rules remain in ResourceProviders.lua, outside the rendering module.
+local specialResourceProvider, SPECIAL_POWER_TOKEN = addon.CreateSpecialResourceProvider(
+    playerClass, powerTypes
 )
-local SPECIAL_POWER_TOKEN = specialResourceProvider and specialResourceProvider.token
 
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
@@ -218,7 +217,7 @@ local function UpdateSpecialResources()
     end
 
     if specialResourceProvider then
-        local count = specialResourceProvider.Update()
+        local count = specialResourceProvider:Update(specialProgress, specialCircles, GetTime())
         SortSpecialResources(count)
     end
 

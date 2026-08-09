@@ -58,6 +58,7 @@
 
 5. **[ResourceProviders.lua](ResourceProviders.lua)**
   - Proveedores extensibles para recursos especiales de clase y runas de Caballero de la Muerte.
+  - La Esencia de Evoker muestra la recarga secuencial del siguiente pip, mientras que las runas mantienen sus seis recargas independientes.
 
 6. **[Commands.lua](Commands.lua)**
   - Adaptador de comandos `/shield`; delega las operaciones de UI en la API de `PlayerBar.lua`.
