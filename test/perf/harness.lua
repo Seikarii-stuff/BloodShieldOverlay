@@ -40,6 +40,13 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "SetScript", function(self, event, fn) self.scripts[event] = fn end)
     frame_method(frame, "GetScript", function(self, event) return self.scripts[event] end)
     frame_method(frame, "RegisterEvent", function(self, event) self.events = self.events or {}; self.events[event] = true end)
+    frame_method(frame, "RegisterUnitEvent", function(self, event, ...)
+        self.unitEvents = self.unitEvents or {}
+        self.unitEvents[event] = self.unitEvents[event] or {}
+        for index = 1, select("#", ...) do
+            self.unitEvents[event][select(index, ...)] = true
+        end
+    end)
     frame_method(frame, "SetAllPoints", function(self, target) self.allPoints = target end)
     frame_method(frame, "SetStatusBarTexture", function(self, texture) self.texture = texture end)
     frame_method(frame, "SetStatusBarColor", function(self, r, g, b, a) self.color = { r, g, b, a } end)
@@ -110,9 +117,9 @@ _G.C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }
 _G.C_NamePlate = nil
 
 function M.load()
+    dofile("BloodShieldOverlay.lua")
     dofile("Core.lua")
     dofile("AbsorbIndicator.lua")
-    dofile("BloodShieldOverlay.lua")
     dofile("PlayerBar.lua")
     dofile("BlizzardFrames.lua")
 end
@@ -124,7 +131,11 @@ function M.set_values(unit, absorb, maxHealth) absorbs[unit], health[unit] = abs
 function M.set_power(unit, current, maximum) power[unit], maxPower[unit] = current, maximum end
 function M.fire(event, unit)
     for _, frame in ipairs(frames) do
-        if frame.events and frame.events[event] and frame.scripts.OnEvent then frame.scripts.OnEvent(frame, event, unit) end
+        local registered = frame.events and frame.events[event]
+        local unitRegistered = frame.unitEvents and frame.unitEvents[event]
+        if (registered or (unitRegistered and unitRegistered[unit])) and frame.scripts.OnEvent then
+            frame.scripts.OnEvent(frame, event, unit)
+        end
     end
 end
 function M.tick(elapsed)

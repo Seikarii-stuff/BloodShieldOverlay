@@ -18,27 +18,7 @@ local SPECIAL_CIRCLE_SIZE = 12
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
-local SPECIAL_POWER_TYPE
-local SPECIAL_POWER_TOKEN
-
-if powerTypes then
-    if playerClass == "PALADIN" then
-        SPECIAL_POWER_TYPE = powerTypes.HolyPower
-        SPECIAL_POWER_TOKEN = "HOLY_POWER"
-    elseif playerClass == "EVOKER" then
-        SPECIAL_POWER_TYPE = powerTypes.Essence
-        SPECIAL_POWER_TOKEN = "ESSENCE"
-    elseif playerClass == "WARLOCK" then
-        SPECIAL_POWER_TYPE = powerTypes.SoulShards
-        SPECIAL_POWER_TOKEN = "SOUL_SHARDS"
-    elseif playerClass == "MONK" then
-        SPECIAL_POWER_TYPE = powerTypes.Chi
-        SPECIAL_POWER_TOKEN = "CHI"
-    elseif playerClass == "ROGUE" or playerClass == "DRUID" then
-        SPECIAL_POWER_TYPE = powerTypes.ComboPoints
-        SPECIAL_POWER_TOKEN = "COMBO_POINTS"
-    end
-end
+local profileKey
 
 local DEFAULTS = {
     configVersion = 2,
@@ -60,10 +40,17 @@ local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 
 local config = {}
 
-local function GetProfileKey()
+local function BuildProfileKey()
     local playerName = UnitName("player") or "Player"
     local realmName = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Unknown"
     return string.format("%s-%s", playerName, realmName)
+end
+
+local function GetProfileKey()
+    if not profileKey then
+        profileKey = BuildProfileKey()
+    end
+    return profileKey
 end
 
 local function EnsureProfileStore()
@@ -260,6 +247,78 @@ end
 local CHARGING_COLOR = { 1, 1, 1 }
 local READY_COLOR = { 1, 0.82, 0 }
 
+local function CreatePowerResourceProvider(powerType, powerToken)
+    return {
+        token = powerToken,
+        GetMax = function()
+            return UnitPowerMax("player", powerType) or 0
+        end,
+        Update = function()
+            local currentPower = UnitPower("player", powerType) or 0
+            local maxPower = math.min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
+
+            for index = 1, maxPower do
+                local circle = specialCircles[index]
+                circle:SetMinMaxValues(0, 1)
+                if index <= currentPower then
+                    specialProgress[index] = 1
+                    circle:SetValue(1)
+                    circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
+                else
+                    circle:SetValue(0)
+                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
+                end
+            end
+
+            return maxPower
+        end,
+    }
+end
+
+local ResourceProviders = {
+    DEATHKNIGHT = {
+        GetMax = function() return 6 end,
+        Update = function()
+            local now = GetTime()
+            for index = 1, 6 do
+                local start, duration, ready = GetRuneCooldown(index)
+                local circle = specialCircles[index]
+                circle:SetMinMaxValues(0, 1)
+                if ready then
+                    specialProgress[index] = 1
+                    circle:SetValue(1)
+                    circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
+                elseif start and duration and duration > 0 then
+                    local progress = (now - start) / duration
+                    if progress < 0 then progress = 0 end
+                    if progress > 1 then progress = 1 end
+                    specialProgress[index] = progress
+                    circle:SetMinMaxValues(0, duration)
+                    circle:SetValue(now - start)
+                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
+                else
+                    circle:SetValue(0)
+                    circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
+                end
+            end
+
+            return 6
+        end,
+    },
+}
+
+if powerTypes then
+    ResourceProviders.PALADIN = CreatePowerResourceProvider(powerTypes.HolyPower, "HOLY_POWER")
+    ResourceProviders.EVOKER = CreatePowerResourceProvider(powerTypes.Essence, "ESSENCE")
+    ResourceProviders.WARLOCK = CreatePowerResourceProvider(powerTypes.SoulShards, "SOUL_SHARDS")
+    ResourceProviders.MONK = CreatePowerResourceProvider(powerTypes.Chi, "CHI")
+    ResourceProviders.ROGUE = CreatePowerResourceProvider(powerTypes.ComboPoints, "COMBO_POINTS")
+    ResourceProviders.DRUID = CreatePowerResourceProvider(powerTypes.ComboPoints, "COMBO_POINTS")
+end
+
+local specialResourceProvider = ResourceProviders[playerClass]
+local SPECIAL_POWER_TOKEN = specialResourceProvider and specialResourceProvider.token
+
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
 
@@ -293,12 +352,7 @@ local function UpdateSpecialResourcesLayout()
         return
     end
 
-    local maxPower = 0
-    if playerClass == "DEATHKNIGHT" then
-        maxPower = 6
-    elseif SPECIAL_POWER_TYPE then
-        maxPower = UnitPowerMax("player", SPECIAL_POWER_TYPE) or 0
-    end
+    local maxPower = specialResourceProvider and specialResourceProvider.GetMax() or 0
     maxPower = math.min(maxPower, MAX_SPECIAL_CIRCLES)
 
     if maxPower <= 0 then
@@ -353,46 +407,9 @@ local function UpdateSpecialResources()
         specialProgress[index] = 0
     end
 
-    if playerClass == "DEATHKNIGHT" then
-        local now = GetTime()
-        for index = 1, 6 do
-            local start, duration, ready = GetRuneCooldown(index)
-            local circle = specialCircles[index]
-            circle:SetMinMaxValues(0, 1)
-            if ready then
-                specialProgress[index] = 1
-                circle:SetValue(1)
-                circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
-            elseif start and duration and duration > 0 then
-                local progress = (now - start) / duration
-                if progress < 0 then progress = 0 end
-                if progress > 1 then progress = 1 end
-                specialProgress[index] = progress
-                circle:SetMinMaxValues(0, duration)
-                circle:SetValue(now - start)
-                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-            else
-                circle:SetValue(0)
-                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-            end
-        end
-        SortSpecialResources(6)
-    elseif SPECIAL_POWER_TYPE then
-        local currentPower = UnitPower("player", SPECIAL_POWER_TYPE) or 0
-        local maxPower = math.min(UnitPowerMax("player", SPECIAL_POWER_TYPE) or 0, MAX_SPECIAL_CIRCLES)
-        for index = 1, maxPower do
-            local circle = specialCircles[index]
-            circle:SetMinMaxValues(0, 1)
-            if index <= currentPower then
-                specialProgress[index] = 1
-                circle:SetValue(1)
-                circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
-            else
-                circle:SetValue(0)
-                circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-            end
-        end
-        SortSpecialResources(maxPower)
+    if specialResourceProvider then
+        local count = specialResourceProvider.Update()
+        SortSpecialResources(count)
     end
 
     UpdateSpecialResourcesLayout()
@@ -721,27 +738,28 @@ local function ShowConfigMenu()
     menuFrame:Show()
 end
 
-if addon.RegisterPlayerUpdateListener then
+addon.RegisterInitializer(function()
+    if not profileKey then
+        profileKey = BuildProfileKey()
+    end
+    EnsureConfig()
+    UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
-end
+end)
 
 local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:RegisterEvent("UNIT_POWER_UPDATE")
-initFrame:RegisterEvent("UNIT_MAXPOWER")
-initFrame:RegisterEvent("UNIT_POWER_FREQUENT")
+initFrame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+initFrame:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+initFrame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
 initFrame:RegisterEvent("RUNE_POWER_UPDATE")
 initFrame:SetScript("OnEvent", function(_, event, unit, powerType)
-    if event == "PLAYER_LOGIN" then
-        EnsureConfig()
-        UpdateBar()
-    elseif event == "RUNE_POWER_UPDATE" then
+    if event == "RUNE_POWER_UPDATE" then
         UpdateSpecialResources()
-    elseif unit == "player" and event == "UNIT_MAXPOWER" then
+    elseif event == "UNIT_MAXPOWER" then
         -- Rare event; always safe to recompute (pip count can change, e.g. talents).
         UpdateBar()
         UpdateSpecialResources()
-    elseif unit == "player" and (event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT") then
+    elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" then
         UpdateBar()
         -- UNIT_POWER_FREQUENT fires very often for the class's primary
         -- resource (e.g. Energy/Rage/Mana). Only recompute the special-
@@ -753,7 +771,7 @@ initFrame:SetScript("OnEvent", function(_, event, unit, powerType)
     end
 end)
 
-SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
+addon.HandleSlashCommand = function(msg)
     msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
 
     if msg == "" then
@@ -813,6 +831,3 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
         print("BloodShieldOverlay is unlocked. Drag the bar to move it, then use /shield lock.")
     end
 end
-SLASH_BLOODSHIELDOVERLAY1 = "/shield"
-SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
-SLASH_BLOODSHIELDOVERLAY3 = "/shields"

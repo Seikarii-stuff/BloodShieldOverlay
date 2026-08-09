@@ -360,7 +360,9 @@ local function UpdateUnit(unit, absorb, maxHealth)
 
     absorb = absorb or UnitGetTotalAbsorbs(unit) or 0
     maxHealth = maxHealth or UnitHealthMax(unit) or 1
-    for _, entry in pairs(entries) do
+    -- `entries` is keyed by health bar. Explicit `next` avoids the `pairs`
+    -- helper on this event-driven hot path while preserving the existing map.
+    for _, entry in next, entries do
         addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
     end
 end
@@ -411,16 +413,16 @@ addon.RequestRefresh = function()
     end
 end
 
-if addon.RegisterUnitUpdateListener then
+addon.RegisterInitializer(function()
     addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
         if overlays[unit] then
             UpdateUnit(unit, absorb, maxHealth)
         end
     end)
-end
+end)
 
 -- Centralized combat/regen listener callback
-if addon.RegisterRegenListener then
+addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
             if pendingRefresh then
@@ -429,7 +431,7 @@ if addon.RegisterRegenListener then
             end
         end
     end)
-end
+end)
 
 if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)

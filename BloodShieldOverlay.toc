@@ -6,8 +6,8 @@
 ## IconTexture: 237540
 ## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
 
+BloodShieldOverlay.lua
 Core.lua
 AbsorbIndicator.lua
-BloodShieldOverlay.lua
 PlayerBar.lua
 BlizzardFrames.lua
