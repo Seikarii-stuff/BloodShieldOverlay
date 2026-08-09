@@ -112,8 +112,8 @@ local function GetResourceBar(frame)
     if IsStatusBar(bar) then return bar end
 
     if frame.GetChildren then
-            -- Blizzard resource frames expose at most 12 direct children here;
-            -- deeper or unrelated descendants are handled by the bounded scan.
+        -- Inspect the first 12 direct children; deeper traversal belongs to
+        -- FindPlayerFrame, which applies the bounded hierarchy scan.
         local child1, child2, child3, child4, child5, child6,
             child7, child8, child9, child10, child11, child12 = frame:GetChildren()
         if IsResourceStatusBar(child1) then return child1 end
@@ -310,11 +310,12 @@ local function OnLocateTimer()
         locateAttempts = 0
     elseif enabled and locateAttempts < MAX_LOCATE_ATTEMPTS then
         locateAttempts = locateAttempts + 1
-        ScheduleLocate()
+        ScheduleLocate(true)
     end
 end
 
-ScheduleLocate = function()
+ScheduleLocate = function(isRetry)
+    if not isRetry then locateAttempts = 0 end
     if not enabled or refreshScheduled then return end
     refreshScheduled = true
     C_Timer.After(0.05, OnLocateTimer)
@@ -350,7 +351,7 @@ eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 eventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 eventFrame:SetScript("OnEvent", function(_, event, _, powerType)
-        if not enabled and event ~= "PLAYER_REGEN_ENABLED" then return end
+    if not enabled and event ~= "PLAYER_REGEN_ENABLED" then return end
     if event == "PLAYER_REGEN_ENABLED" then
         if pendingLocate then ScheduleLocate() end
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"

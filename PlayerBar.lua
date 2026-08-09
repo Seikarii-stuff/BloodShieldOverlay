@@ -557,6 +557,10 @@ local function CreateConfigMenu()
             and addon.SetClassResourceOverlayPipSize(pipWidth, pipHeight) then
             config.classResourcePipWidth = pipWidth
             config.classResourcePipHeight = pipHeight
+        else
+            print("BloodShieldOverlay: group pip width must be 4-32 and height 2-20.")
+            pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
+            pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
         end
     end)
 
