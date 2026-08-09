@@ -93,5 +93,5 @@ Estos tests no sustituyen la validación dentro del cliente PTR/Retail con marco
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
 ---
-**Versión**: 1.6 Release
+**Versión**: 2.0 Release
 **Autor**: Seikarii  
