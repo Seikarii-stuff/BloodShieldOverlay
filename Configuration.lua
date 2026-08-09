@@ -7,7 +7,8 @@ local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
     configVersion = 2, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
-    showHealth = true, showSpecialResources = true, resourceDisplay = "left",
+    showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
+    resourceDisplay = "left",
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -40,6 +41,7 @@ local function ApplyDefaults(db)
     if type(db.hideExternalBar) ~= "boolean" then db.hideExternalBar = DEFAULTS.hideExternalBar end
     if type(db.showHealth) ~= "boolean" then db.showHealth = DEFAULTS.showHealth end
     if type(db.showSpecialResources) ~= "boolean" then db.showSpecialResources = DEFAULTS.showSpecialResources end
+    if type(db.showClassResourceOverlay) ~= "boolean" then db.showClassResourceOverlay = DEFAULTS.showClassResourceOverlay end
     if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then db.resourceDisplay = DEFAULTS.resourceDisplay end
     return db
 end

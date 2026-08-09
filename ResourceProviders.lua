@@ -1,5 +1,4 @@
--- Class-specific special-resource providers.
--- PlayerBar only renders provider output; it does not own class rules.
+-- Shared class-specific resource state and event driver.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -8,25 +7,20 @@ local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local GetRuneCooldown = GetRuneCooldown
 local GetTime = GetTime
+local CreateFrame = CreateFrame
 local math_min = math.min
 local math_max = math.max
 
-local MAX_SPECIAL_CIRCLES = 7
+local MAX_RESOURCES = 7
 local RUNE_COUNT = 6
 local ESSENCE_CHARGE_DURATION = 4
-local CHARGING_COLOR = { 1, 1, 1 }
-local READY_COLOR = { 1, 0.82, 0 }
 
--- Shared stable ordering for every renderer. Ready pips stay ahead of
--- charging/empty pips without allocating a temporary array.
 function addon.SortSpecialResources(progress, order, count)
     for position = 2, count do
         local candidate = order[position]
         local candidateProgress = progress[candidate]
         local insertAt = position - 1
-
-        while insertAt >= 1
-            and progress[order[insertAt]] < candidateProgress do
+        while insertAt >= 1 and progress[order[insertAt]] < candidateProgress do
             order[insertAt + 1] = order[insertAt]
             insertAt = insertAt - 1
         end
@@ -34,125 +28,145 @@ function addon.SortSpecialResources(progress, order, count)
     end
 end
 
-local function SetCircle(circle, progress, maximum, value, ready)
-    circle:SetMinMaxValues(0, maximum)
-    circle:SetValue(value)
-    if ready then
-        circle:SetStatusBarColor(READY_COLOR[1], READY_COLOR[2], READY_COLOR[3], 1)
-    else
-        circle:SetStatusBarColor(CHARGING_COLOR[1], CHARGING_COLOR[2], CHARGING_COLOR[3], 1)
-    end
-    return progress
-end
-
 local function CreatePowerProvider(powerType)
+    local state = { progress = {}, maximum = 0, charging = false }
     return {
         GetMax = function()
-            return math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
+            return math_min(UnitPowerMax("player", powerType) or 0, MAX_RESOURCES)
         end,
-        Update = function(_, progress, circles)
+        Refresh = function()
             local current = UnitPower("player", powerType) or 0
-            local maximum = math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
-            for index = 1, maximum do
-                local ready = index <= current
-                progress[index] = ready and 1 or 0
-                SetCircle(circles[index], progress[index], 1, progress[index], ready)
-            end
-            return maximum, false
+            local maximum = math_min(UnitPowerMax("player", powerType) or 0, MAX_RESOURCES)
+            for index = 1, maximum do state.progress[index] = index <= current and 1 or 0 end
+            for index = maximum + 1, MAX_RESOURCES do state.progress[index] = 0 end
+            state.maximum, state.charging = maximum, false
         end,
+        GetState = function() return state end,
     }
 end
 
 local function CreateEssenceProvider(powerType)
     local chargeStart
     local previousReadyCount
-
+    local state = { progress = {}, maximum = 0, charging = false }
     return {
         GetMax = function()
-            return math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
+            return math_min(UnitPowerMax("player", powerType) or 0, MAX_RESOURCES)
         end,
-        Update = function(_, progress, circles, now)
+        Refresh = function(_, now)
             local current = UnitPower("player", powerType) or 0
-            local maximum = math_min(UnitPowerMax("player", powerType) or 0, MAX_SPECIAL_CIRCLES)
+            local maximum = math_min(UnitPowerMax("player", powerType) or 0, MAX_RESOURCES)
             local readyCount = math_min(current, maximum)
-
-            -- Essence does not expose a reliable per-tick timer event. Start
-            -- a fixed four-second visual charge whenever the confirmed ready
-            -- count changes; the next UNIT_POWER_UPDATE turns that pip yellow.
             if maximum <= 0 or readyCount >= maximum then
                 chargeStart = nil
-            elseif previousReadyCount == nil or readyCount > previousReadyCount then
-                chargeStart = now
-            elseif not chargeStart then
+            elseif previousReadyCount == nil or readyCount > previousReadyCount or not chargeStart then
                 chargeStart = now
             end
             previousReadyCount = readyCount
-
             for index = 1, maximum do
                 if index <= readyCount then
-                    progress[index] = 1
-                    SetCircle(circles[index], 1, 1, 1, true)
+                    state.progress[index] = 1
                 elseif index == readyCount + 1 and chargeStart then
-                    local elapsed = math_max(0, now - chargeStart)
-                    local value = math_min(1, elapsed / ESSENCE_CHARGE_DURATION)
-                    progress[index] = value
-                    SetCircle(circles[index], value, 1, value, false)
+                    state.progress[index] = math_min(1, math_max(0, now - chargeStart) / ESSENCE_CHARGE_DURATION)
                 else
-                    progress[index] = 0
-                    SetCircle(circles[index], 0, 1, 0, false)
+                    state.progress[index] = 0
                 end
             end
-            local charging = readyCount < maximum and chargeStart ~= nil
-            return maximum, charging and true or false
+            for index = maximum + 1, MAX_RESOURCES do state.progress[index] = 0 end
+            state.maximum = maximum
+            state.charging = readyCount < maximum and chargeStart ~= nil
         end,
+        GetState = function() return state end,
     }
 end
 
 local function CreateRuneProvider()
+    local state = { progress = {}, maximum = RUNE_COUNT, charging = false }
     return {
         GetMax = function() return RUNE_COUNT end,
-        Update = function(_, progress, circles, now)
-            now = now or GetTime()
+        Refresh = function(_, now)
             local charging = false
             for index = 1, RUNE_COUNT do
                 local start, duration, ready = GetRuneCooldown(index)
-                local circle = circles[index]
                 if ready then
-                    progress[index] = 1
-                    SetCircle(circle, 1, 1, 1, true)
+                    state.progress[index] = 1
                 elseif start and duration and duration > 0 then
-                    local value = math_max(0, math_min(1, (now - start) / duration))
-                    progress[index] = value
-                    SetCircle(circle, value, duration, now - start, false)
+                    state.progress[index] = math_max(0, math_min(1, (now - start) / duration))
                     charging = true
                 else
-                    progress[index] = 0
-                    SetCircle(circle, 0, 1, 0, false)
+                    state.progress[index] = 0
                 end
             end
-            return RUNE_COUNT, charging
+            state.charging = charging
         end,
+        GetState = function() return state end,
     }
 end
 
-function addon.CreateSpecialResourceProvider(playerClass, powerTypes)
+local provider
+local resourceToken
+local listeners = {}
+local listenerCount = 0
+local driver = CreateFrame("Frame")
+local tickerElapsed = 0
+
+function addon.GetSpecialResourceProvider(playerClass, powerTypes)
+    if provider then return provider, resourceToken end
     if playerClass == "DEATHKNIGHT" then
-        return CreateRuneProvider(), nil
+        provider = CreateRuneProvider()
+    elseif powerTypes then
+        local definitions = {
+            PALADIN = { powerTypes.HolyPower, "HOLY_POWER" },
+            EVOKER = { powerTypes.Essence, "ESSENCE", true },
+            WARLOCK = { powerTypes.SoulShards, "SOUL_SHARDS" },
+            MONK = { powerTypes.Chi, "CHI" },
+            ROGUE = { powerTypes.ComboPoints, "COMBO_POINTS" },
+            DRUID = { powerTypes.ComboPoints, "COMBO_POINTS" },
+        }
+        local definition = definitions[playerClass]
+        if definition and definition[1] then
+            provider = definition[3] and CreateEssenceProvider(definition[1]) or CreatePowerProvider(definition[1])
+            resourceToken = definition[2]
+        end
     end
-    if not powerTypes then return nil, nil end
-
-    local definitions = {
-        PALADIN = { powerTypes.HolyPower, "HOLY_POWER" },
-        EVOKER = { powerTypes.Essence, "ESSENCE", true },
-        WARLOCK = { powerTypes.SoulShards, "SOUL_SHARDS" },
-        MONK = { powerTypes.Chi, "CHI" },
-        ROGUE = { powerTypes.ComboPoints, "COMBO_POINTS" },
-        DRUID = { powerTypes.ComboPoints, "COMBO_POINTS" },
-    }
-    local definition = definitions[playerClass]
-    if not definition or not definition[1] then return nil, nil end
-    if definition[3] then
-        return CreateEssenceProvider(definition[1]), definition[2]
-    end
-    return CreatePowerProvider(definition[1]), definition[2]
+    if provider then provider:Refresh(GetTime()) end
+    return provider, resourceToken
 end
+
+addon.CreateSpecialResourceProvider = addon.GetSpecialResourceProvider
+
+local function NotifyListeners()
+    for index = 1, listenerCount do listeners[index]() end
+end
+
+local function RefreshProvider()
+    if not provider then return end
+    provider:Refresh(GetTime())
+    local state = provider:GetState()
+    if state.charging then
+        driver:SetScript("OnUpdate", function(_, elapsed)
+            tickerElapsed = tickerElapsed + elapsed
+            if tickerElapsed >= 0.1 then
+                tickerElapsed = 0
+                RefreshProvider()
+            end
+        end)
+    else
+        tickerElapsed = 0
+        driver:SetScript("OnUpdate", nil)
+    end
+    NotifyListeners()
+end
+
+function addon.RegisterSpecialResourceListener(listener)
+    if type(listener) ~= "function" then return end
+    listenerCount = listenerCount + 1
+    listeners[listenerCount] = listener
+    listener()
+end
+
+driver:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+driver:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+driver:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
+driver:RegisterEvent("RUNE_POWER_UPDATE")
+driver:SetScript("OnEvent", RefreshProvider)

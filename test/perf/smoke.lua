@@ -21,6 +21,8 @@ check(type(addon.RefreshPartyFrames) == "function", "party refresh API missing")
 check(type(addon.RequestRefresh) == "function", "refresh API missing")
 check(type(addon.UpdateSpecialResourcesLayout) == "function", "special resource layout API missing")
 check(type(addon.UpdateSpecialResources) == "function", "special resource update API missing")
+check(type(addon.GetSpecialResourceProvider) == "function", "shared resource provider API missing")
+check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -65,6 +67,7 @@ check(bar and bar.resourceBar == nil, "bar should not expose implementation deta
 check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag handler")
 check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
 check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
+check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
 check(configMenu.applyButton.point == "LEFT" and configMenu.applyButton.relative == configMenu.capEdit,
     "apply button should be beside the size and cap fields")
 
@@ -74,6 +77,11 @@ check(configMenu.specialResCheck:GetChecked() == false, "special resource toggle
 configMenu.specialResCheck:SetChecked(true)
 configMenu.specialResCheck:GetScript("OnClick")(configMenu.specialResCheck)
 check(configMenu.specialResCheck:GetChecked() == true, "special resource re-enable failed")
+configMenu.classOverlayCheck:SetChecked(false)
+configMenu.classOverlayCheck:GetScript("OnClick")(configMenu.classOverlayCheck)
+check(configMenu.classOverlayCheck:GetChecked() == false, "group resource overlay toggle failed")
+configMenu.classOverlayCheck:SetChecked(true)
+configMenu.classOverlayCheck:GetScript("OnClick")(configMenu.classOverlayCheck)
 
 local originalWidth, originalHeight = bar.width, bar.height
 configMenu.capEdit:SetText("300")

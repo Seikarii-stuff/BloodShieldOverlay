@@ -490,7 +490,7 @@ manager:SetScript("OnEvent", function(_, event, unit)
         return
     end
 
-    -- FIX: Purgar referencias muertas explícitamente en el desmantelamiento de Nameplates
+    -- FIX: Explicitly purge dead references when dismantling nameplates.
     if event == "NAME_PLATE_UNIT_REMOVED" then
         if unit then
             local nameplate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)

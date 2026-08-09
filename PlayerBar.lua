@@ -138,31 +138,11 @@ end
 
 -- White while charging/empty; snaps to gold the instant a pip is ready/full.
 -- Class rules remain in ResourceProviders.lua, outside the rendering module.
-local specialResourceProvider, SPECIAL_POWER_TOKEN = addon.CreateSpecialResourceProvider(
+local specialResourceProvider = addon.GetSpecialResourceProvider(
     playerClass, powerTypes
 )
 local SortSpecialResources = addon.SortSpecialResources
 local UpdateSpecialResources
-local specialTicker = CreateFrame("Frame")
-local specialElapsed = 0
-local SPECIAL_TICK = 0.1
-
-local function OnSpecialTick(_, elapsed)
-    specialElapsed = specialElapsed + elapsed
-    if specialElapsed < SPECIAL_TICK then return end
-    specialElapsed = 0
-    UpdateSpecialResources()
-end
-
-local function SetSpecialTicking(active)
-    if active then
-        specialTicker:SetScript("OnUpdate", OnSpecialTick)
-    else
-        specialElapsed = 0
-        specialTicker:SetScript("OnUpdate", nil)
-    end
-end
-
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
 
@@ -172,13 +152,13 @@ local function CreateSpecialResources()
     for index = 1, MAX_SPECIAL_CIRCLES do
         local circle = CreateFrame("StatusBar", nil, specialResourceContainer)
         circle:SetFrameLevel(resourceBar:GetFrameLevel() + 1)
-        circle:SetStatusBarTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+        circle:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
         circle:SetStatusBarColor(1, 1, 1, 1)
         circle:SetOrientation("VERTICAL")
 
         local background = circle:CreateTexture(nil, "BACKGROUND")
         background:SetAllPoints(circle)
-        background:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+        background:SetTexture("Interface\\Buttons\\WHITE8x8")
         background:SetVertexColor(0.15, 0.15, 0.15, 0.6)
 
         circle:EnableMouse(false)
@@ -233,7 +213,6 @@ UpdateSpecialResources = function()
     if not config.showSpecialResources or config.hideExternalBar
         or config.resourceDisplay == "none" then
         UpdateSpecialResourcesLayout()
-        SetSpecialTicking(false)
         return
     end
 
@@ -241,17 +220,25 @@ UpdateSpecialResources = function()
         specialProgress[index] = 0
     end
 
-    local isCharging = false
     if specialResourceProvider then
-        local count, charging = specialResourceProvider:Update(
-            specialProgress, specialCircles, GetTime()
-        )
+        local state = specialResourceProvider:GetState()
+        local count = state.maximum
+        for index = 1, MAX_SPECIAL_CIRCLES do
+            local value = state.progress[index] or 0
+            specialProgress[index] = value
+            local circle = specialCircles[index]
+            circle:SetMinMaxValues(0, 1)
+            circle:SetValue(value)
+            if value >= 1 then
+                circle:SetStatusBarColor(1, 0.82, 0, 1)
+            else
+                circle:SetStatusBarColor(1, 1, 1, 1)
+            end
+        end
         SortSpecialResources(specialProgress, specialOrder, count)
-        isCharging = charging and true or false
     end
 
     UpdateSpecialResourcesLayout()
-    SetSpecialTicking(isCharging)
 end
 
 addon.UpdateSpecialResourcesLayout = UpdateSpecialResourcesLayout
@@ -274,7 +261,7 @@ local function CreateBar()
     bg:SetAllPoints(bar)
     bg:SetColorTexture(0, 0, 0, 0.4)
 
-    -- Barra de Salud (Roja)
+    -- Health bar (red).
     healthBar = CreateFrame("StatusBar", nil, bar)
     healthBar:SetAllPoints(bar)
     healthBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
@@ -283,10 +270,10 @@ local function CreateBar()
     healthBar:SetReverseFill(false)
     healthBar:SetFrameLevel(bar:GetFrameLevel())
 
-    -- Barra de Recursos Personales (Azul, Vertical, Ancho 8)
+    -- Personal resource bar (blue, vertical, width 8).
     resourceBar = CreateFrame("StatusBar", nil, bar)
     resourceBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-    resourceBar:SetStatusBarColor(0.0, 0.5, 1.0, 0.9) -- Azul
+    resourceBar:SetStatusBarColor(0.0, 0.5, 1.0, 0.9)
     resourceBar:SetOrientation("VERTICAL")
     resourceBar:SetReverseFill(false)
     resourceBar:SetFrameLevel(bar:GetFrameLevel())
@@ -365,13 +352,13 @@ local function UpdateBar(absorb, maxHP)
         bar:SetValue(0)
     end
 
-    -- Actualización segura de la Barra de Recursos (Maná, Poder Rúnico, Ira, Enfoque, etc.)
+    -- Safely update the personal resource bar.
     if resourceBar and config.resourceDisplay ~= "none" then
         resourceBar:Show()
         local curPower = UnitPower("player") or 0
         local maxPower = UnitPowerMax("player") or 1
 
-        -- Si maxPower es 0 evitar divisiones/mínimos erróneos
+        -- Avoid invalid ranges when the resource has no maximum.
         if maxPower <= 0 then maxPower = 1 end
 
         resourceBar:SetMinMaxValues(0, maxPower)
@@ -505,8 +492,19 @@ local function CreateConfigMenu()
     end)
     menuFrame.specialResCheck = specialResCheck
 
+    local classOverlayCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
+    classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -4)
+    classOverlayCheck.Text:SetText("Show special resources on group frames")
+    classOverlayCheck:SetScript("OnClick", function(self)
+        config.showClassResourceOverlay = self:GetChecked() and true or false
+        if addon.SetClassResourceOverlayEnabled then
+            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
+        end
+    end)
+    menuFrame.classOverlayCheck = classOverlayCheck
+
     local resLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resLabel:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 2, -10)
+    resLabel:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 2, -10)
     resLabel:SetText("Personal Resource Bar:")
 
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
@@ -567,6 +565,9 @@ local function RefreshConfigMenuFields()
     if menuFrame.specialResCheck then
         menuFrame.specialResCheck:SetChecked(config.showSpecialResources and true or false)
     end
+    if menuFrame.classOverlayCheck then
+        menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay and true or false)
+    end
     if menuFrame.resButton and menuFrame.resButton.UpdateText then
         menuFrame.resButton:UpdateText()
     end
@@ -580,32 +581,15 @@ end
 
 addon.RegisterInitializer(function()
     config = addon.PlayerBarConfig.Initialize()
+    if addon.SetClassResourceOverlayEnabled then
+        addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
+    end
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end)
 
-local initFrame = CreateFrame("Frame")
-initFrame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
-initFrame:RegisterUnitEvent("UNIT_MAXPOWER", "player")
-initFrame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
-initFrame:RegisterEvent("RUNE_POWER_UPDATE")
-initFrame:SetScript("OnEvent", function(_, event, unit, powerType)
-    if event == "RUNE_POWER_UPDATE" then
-        UpdateSpecialResources()
-    elseif event == "UNIT_MAXPOWER" then
-        -- Rare event; always safe to recompute (pip count can change, e.g. talents).
-        UpdateBar()
-        UpdateSpecialResources()
-    elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" then
-        UpdateBar()
-        -- UNIT_POWER_FREQUENT fires very often for the class's primary
-        -- resource (e.g. Energy/Rage/Mana). Only recompute the special-
-        -- resource pips when the power type that actually changed is the
-        -- one they track, instead of on every unrelated tick.
-        if SPECIAL_POWER_TOKEN and powerType == SPECIAL_POWER_TOKEN then
-            UpdateSpecialResources()
-        end
-    end
+addon.RegisterSpecialResourceListener(function()
+    UpdateSpecialResources()
 end)
 
 addon.PlayerBarAPI = {
