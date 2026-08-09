@@ -10,6 +10,7 @@ local UnitClass = UnitClass
 local GetTime = GetTime
 local C_Timer = C_Timer
 local Enum = Enum
+local UnitIsUnit = UnitIsUnit
 local ipairs = ipairs
 local math_min = math.min
 local type = type
@@ -83,6 +84,15 @@ local function GetUnit(frame)
     return nil
 end
 
+local function IsPlayerUnit(frame)
+    local unit = GetUnit(frame)
+    if not unit then return false end
+    if unit == "player" then return true end
+    -- In a raid, Blizzard normally exposes the player's compact frame as
+    -- raidN rather than player. UnitIsUnit is the authoritative comparison.
+    return UnitIsUnit and UnitIsUnit(unit, "player") or false
+end
+
 local function GetResourceBar(frame)
     if IsForbidden(frame) then return nil end
 
@@ -111,7 +121,7 @@ end
 
 local function FindPlayerFrame(frame)
     if IsForbidden(frame) then return nil end
-    if GetUnit(frame) == "player" then return frame end
+    if IsPlayerUnit(frame) then return frame end
     if not frame.GetChildren then return nil end
 
     local children = { frame:GetChildren() }
@@ -139,7 +149,7 @@ local function FindPlayerResourceBar()
     -- every global frame. The frame's unit is still checked before use.
     for index = 1, compactFrameNameCount do
         local frame = _G[COMPACT_FRAME_NAMES[index]]
-        if frame and GetUnit(frame) == "player" then
+        if frame and IsPlayerUnit(frame) then
             bar = GetResourceBar(frame)
             if bar then return bar end
         end
