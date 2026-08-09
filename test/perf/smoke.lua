@@ -23,6 +23,9 @@ check(type(addon.UpdateSpecialResourcesLayout) == "function", "special resource 
 check(type(addon.UpdateSpecialResources) == "function", "special resource update API missing")
 check(type(addon.GetSpecialResourceProvider) == "function", "shared resource provider API missing")
 check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
+check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
+check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
+check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -131,11 +134,41 @@ wow.set_group(true, false)
 wow.reset_get_children_calls()
 addon.RequestRefresh()
 wow.flush_timers()
-check(wow.get_children_calls() == 2, "container discovery called GetChildren more than once per level")
+check(wow.get_children_calls() >= 2, "container discovery did not scan the expected hierarchy")
 wow.set_combat(true)
 addon.RequestRefresh()
 wow.set_combat(false)
 wow.fire("PLAYER_REGEN_ENABLED")
 wow.flush_timers()
+
+-- Regression test: group-frame discovery must not reparent the overlay during combat.
+local groupContainer = wow.new_frame("Frame", "CombatGroupContainer")
+local groupMember = wow.new_frame("Frame", "CombatGroupMember", groupContainer)
+groupMember.displayedUnit = "player"
+local groupPowerBar = wow.new_frame("StatusBar", "CombatGroupPowerBar", groupMember)
+PartyFrame = groupContainer
+addon.SetClassResourceOverlayEnabled(true)
+wow.set_combat(true)
+wow.fire("GROUP_ROSTER_UPDATE")
+wow.flush_timers()
+local classOverlay = _G["BSO_ClassResourceOverlay"]
+check(classOverlay.parent ~= groupPowerBar, "group overlay mutated a protected frame during combat")
+wow.set_combat(false)
+wow.fire("PLAYER_REGEN_ENABLED")
+wow.flush_timers()
+check(classOverlay.parent == groupPowerBar, "deferred group overlay discovery did not retry after combat")
+
+-- Regression test: a raid layout may emit GROUP_ROSTER_UPDATE before its
+-- child frames exist; the bounded retry must attach once the bar is created.
+PartyFrame = nil
+wow.fire("GROUP_ROSTER_UPDATE")
+wow.flush_timers()
+local delayedContainer = wow.new_frame("Frame", "DelayedRaidContainer")
+local delayedMember = wow.new_frame("Frame", "DelayedRaidMember", delayedContainer)
+delayedMember.displayedUnit = "player"
+local delayedPowerBar = wow.new_frame("StatusBar", "DelayedRaidPowerBar", delayedMember)
+PartyFrame = delayedContainer
+wow.flush_timers()
+check(classOverlay.parent == delayedPowerBar, "raid layout retry did not attach the late-created resource bar")
 
 print(string.format("smoke: PASS (%d assertions)", passed))

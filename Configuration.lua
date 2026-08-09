@@ -8,6 +8,7 @@ local DEFAULTS = {
     configVersion = 2, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
+    classResourcePipWidth = 12, classResourcePipHeight = 6,
     resourceDisplay = "left",
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
@@ -42,6 +43,12 @@ local function ApplyDefaults(db)
     if type(db.showHealth) ~= "boolean" then db.showHealth = DEFAULTS.showHealth end
     if type(db.showSpecialResources) ~= "boolean" then db.showSpecialResources = DEFAULTS.showSpecialResources end
     if type(db.showClassResourceOverlay) ~= "boolean" then db.showClassResourceOverlay = DEFAULTS.showClassResourceOverlay end
+    if type(db.classResourcePipWidth) ~= "number" or db.classResourcePipWidth < 4 or db.classResourcePipWidth > 32 then
+        db.classResourcePipWidth = DEFAULTS.classResourcePipWidth
+    end
+    if type(db.classResourcePipHeight) ~= "number" or db.classResourcePipHeight < 2 or db.classResourcePipHeight > 20 then
+        db.classResourcePipHeight = DEFAULTS.classResourcePipHeight
+    end
     if type(db.resourceDisplay) ~= "string" or not RESOURCE_DISPLAY_MODES[db.resourceDisplay] then db.resourceDisplay = DEFAULTS.resourceDisplay end
     return db
 end

@@ -528,11 +528,36 @@ local function CreateConfigMenu()
     end)
     menuFrame.resButton = resButton
 
+    local pipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    pipWidthLabel:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", 0, -10)
+    pipWidthLabel:SetText("Group pip width:")
+    local pipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    pipWidthEdit:SetSize(50, 24)
+    pipWidthEdit:SetPoint("LEFT", pipWidthLabel, "RIGHT", 12, 0)
+    pipWidthEdit:SetAutoFocus(false)
+    menuFrame.pipWidthEdit = pipWidthEdit
+
+    local pipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    pipHeightLabel:SetPoint("LEFT", pipWidthEdit, "RIGHT", 12, 0)
+    pipHeightLabel:SetText("Height:")
+    local pipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    pipHeightEdit:SetSize(50, 24)
+    pipHeightEdit:SetPoint("LEFT", pipHeightLabel, "RIGHT", 12, 0)
+    pipHeightEdit:SetAutoFocus(false)
+    menuFrame.pipHeightEdit = pipHeightEdit
+
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
         local height = tonumber(heightEdit:GetText())
         local capPercent = tonumber(capEdit:GetText())
         ApplyBarDimensions(width, height, capPercent)
+        local pipWidth = tonumber(pipWidthEdit:GetText())
+        local pipHeight = tonumber(pipHeightEdit:GetText())
+        if addon.SetClassResourceOverlayPipSize
+            and addon.SetClassResourceOverlayPipSize(pipWidth, pipHeight) then
+            config.classResourcePipWidth = pipWidth
+            config.classResourcePipHeight = pipHeight
+        end
     end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
@@ -560,6 +585,8 @@ local function RefreshConfigMenuFields()
     menuFrame.widthEdit:SetText(tostring(config.width or DEFAULTS.width))
     menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
+    menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
+    menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
     menuFrame.healthCheck:SetChecked(config.showHealth and true or false)
     if menuFrame.specialResCheck then
@@ -584,6 +611,9 @@ addon.RegisterInitializer(function()
     if addon.SetClassResourceOverlayEnabled then
         addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
     end
+    if addon.SetClassResourceOverlayPipSize then
+        addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight)
+    end
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end)
@@ -607,6 +637,12 @@ addon.PlayerBarAPI = {
     end,
     Reset = function()
         config = addon.PlayerBarConfig.Reset()
+        if addon.SetClassResourceOverlayEnabled then
+            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
+        end
+        if addon.SetClassResourceOverlayPipSize then
+            addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight)
+        end
         if bar then
             bar:ClearAllPoints()
             bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)

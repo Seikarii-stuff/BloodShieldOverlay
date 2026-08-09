@@ -109,6 +109,8 @@ local listeners = {}
 local listenerCount = 0
 local driver = CreateFrame("Frame")
 local tickerElapsed = 0
+local ticking = false
+local RefreshProvider
 
 function addon.GetSpecialResourceProvider(playerClass, powerTypes)
     if provider then return provider, resourceToken end
@@ -133,25 +135,27 @@ function addon.GetSpecialResourceProvider(playerClass, powerTypes)
     return provider, resourceToken
 end
 
-addon.CreateSpecialResourceProvider = addon.GetSpecialResourceProvider
-
 local function NotifyListeners()
     for index = 1, listenerCount do listeners[index]() end
 end
 
-local function RefreshProvider()
+local function OnDriverTick(_, elapsed)
+    tickerElapsed = tickerElapsed + elapsed
+    if tickerElapsed >= 0.1 then
+        tickerElapsed = 0
+        RefreshProvider()
+    end
+end
+
+RefreshProvider = function()
     if not provider then return end
     provider:Refresh(GetTime())
     local state = provider:GetState()
-    if state.charging then
-        driver:SetScript("OnUpdate", function(_, elapsed)
-            tickerElapsed = tickerElapsed + elapsed
-            if tickerElapsed >= 0.1 then
-                tickerElapsed = 0
-                RefreshProvider()
-            end
-        end)
-    else
+    if state.charging and not ticking then
+        ticking = true
+        driver:SetScript("OnUpdate", OnDriverTick)
+    elseif not state.charging and ticking then
+        ticking = false
         tickerElapsed = 0
         driver:SetScript("OnUpdate", nil)
     end

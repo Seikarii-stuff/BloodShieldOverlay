@@ -25,6 +25,8 @@ if not resourceProvider then return end
 local MAX_PIPS = 7
 local PIP_WIDTH = 12
 local PIP_HEIGHT = 6
+local pipWidth = PIP_WIDTH
+local pipHeight = PIP_HEIGHT
 local PIP_GAP = 3
 local PIP_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 
@@ -110,6 +112,8 @@ local function GetResourceBar(frame)
     if IsStatusBar(bar) then return bar end
 
     if frame.GetChildren then
+            -- Blizzard resource frames expose at most 12 direct children here;
+            -- deeper or unrelated descendants are handled by the bounded scan.
         local child1, child2, child3, child4, child5, child6,
             child7, child8, child9, child10, child11, child12 = frame:GetChildren()
         if IsResourceStatusBar(child1) then return child1 end
@@ -187,7 +191,7 @@ local function EnsureOverlay()
     if overlay then return end
 
     overlay = CreateFrame("Frame", "BSO_ClassResourceOverlay", UIParent)
-    overlay:SetHeight(PIP_HEIGHT)
+    overlay:SetHeight(pipHeight)
     overlay:EnableMouse(false)
     overlay:Hide()
 
@@ -260,16 +264,16 @@ UpdatePips = function()
     end
     addon.SortSpecialResources(progress, pipOrder, maximum)
 
-    local totalWidth = maximum * PIP_WIDTH + (maximum - 1) * PIP_GAP
-    overlay:SetSize(totalWidth, PIP_HEIGHT)
+    local totalWidth = maximum * pipWidth + (maximum - 1) * PIP_GAP
+    overlay:SetSize(totalWidth, pipHeight)
 
     overlay:Show()
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            pip:SetSize(PIP_WIDTH, PIP_HEIGHT)
+            pip:SetSize(pipWidth, pipHeight)
             pip:ClearAllPoints()
-            pip:SetPoint("LEFT", overlay, "LEFT", (index - 1) * (PIP_WIDTH + PIP_GAP), 0)
+            pip:SetPoint("LEFT", overlay, "LEFT", (index - 1) * (pipWidth + PIP_GAP), 0)
             pip:Show()
         else
             pip:Hide()
@@ -279,8 +283,12 @@ UpdatePips = function()
 end
 
 local pendingLocate = false
+local locateAttempts = 0
+local MAX_LOCATE_ATTEMPTS = 6
+local ScheduleLocate
 
 local function Locate()
+    if not enabled then return false end
     if InCombatLockdown() then
         pendingLocate = true
         return false
@@ -290,39 +298,59 @@ local function Locate()
     UpdatePips()
     return true
 end
-local function ScheduleLocate()
-    if refreshScheduled then return end
+
+local function OnLocateTimer()
+    refreshScheduled = false
+    if InCombatLockdown() then
+        pendingLocate = true
+        return
+    end
+    pendingLocate = false
+    if Locate() then
+        locateAttempts = 0
+    elseif enabled and locateAttempts < MAX_LOCATE_ATTEMPTS then
+        locateAttempts = locateAttempts + 1
+        ScheduleLocate()
+    end
+end
+
+ScheduleLocate = function()
+    if not enabled or refreshScheduled then return end
     refreshScheduled = true
-    C_Timer.After(0.05, function()
-        refreshScheduled = false
-        if InCombatLockdown() then
-            pendingLocate = true
-            return
-        end
-        pendingLocate = false
-        Locate()
-    end)
+    C_Timer.After(0.05, OnLocateTimer)
 end
 
 function addon.SetClassResourceOverlayEnabled(value)
     enabled = value and true or false
     if not enabled then
+        pendingLocate = false
+        locateAttempts = 0
         if overlay then overlay:Hide() end
         return
     end
     ScheduleLocate()
 end
 
+function addon.SetClassResourceOverlayPipSize(width, height)
+    if type(width) ~= "number" or type(height) ~= "number" then return false end
+    if width < 4 or width > 32 or height < 2 or height > 20 then return false end
+
+    pipWidth, pipHeight = width, height
+    if overlay then overlay:SetHeight(pipHeight) end
+    UpdatePips()
+    return true
+end
+
 eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("UI_SCALE_CHANGED")
 eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 eventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 eventFrame:SetScript("OnEvent", function(_, event, _, powerType)
+        if not enabled and event ~= "PLAYER_REGEN_ENABLED" then return end
     if event == "PLAYER_REGEN_ENABLED" then
         if pendingLocate then ScheduleLocate() end
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"
