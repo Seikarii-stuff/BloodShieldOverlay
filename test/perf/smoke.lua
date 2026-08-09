@@ -9,6 +9,9 @@ end
 wow.load()
 local addon = BloodShieldOverlay
 wow.fire("PLAYER_LOGIN")
+local playerBar = _G["BloodShieldOverlayBar"]
+check(playerBar and playerBar:IsShown(), "PlayerBar.lua did not initialize the standalone bar")
+check(playerBar.min == 0 and playerBar.max == 2000 and playerBar.value == 250, "standalone absorb bar was not updated")
 check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API missing")
 check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API missing")
 check(type(addon.RegisterRegenListener) == "function", "regen listener API missing")

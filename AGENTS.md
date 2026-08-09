@@ -54,7 +54,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 - Uses a centralized, subscription-based dispatcher (`RegisterUnitUpdateListener`, `RegisterPlayerUpdateListener`, `RegisterRegenListener`).
 - Avoids redundant event registrations across multiple frames, keeping client event overhead to the absolute minimum.
 
-### 6. Minimalist Render Engine (`AbsorbIndicator.lua`, `BloodShieldOverlay.lua`)
+### 6. Minimalist Render Engine (`AbsorbIndicator.lua`, `PlayerBar.lua`, `BloodShieldOverlay.lua`)
 - Render textures rely on native status bar primitives (`Interface\Buttons\WHITE8x8`).
 - The only `OnUpdate` script is the demand-driven throttle controller in `Core.lua`; it is removed whenever the pending-unit queue is empty. The addon otherwise remains event-driven.
 - Overlay elements are set to `EnableMouse(false)`, removing them from the client's hit-testing pass.

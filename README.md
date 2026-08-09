@@ -46,13 +46,16 @@
    - Sistema de micro-throttle (~30 FPS) y patrón observador con asignaciones nulas de memoria.
 
 2. **[BloodShieldOverlay.lua](BloodShieldOverlay.lua)**
-   - Control de la barra de absorción independiente del jugador.
-   - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`) y menú de ajustes.
+  - Bootstrap del namespace del addon y punto de entrada mínimo.
 
-3. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
+3. **[PlayerBar.lua](PlayerBar.lua)**
+  - Control de las barras standalone de absorción, salud y recurso.
+  - Gestión de perfiles almacenados (`BloodShieldOverlayProfiles`), menú de ajustes y comandos `/shield`.
+
+4. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.
 
-4. **[BlizzardFrames.lua](BlizzardFrames.lua)**
+5. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
 
 ## 🧪 Tests offline

@@ -107,6 +107,7 @@ function M.load()
     dofile("Core.lua")
     dofile("AbsorbIndicator.lua")
     dofile("BloodShieldOverlay.lua")
+    dofile("PlayerBar.lua")
     dofile("BlizzardFrames.lua")
 end
 
