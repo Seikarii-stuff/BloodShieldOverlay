@@ -420,10 +420,12 @@ end)
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
-            if pendingRefresh then
-                pendingRefresh = false
-                DiscoverAndUpdate()
-            end
+            -- Always re-run discovery after combat. GROUP_ROSTER_UPDATE can
+            -- arrive before the client has restored the party layout, and a
+            -- refresh requested during combat may otherwise be consumed while
+            -- the frame still reports its raid state.
+            pendingRefresh = false
+            QueueDiscoverAndUpdate()
         end
     end)
 end)
@@ -475,6 +477,7 @@ end
 manager:RegisterEvent("PLAYER_LOGIN")
 manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("GROUP_ROSTER_UPDATE")
+manager:RegisterEvent("PLAYER_REGEN_ENABLED")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:RegisterEvent("UI_SCALE_CHANGED")
@@ -482,6 +485,11 @@ manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 manager:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 manager:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_REGEN_ENABLED" then
+        QueueDiscoverAndUpdate()
+        return
+    end
+
     -- FIX: Purgar referencias muertas explícitamente en el desmantelamiento de Nameplates
     if event == "NAME_PLATE_UNIT_REMOVED" then
         if unit then

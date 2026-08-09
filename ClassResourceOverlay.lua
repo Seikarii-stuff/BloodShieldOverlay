@@ -5,7 +5,6 @@ local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 local CreateFrame = CreateFrame
-local InCombatLockdown = InCombatLockdown
 local UnitClass = UnitClass
 local GetTime = GetTime
 local C_Timer = C_Timer
@@ -14,7 +13,6 @@ local UnitIsUnit = UnitIsUnit
 local ipairs = ipairs
 local math_min = math.min
 local type = type
-local issecretvalue = issecretvalue
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
@@ -24,21 +22,19 @@ local resourceProvider, resourceToken = addon.CreateSpecialResourceProvider(
 
 if not resourceProvider then return end
 
+-- Dimensiones fijas y textura ovalada para las esferas de recursos
 local MAX_PIPS = 7
-local PIP_HEIGHT = 3
-local PIP_GAP = 1
-local FALLBACK_PIP_WIDTH = 9
-local PIP_TEXTURE = "Interface\\Buttons\\WHITE8x8"
+local PIP_WIDTH = 12
+local PIP_HEIGHT = 6
+local PIP_GAP = 3
+local PIP_TEXTURE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall"
 
 local overlay
 local pips = {}
 local progress = {}
 local pipOrder = {}
-local currentBar
-local refreshPending = false
+local currentBar = nil
 local refreshScheduled = false
-local pipWidth = FALLBACK_PIP_WIDTH
-local layoutWidth = FALLBACK_PIP_WIDTH * MAX_PIPS + PIP_GAP * (MAX_PIPS - 1)
 local resourceElapsed = 0
 local RESOURCE_TICK = 0.2
 local eventFrame
@@ -88,8 +84,6 @@ local function IsPlayerUnit(frame)
     local unit = GetUnit(frame)
     if not unit then return false end
     if unit == "player" then return true end
-    -- In a raid, Blizzard normally exposes the player's compact frame as
-    -- raidN rather than player. UnitIsUnit is the authoritative comparison.
     return UnitIsUnit and UnitIsUnit(unit, "player") or false
 end
 
@@ -101,7 +95,6 @@ local function GetResourceBar(frame)
         if IsStatusBar(bar) then return bar end
     end
 
-    -- Some Blizzard layouts nest the power bar one level below the unit frame.
     if frame.GetChildren then
         local children = { frame:GetChildren() }
         for _, child in ipairs(children) do
@@ -145,8 +138,6 @@ local function FindPlayerResourceBar()
     bar = playerFrame and GetResourceBar(playerFrame)
     if bar then return bar end
 
-    -- Static names cover the normal CompactUnitFrame pools without scanning
-    -- every global frame. The frame's unit is still checked before use.
     for index = 1, compactFrameNameCount do
         local frame = _G[COMPACT_FRAME_NAMES[index]]
         if frame and IsPlayerUnit(frame) then
@@ -155,8 +146,6 @@ local function FindPlayerResourceBar()
         end
     end
 
-    -- Keep the main player frame as a fallback for layouts that remove the
-    -- compact party frame while the player is alone.
     local main = PlayerFrame and PlayerFrame.PlayerFrameContent
     local content = main and main.PlayerFrameContentMain
     local healthArea = content and content.HealthBarArea
@@ -184,7 +173,8 @@ local function EnsureOverlay()
 
         local background = pip:CreateTexture(nil, "BACKGROUND")
         background:SetAllPoints(pip)
-        background:SetColorTexture(0, 0, 0, 0.65)
+        background:SetTexture(PIP_TEXTURE)
+        background:SetVertexColor(0.15, 0.15, 0.15, 0.7)
 
         pips[index] = pip
         progress[index] = 0
@@ -195,21 +185,20 @@ end
 local function AttachTo(bar)
     EnsureOverlay()
 
-    if currentBar == bar then
-        overlay:Show()
+    if currentBar ~= bar then
+        if currentBar then overlay:Hide() end
+        currentBar = bar
+    end
+
+    if not bar then
+        overlay:Hide()
         return
     end
 
-    if currentBar then overlay:Hide() end
-    currentBar = bar
-    if not bar then return end
-
     overlay:SetParent(bar)
     overlay:ClearAllPoints()
-    overlay:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
-    overlay:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
+    overlay:SetPoint("BOTTOM", bar, "BOTTOM", 0, -1)
     overlay:SetFrameLevel((bar:GetFrameLevel() or 0) + 5)
-    overlay:Show()
 end
 
 local UpdatePips
@@ -246,58 +235,33 @@ UpdatePips = function()
     local _, charging = resourceProvider:Update(progress, pips, GetTime())
     addon.SortSpecialResources(progress, pipOrder, maximum)
 
-    -- Protected compact bars can return a secret width. Secret values may be
-    -- passed through WoW frame APIs, but cannot be compared or divided in
-    -- Lua. When the width is public (normally outside protected layout work),
-    -- cache the current geometry and reuse it while the value is secret.
-    if issecretvalue then
-        local width = overlay:GetWidth()
-        if not issecretvalue(width) and width > 0 then
-            layoutWidth = width
-        end
-    end
-
-    local available = layoutWidth - PIP_GAP * (maximum - 1)
-    if available > 0 then pipWidth = available / maximum end
+    local totalWidth = maximum * PIP_WIDTH + (maximum - 1) * PIP_GAP
+    overlay:SetSize(totalWidth, PIP_HEIGHT)
 
     overlay:Show()
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            pip:SetSize(pipWidth, PIP_HEIGHT)
+            pip:SetSize(PIP_WIDTH, PIP_HEIGHT)
             pip:ClearAllPoints()
-            pip:SetPoint("LEFT", overlay, "LEFT",
-                (index - 1) * (pipWidth + PIP_GAP), 0)
+            pip:SetPoint("LEFT", overlay, "LEFT", (index - 1) * (PIP_WIDTH + PIP_GAP), 0)
             pip:Show()
         else
             pip:Hide()
         end
     end
 
-    -- Runes and Evoker Essence expose a cooldown fraction, not a new power
-    -- event for every visual step. Keep a demand-driven ticker only while a
-    -- pip is charging; completed/instant resources remain event-driven.
     SetResourceTicking(charging and true or false)
 end
 
 local function Locate()
-    if InCombatLockdown() then
-        refreshPending = true
-        return
-    end
-
-    refreshPending = false
-    AttachTo(FindPlayerResourceBar())
+    local targetBar = FindPlayerResourceBar()
+    AttachTo(targetBar)
     UpdatePips()
 end
 
 local function ScheduleLocate()
-    if InCombatLockdown() then
-        refreshPending = true
-        return
-    end
     if refreshScheduled then return end
-
     refreshScheduled = true
     C_Timer.After(0.05, function()
         refreshScheduled = false
@@ -312,17 +276,17 @@ eventFrame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
 eventFrame:RegisterEvent("RUNE_POWER_UPDATE")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("UI_SCALE_CHANGED")
 eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 eventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+
 eventFrame:SetScript("OnEvent", function(_, event, _, powerType)
     if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"
-        or event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED"
-        or event == "EDIT_MODE_LAYOUTS_UPDATED" then
+        or event == "PLAYER_REGEN_ENABLED" or event == "UI_SCALE_CHANGED"
+        or event == "DISPLAY_SIZE_CHANGED" or event == "EDIT_MODE_LAYOUTS_UPDATED" then
         ScheduleLocate()
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        if refreshPending then ScheduleLocate() end
     elseif event == "RUNE_POWER_UPDATE" or event == "UNIT_MAXPOWER"
         or (resourceToken and powerType == resourceToken) then
         UpdatePips()
@@ -332,8 +296,4 @@ end)
 addon.RegisterInitializer(function()
     EnsureOverlay()
     Locate()
-    if addon.RequestRefresh then addon.RequestRefresh() end
-    -- Blizzard may populate CompactUnitFrames on the next layout pass.
-    -- Retry after that pass without touching protected frames in combat.
-    ScheduleLocate()
 end)
