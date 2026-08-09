@@ -9,8 +9,10 @@ local healthBar
 local resourceBar
 local menuFrame
 local tickLines = {}
+local resourceThresholdLine
 
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
+local RESOURCE_THRESHOLD = 0.28
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
 local SPECIAL_CIRCLE_SIZE = 12
@@ -109,6 +111,18 @@ local function UpdateResourceBarLayout()
         resourceBar:Show()
     else
         resourceBar:Hide()
+    end
+
+    if resourceThresholdLine then
+        if mode == "none" then
+            resourceThresholdLine:Hide()
+        else
+            local yOffset = resourceBar:GetHeight() * RESOURCE_THRESHOLD
+            resourceThresholdLine:ClearAllPoints()
+            resourceThresholdLine:SetPoint("BOTTOMLEFT", resourceBar, "BOTTOMLEFT", 0, yOffset - 1)
+            resourceThresholdLine:SetPoint("BOTTOMRIGHT", resourceBar, "BOTTOMRIGHT", 0, yOffset - 1)
+            resourceThresholdLine:Show()
+        end
     end
 end
 
@@ -296,6 +310,10 @@ local function CreateBar()
     local rBg = resourceBar:CreateTexture(nil, "BACKGROUND")
     rBg:SetAllPoints(resourceBar)
     rBg:SetColorTexture(0, 0, 0, 0.5)
+
+    resourceThresholdLine = resourceBar:CreateTexture(nil, "OVERLAY")
+    resourceThresholdLine:SetColorTexture(1, 1, 1, 0.85)
+    resourceThresholdLine:SetHeight(2)
 
     UpdateResourceBarLayout()
     CreateSpecialResources()

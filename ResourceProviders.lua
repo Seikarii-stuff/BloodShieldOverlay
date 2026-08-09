@@ -64,7 +64,9 @@ local function CreateEssenceProvider(powerType)
             -- count changes; the next UNIT_POWER_UPDATE turns that pip yellow.
             if maximum <= 0 or readyCount >= maximum then
                 chargeStart = nil
-            elseif previousReadyCount ~= readyCount or not chargeStart then
+            elseif previousReadyCount == nil or readyCount > previousReadyCount then
+                chargeStart = now
+            elseif not chargeStart then
                 chargeStart = now
             end
             previousReadyCount = readyCount
