@@ -48,6 +48,7 @@ local function new_frame(objectType, name, parent)
         end
     end)
     frame_method(frame, "SetAllPoints", function(self, target) self.allPoints = target end)
+    frame_method(frame, "SetParent", function(self, value) self.parent = value end)
     frame_method(frame, "SetStatusBarTexture", function(self, texture) self.texture = texture end)
     frame_method(frame, "SetStatusBarColor", function(self, r, g, b, a) self.color = { r, g, b, a } end)
     frame_method(frame, "SetOrientation", function(self, value) self.orientation = value end)
@@ -126,6 +127,7 @@ function M.load()
     dofile("PlayerBar.lua")
     dofile("Commands.lua")
     dofile("BlizzardFrames.lua")
+    dofile("ClassResourceOverlay.lua")
 end
 
 function M.new_frame(...) return new_frame(...) end

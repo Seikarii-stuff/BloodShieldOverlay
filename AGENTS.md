@@ -4,6 +4,8 @@ Welcome to **BloodShieldOverlay**, a high-performance, ultra-lightweight World o
 
 This repository documents a performance-oriented implementation of common high-efficiency Lua patterns for the World of Warcraft client environment. Offline benchmarks are synthetic and do not establish in-client correctness or performance guarantees.
 
+**Current release:** 2.1. This release adds a dedicated `ClassResourceOverlay.lua` module for rendering the player's special resources horizontally on the bottom edge of the player's party/raid resource bar.
+
 ---
 
 ## 📊 Performance Benchmarks
@@ -49,6 +51,7 @@ This section details the architectural patterns and Lua techniques utilized thro
 ### 4. Bounded Container Scanning
 - Container scanning (`ScanContainerChildren`, `ScanCompactFrames`) uses bounded child lists and direct loops.
 - Discovery is not a combat-frame loop; allocations are measured by the benchmark rather than claimed as zero.
+- `ClassResourceOverlay.lua` uses fixed compact-frame name caches and bounded hierarchy discovery; it does not enumerate all global frames.
 
 ### 5. Event Bus Decoupling
 - Uses a centralized, subscription-based dispatcher (`RegisterUnitUpdateListener`, `RegisterPlayerUpdateListener`, `RegisterRegenListener`).
@@ -59,8 +62,16 @@ This section details the architectural patterns and Lua techniques utilized thro
 - `Core.lua` uses a demand-driven `OnUpdate` throttle for absorb updates, and `PlayerBar.lua` uses a separate 10 Hz `OnUpdate` only while a special resource pip is charging. Both scripts are removed when their work is complete; the addon otherwise remains event-driven.
 - Overlay elements are set to `EnableMouse(false)`, removing them from the client's hit-testing pass.
 
+### 6.1 Horizontal Class-Resource Overlay (`ClassResourceOverlay.lua`)
+- Reuses `addon.CreateSpecialResourceProvider()` from `ResourceProviders.lua`; class-specific rules are not duplicated in the UI module.
+- Pre-creates a maximum of seven horizontal `StatusBar` pips and reuses their progress/state tables during updates.
+- Anchors the overlay to the player's Blizzard power/mana bar in compact party, compact raid, legacy party, or fallback player-frame layouts.
+- Discovery and reparenting are guarded by `InCombatLockdown()` and retried after `PLAYER_REGEN_ENABLED` or the next Blizzard layout pass.
+- Resource changes are event-driven through `UNIT_POWER_UPDATE`, `UNIT_POWER_FREQUENT`, `UNIT_MAXPOWER`, and `RUNE_POWER_UPDATE`; there is no permanent polling loop.
+
 ### 7. Test and Benchmark Workflow
-- Offline smoke test: `lua test/perf/smoke.lua` — validates loading, public APIs, event coalescing, profile/menu initialization, combat-deferred refresh and bounded frame discovery. Current result: **PASS, 19 assertions**.
+- Offline smoke test: `lua test/perf/smoke.lua` — validates loading, public APIs, event coalescing, profile/menu initialization, combat-deferred refresh, bounded frame discovery, and module loading. Current result: **PASS, 37 assertions**.
+- Class-resource integration check — validates that a simulated player `CompactPartyFrame` resource bar receives `BSO_ClassResourceOverlay` after initialization and deferred layout discovery.
 - Synthetic benchmark: `lua test/benchmark/benchmark.lua 100000` — measures dispatch, overlay updates, discovery throughput, listener count and Lua heap delta.
 - Generated result: `test/result/benchmark-latest.txt`.
 - The harness is intentionally offline and does not replace in-client PTR/Retail validation with protected frames, Edit Mode and 40-player raid layouts.

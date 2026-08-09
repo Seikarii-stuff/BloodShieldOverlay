@@ -141,6 +141,7 @@ end
 local specialResourceProvider, SPECIAL_POWER_TOKEN = addon.CreateSpecialResourceProvider(
     playerClass, powerTypes
 )
+local SortSpecialResources = addon.SortSpecialResources
 local UpdateSpecialResources
 local specialTicker = CreateFrame("Frame")
 local specialElapsed = 0
@@ -226,23 +227,6 @@ local function UpdateSpecialResourcesLayout()
     end
 end
 
-local function SortSpecialResources(count)
-    -- The collection has at most seven entries. Stable insertion sort keeps
-    -- ready runes at the top without table.sort or a comparator closure.
-    for position = 2, count do
-        local candidate = specialOrder[position]
-        local candidateProgress = specialProgress[candidate]
-        local insertAt = position - 1
-
-        while insertAt >= 1
-            and specialProgress[specialOrder[insertAt]] < candidateProgress do
-            specialOrder[insertAt + 1] = specialOrder[insertAt]
-            insertAt = insertAt - 1
-        end
-        specialOrder[insertAt + 1] = candidate
-    end
-end
-
 UpdateSpecialResources = function()
     if not specialResourceContainer then return end
 
@@ -262,7 +246,7 @@ UpdateSpecialResources = function()
         local count, charging = specialResourceProvider:Update(
             specialProgress, specialCircles, GetTime()
         )
-        SortSpecialResources(count)
+        SortSpecialResources(specialProgress, specialOrder, count)
         isCharging = charging and true or false
     end
 

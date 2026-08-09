@@ -17,6 +17,23 @@ local ESSENCE_CHARGE_DURATION = 4
 local CHARGING_COLOR = { 1, 1, 1 }
 local READY_COLOR = { 1, 0.82, 0 }
 
+-- Shared stable ordering for every renderer. Ready pips stay ahead of
+-- charging/empty pips without allocating a temporary array.
+function addon.SortSpecialResources(progress, order, count)
+    for position = 2, count do
+        local candidate = order[position]
+        local candidateProgress = progress[candidate]
+        local insertAt = position - 1
+
+        while insertAt >= 1
+            and progress[order[insertAt]] < candidateProgress do
+            order[insertAt + 1] = order[insertAt]
+            insertAt = insertAt - 1
+        end
+        order[insertAt + 1] = candidate
+    end
+end
+
 local function SetCircle(circle, progress, maximum, value, ready)
     circle:SetMinMaxValues(0, maximum)
     circle:SetValue(value)

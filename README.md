@@ -1,6 +1,6 @@
 # BloodShieldOverlay
 
-**BloodShieldOverlay** es un addon ligero y de alto rendimiento para **World of Warcraft** (Retail & PTR) que muestra escudos de absorción (*absorbs*) tanto en una barra personalizable como en los marcos de unidad nativos de Blizzard (**Jugador, Resource Display, Party y Raid**).
+**BloodShieldOverlay** es un addon ligero y de alto rendimiento para **World of Warcraft** (Retail & PTR) que muestra escudos de absorción (*absorbs*) tanto en una barra personalizable como en los marcos de unidad nativos de Blizzard (**Jugador, Resource Display, Party y Raid**). Versión actual: **2.1**.
 
 ---
 
@@ -14,6 +14,12 @@
   - Barra de salud opcional superpuesta y barra de recurso personal configurable a la izquierda, derecha o desactivada.
   - Recursos especiales discretos dentro de la barra vertical de recursos: Poder Sagrado, Esencia, Fragmentos de Alma, Chi, Puntos de Combo y Runas de Caballero de la Muerte.
   - Los círculos se crean una sola vez y se actualizan mediante `UNIT_POWER_FREQUENT`, `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER` y `RUNE_POWER_UPDATE`.
+
+- **Recursos Especiales en Marcos de Grupo y Raid**:
+  - Muestra los recursos especiales del jugador de forma horizontal en la parte inferior de su barra de maná/recurso de clase.
+  - Funciona con `CompactPartyFrame`, `CompactRaidFrame`, `PartyFrame` y el modo *Always-In-Party*.
+  - Reutiliza los proveedores de [ResourceProviders.lua](ResourceProviders.lua), sin duplicar reglas específicas de cada clase.
+  - El descubrimiento se difiere durante combate y se reintenta después del layout de Blizzard para evitar taint y referencias a marcos protegidos.
 
 - **Overlays en Marcos Nativos de Blizzard**:
   - Integración limpia sobre `PlayerFrame`, `PersonalResourceDisplayFrame`, `PartyFrame`, `CompactPartyFrame` y `CompactRaidFrame`.
@@ -69,6 +75,10 @@
 8. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
 
+9. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
+  - Renderiza horizontalmente los recursos especiales del jugador sobre la barra de recurso de su marco de party/raid.
+  - Mantiene separado el descubrimiento de marcos, el renderizado y la lógica de recursos de clase.
+
 ## 🧪 Tests offline
 
 El addon incluye un simulador mínimo de la API de WoW para validar los caminos que no requieren el cliente:
@@ -76,6 +86,7 @@ El addon incluye un simulador mínimo de la API de WoW para validar los caminos 
 - Smoke test: `lua test/perf/smoke.lua`
   - Comprueba carga, APIs públicas, coalescing de eventos, perfiles, comandos slash, menú, toggles de salud/recurso, descubrimiento y refresco diferido durante combate.
   - Incluye una regresión del botón **Unlock**, que anteriormente llamaba al método inexistente `Button:Text()`.
+- Integración de recursos especiales: crea un `CompactPartyFrame` simulado, asigna el jugador y verifica el anclaje del overlay a la barra de recurso.
 - Benchmark: `lua test/benchmark/benchmark.lua 100000`
   - Mide dispatch, actualización de overlays, descubrimiento y delta del heap.
 
@@ -93,5 +104,5 @@ Estos tests no sustituyen la validación dentro del cliente PTR/Retail con marco
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
 ---
-**Versión**: 2.0 Release
+**Versión**: 2.1 Release
 **Autor**: Seikarii  
