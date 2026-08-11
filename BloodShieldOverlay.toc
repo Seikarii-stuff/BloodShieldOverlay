@@ -1,6 +1,6 @@
 ## Interface: 120100,120007
 ## Title: Shield Overlay
-## Notes: /shield to move, /shield reset to default, /shield hide/show to show/hide the shield bar, /shield party to refresh party frames, 20%-200% functional shield bar, shows shield overlays in raid/player/party frames. Minimal addon for blizzard original raid/party UI.
+## Notes: /shield to open the floating menu, /shield reload to refresh party/group frames. 20%-200% functional shield bar, shows shield overlays in raid/player/party frames. Minimal addon for blizzard original raid/party UI.
 ## Author: Seikarii
 ## Version: 2.1
 ## IconTexture: 237540
@@ -13,6 +13,7 @@ AbsorbIndicator.lua
 Configuration.lua
 ResourceProviders.lua
 PlayerBar.lua
+options.lua
 Commands.lua
 BlizzardFrames.lua
 ClassResourceOverlay.lua

@@ -416,7 +416,7 @@ local function CreateConfigMenu()
     info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 16, -40)
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
     info:SetJustifyH("LEFT")
-    info:SetText("Click Unlock to drag the bar. Click Lock to anchor. Use /shield reset for defaults.")
+    info:SetText("Click Unlock to drag the bar. Click Lock to anchor. Use /shield reload to refresh party/group frames.")
 
     local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -12)
@@ -646,3 +646,5 @@ addon.PlayerBarAPI = {
         UpdateBar()
     end,
 }
+addon.ShowConfigMenu = ShowConfigMenu
+
