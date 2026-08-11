@@ -16,7 +16,10 @@ local function OpenConfigMenu()
 end
 
 local function CreateInterfaceOptionsPanel()
-    if type(InterfaceOptions_AddCategory) ~= "function" then
+    -- Modern Settings API (Dragonflight 10.0+, still current in Midnight 12.1).
+    -- InterfaceOptions_AddCategory was removed, so the old codepath silently
+    -- no-ops and the panel never appears under AddOns.
+    if type(Settings) ~= "table" or type(Settings.RegisterCanvasLayoutCategory) ~= "function" then
         return
     end
 
@@ -45,7 +48,11 @@ local function CreateInterfaceOptionsPanel()
     slashHint:SetJustifyH("LEFT")
     slashHint:SetText("Chat shortcut: /shield    Reload shortcut: /shield reload")
 
-    InterfaceOptions_AddCategory(panel)
+    local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    -- Keep the category's ID so other code (e.g. a future slash command) can
+    -- reopen this exact panel via Settings.OpenToCategory(category:GetID()).
+    panel.settingsCategory = category
+    Settings.RegisterAddOnCategory(category)
 end
 
 addon.RegisterInitializer(CreateInterfaceOptionsPanel)
