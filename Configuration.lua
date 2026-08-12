@@ -9,6 +9,7 @@ local DEFAULTS = {
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
+    specialResourcePipWidth = 10, specialResourcePipHeight = 8,
     resourceDisplay = "left",
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
@@ -50,6 +51,8 @@ local FIELD_VALIDATORS = {
     showClassResourceOverlay = IsBoolean,
     classResourcePipWidth = function(value) return type(value) == "number" and value >= 4 and value <= 32 end,
     classResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
+    specialResourcePipWidth = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
+    specialResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 32 end,
     resourceDisplay = function(value) return type(value) == "string" and RESOURCE_DISPLAY_MODES[value] == true end,
 }
 

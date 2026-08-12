@@ -9,7 +9,7 @@ local healthBar
 local resourceBar
 local menuFrame
 local tickLines = {}
-local resourceThresholdLine
+local resourceThresholdLines = {}
 
 -- Cached as upvalues, consistent with ResourceProviders.lua and
 -- ClassResourceOverlay.lua, since UpdateSpecialResourcesLayout runs on the
@@ -19,7 +19,7 @@ local math_max = math.max
 local math_floor = math.floor
 
 local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
-local RESOURCE_THRESHOLD = 0.28
+local RESOURCE_THRESHOLDS = { 0.28, 0.56 }
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
 local SPECIAL_CIRCLE_SIZE = 12
@@ -120,15 +120,18 @@ local function UpdateResourceBarLayout()
         resourceBar:Hide()
     end
 
-    if resourceThresholdLine then
-        if mode == "none" then
-            resourceThresholdLine:Hide()
-        else
-            local yOffset = resourceBar:GetHeight() * RESOURCE_THRESHOLD
-            resourceThresholdLine:ClearAllPoints()
-            resourceThresholdLine:SetPoint("BOTTOMLEFT", resourceBar, "BOTTOMLEFT", 0, yOffset - 1)
-            resourceThresholdLine:SetPoint("BOTTOMRIGHT", resourceBar, "BOTTOMRIGHT", 0, yOffset - 1)
-            resourceThresholdLine:Show()
+    for _, threshold in ipairs(RESOURCE_THRESHOLDS) do
+        local line = resourceThresholdLines[threshold]
+        if line then
+            if mode == "none" then
+                line:Hide()
+            else
+                local yOffset = resourceBar:GetHeight() * threshold
+                line:ClearAllPoints()
+                line:SetPoint("BOTTOMLEFT", resourceBar, "BOTTOMLEFT", 0, yOffset - 1)
+                line:SetPoint("BOTTOMRIGHT", resourceBar, "BOTTOMRIGHT", 0, yOffset - 1)
+                line:Show()
+            end
         end
     end
 end
@@ -194,9 +197,12 @@ local function UpdateSpecialResourcesLayout()
     -- layout pass. Read the actual resource bar dimensions as the authority.
     local parentWidth = resourceBar:GetWidth()
     local parentHeight = resourceBar:GetHeight()
-    local slotSize = math_min(SPECIAL_CIRCLE_SIZE, math_floor(parentHeight / maxPower))
+    local customWidth = config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth
+    local customHeight = config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight
+    local slotSize = math_min(math_max(3, customHeight), math_floor(parentHeight / maxPower))
     if slotSize < 3 then slotSize = 3 end
-    local circleWidth = math_max(2, parentWidth - 2)
+    local circleWidth = math_max(2, math_min(customWidth, math_max(2, parentWidth - 2)))
+    local xOffset = math_max(1, (parentWidth - circleWidth) / 2)
 
     specialResourceContainer:Show()
     for index = 1, MAX_SPECIAL_CIRCLES do
@@ -204,7 +210,7 @@ local function UpdateSpecialResourcesLayout()
         if index <= maxPower then
             circle:SetSize(circleWidth, math_max(1, slotSize - 2))
             circle:ClearAllPoints()
-            circle:SetPoint("TOPLEFT", resourceBar, "TOPLEFT", 1,
+            circle:SetPoint("TOPLEFT", resourceBar, "TOPLEFT", xOffset,
                 -((index - 1) * slotSize + 1))
             circle:Show()
         else
@@ -238,6 +244,18 @@ end
 
 addon.UpdateSpecialResourcesLayout = UpdateSpecialResourcesLayout
 addon.UpdateSpecialResources = UpdateSpecialResources
+
+function addon.SetSpecialResourcePipSize(width, height)
+    if type(width) ~= "number" or type(height) ~= "number" then return false end
+    if width < 2 or width > 20 or height < 2 or height > 32 then return false end
+
+    config.specialResourcePipWidth = width
+    config.specialResourcePipHeight = height
+    if specialResourceContainer then
+        UpdateSpecialResourcesLayout()
+    end
+    return true
+end
 
 local function CreateBar()
     if bar then return end
@@ -277,9 +295,12 @@ local function CreateBar()
     rBg:SetAllPoints(resourceBar)
     rBg:SetColorTexture(0, 0, 0, 0.5)
 
-    resourceThresholdLine = resourceBar:CreateTexture(nil, "OVERLAY")
-    resourceThresholdLine:SetColorTexture(1, 1, 1, 0.85)
-    resourceThresholdLine:SetHeight(2)
+    for _, threshold in ipairs(RESOURCE_THRESHOLDS) do
+        local thresholdLine = resourceBar:CreateTexture(nil, "OVERLAY")
+        thresholdLine:SetColorTexture(1, 1, 1, 0.85)
+        thresholdLine:SetHeight(2)
+        resourceThresholdLines[threshold] = thresholdLine
+    end
 
     UpdateResourceBarLayout()
     CreateSpecialResources()
@@ -496,6 +517,24 @@ local function CreateConfigMenu()
     resLabel:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 2, -10)
     resLabel:SetText("Personal Resource Bar:")
 
+    local resourcePipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resourcePipWidthLabel:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", 0, -10)
+    resourcePipWidthLabel:SetText("Resource pip width:")
+    local resourcePipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    resourcePipWidthEdit:SetSize(50, 24)
+    resourcePipWidthEdit:SetPoint("LEFT", resourcePipWidthLabel, "RIGHT", 12, 0)
+    resourcePipWidthEdit:SetAutoFocus(false)
+    menuFrame.resourcePipWidthEdit = resourcePipWidthEdit
+
+    local resourcePipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resourcePipHeightLabel:SetPoint("LEFT", resourcePipWidthEdit, "RIGHT", 12, 0)
+    resourcePipHeightLabel:SetText("Height:")
+    local resourcePipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    resourcePipHeightEdit:SetSize(50, 24)
+    resourcePipHeightEdit:SetPoint("LEFT", resourcePipHeightLabel, "RIGHT", 12, 0)
+    resourcePipHeightEdit:SetAutoFocus(false)
+    menuFrame.resourcePipHeightEdit = resourcePipHeightEdit
+
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     resButton:SetSize(90, 24)
     resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
@@ -518,7 +557,7 @@ local function CreateConfigMenu()
     menuFrame.resButton = resButton
 
     local pipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pipWidthLabel:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", 0, -10)
+    pipWidthLabel:SetPoint("TOPLEFT", resourcePipHeightEdit, "BOTTOMLEFT", -90, -12)
     pipWidthLabel:SetText("Group pip width:")
     local pipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
     pipWidthEdit:SetSize(50, 24)
@@ -540,6 +579,18 @@ local function CreateConfigMenu()
         local height = tonumber(heightEdit:GetText())
         local capPercent = tonumber(capEdit:GetText())
         ApplyBarDimensions(width, height, capPercent)
+
+        local resourcePipWidth = tonumber(resourcePipWidthEdit:GetText())
+        local resourcePipHeight = tonumber(resourcePipHeightEdit:GetText())
+        if addon.SetSpecialResourcePipSize and addon.SetSpecialResourcePipSize(resourcePipWidth, resourcePipHeight) then
+            config.specialResourcePipWidth = resourcePipWidth
+            config.specialResourcePipHeight = resourcePipHeight
+        else
+            print("BloodShieldOverlay: resource pip width must be 2-20 and height 2-32.")
+            resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth))
+            resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight))
+        end
+
         local pipWidth = tonumber(pipWidthEdit:GetText())
         local pipHeight = tonumber(pipHeightEdit:GetText())
         if addon.SetClassResourceOverlayPipSize
@@ -578,6 +629,12 @@ local function RefreshConfigMenuFields()
     menuFrame.widthEdit:SetText(tostring(config.width or DEFAULTS.width))
     menuFrame.heightEdit:SetText(tostring(config.height or DEFAULTS.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or DEFAULTS.capMultiplier) * 100))
+    if menuFrame.resourcePipWidthEdit then
+        menuFrame.resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth))
+    end
+    if menuFrame.resourcePipHeightEdit then
+        menuFrame.resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight))
+    end
     menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
     menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
@@ -606,6 +663,9 @@ addon.RegisterInitializer(function()
     end
     if addon.SetClassResourceOverlayPipSize then
         addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight)
+    end
+    if addon.SetSpecialResourcePipSize then
+        addon.SetSpecialResourcePipSize(config.specialResourcePipWidth, config.specialResourcePipHeight)
     end
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)

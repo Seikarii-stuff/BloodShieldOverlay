@@ -24,8 +24,11 @@ check(type(addon.UpdateSpecialResources) == "function", "special resource update
 check(type(addon.GetSpecialResourceProvider) == "function", "shared resource provider API missing")
 check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
 check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
+check(type(addon.SetSpecialResourcePipSize) == "function", "special resource pip API missing")
 check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
+check(addon.SetSpecialResourcePipSize(10, 8), "valid special resource pip size was rejected")
 check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
+check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width was accepted")
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -74,6 +77,8 @@ check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag 
 check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
 check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
 check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
+check(configMenu.resourcePipWidthEdit and configMenu.resourcePipHeightEdit,
+    "personal resource pip editors were not created")
 check(configMenu.applyButton.point == "LEFT" and configMenu.applyButton.relative == configMenu.capEdit,
     "apply button should be beside the size and cap fields")
 
