@@ -469,6 +469,25 @@ local function CreateConfigMenu()
     capEdit:SetAutoFocus(false)
     menuFrame.capEdit = capEdit
 
+    -- Resource bar pip size editors placed next to the Shield dimensions
+    local resourcePipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resourcePipWidthLabel:SetPoint("TOPLEFT", capEdit, "BOTTOMLEFT", 0, -8)
+    resourcePipWidthLabel:SetText("Resource bar pip width:")
+    local resourcePipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    resourcePipWidthEdit:SetSize(50, 24)
+    resourcePipWidthEdit:SetPoint("LEFT", resourcePipWidthLabel, "RIGHT", 12, 0)
+    resourcePipWidthEdit:SetAutoFocus(false)
+    menuFrame.resourcePipWidthEdit = resourcePipWidthEdit
+
+    local resourcePipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resourcePipHeightLabel:SetPoint("LEFT", resourcePipWidthEdit, "RIGHT", 12, 0)
+    resourcePipHeightLabel:SetText("Resource bar pip height:")
+    local resourcePipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
+    resourcePipHeightEdit:SetSize(50, 24)
+    resourcePipHeightEdit:SetPoint("LEFT", resourcePipHeightLabel, "RIGHT", 12, 0)
+    resourcePipHeightEdit:SetAutoFocus(false)
+    menuFrame.resourcePipHeightEdit = resourcePipHeightEdit
+
     local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     applyButton:SetSize(70, 24)
     applyButton:SetPoint("LEFT", capEdit, "RIGHT", 12, 0)
@@ -517,24 +536,6 @@ local function CreateConfigMenu()
     resLabel:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 2, -10)
     resLabel:SetText("Personal Resource Bar:")
 
-    local resourcePipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resourcePipWidthLabel:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", 0, -10)
-    resourcePipWidthLabel:SetText("Resource pip width:")
-    local resourcePipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    resourcePipWidthEdit:SetSize(50, 24)
-    resourcePipWidthEdit:SetPoint("LEFT", resourcePipWidthLabel, "RIGHT", 12, 0)
-    resourcePipWidthEdit:SetAutoFocus(false)
-    menuFrame.resourcePipWidthEdit = resourcePipWidthEdit
-
-    local resourcePipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resourcePipHeightLabel:SetPoint("LEFT", resourcePipWidthEdit, "RIGHT", 12, 0)
-    resourcePipHeightLabel:SetText("Height:")
-    local resourcePipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    resourcePipHeightEdit:SetSize(50, 24)
-    resourcePipHeightEdit:SetPoint("LEFT", resourcePipHeightLabel, "RIGHT", 12, 0)
-    resourcePipHeightEdit:SetAutoFocus(false)
-    menuFrame.resourcePipHeightEdit = resourcePipHeightEdit
-
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     resButton:SetSize(90, 24)
     resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
@@ -557,7 +558,7 @@ local function CreateConfigMenu()
     menuFrame.resButton = resButton
 
     local pipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pipWidthLabel:SetPoint("TOPLEFT", resourcePipHeightEdit, "BOTTOMLEFT", -90, -12)
+    pipWidthLabel:SetPoint("TOPLEFT", resourcePipWidthLabel, "BOTTOMLEFT", 0, -12)
     pipWidthLabel:SetText("Group pip width:")
     local pipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
     pipWidthEdit:SetSize(50, 24)
@@ -615,11 +616,18 @@ local function CreateConfigMenu()
 
     local lock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     lock:SetSize(90, 24)
-    lock:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
+    lock:SetPoint("LEFT", unlock, "RIGHT", 8, 0)
     lock:SetText("Lock")
     lock:SetScript("OnClick", function()
         config.locked = true
         UpdateBarLock()
+    end)
+
+    local closeBtn = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    closeBtn:SetSize(90, 24)
+    closeBtn:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
+    closeBtn:SetText("Close")
+    closeBtn:SetScript("OnClick", function()
         menuFrame:Hide()
     end)
 end

@@ -9,7 +9,7 @@ local DEFAULTS = {
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
-    specialResourcePipWidth = 10, specialResourcePipHeight = 8,
+    specialResourcePipWidth = 2, specialResourcePipHeight = 10,
     resourceDisplay = "left",
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
