@@ -405,140 +405,116 @@ local function ApplyBarDimensions(width, height, capPercent)
     return true
 end
 
+-- Helpers de arquitectura para creación limpia de UI
+local function CreateLabel(parent, text, font)
+    local label = parent:CreateFontString(nil, "OVERLAY", font or "GameFontNormal")
+    label:SetText(text)
+    return label
+end
+
+local function CreateLabeledEditBox(parent, labelText, boxWidth)
+    local container = CreateFrame("Frame", nil, parent)
+    container:SetSize(boxWidth + 80, 24)
+
+    local label = CreateLabel(container, labelText)
+    label:SetPoint("LEFT", container, "LEFT", 0, 0)
+
+    local editBox = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
+    editBox:SetSize(boxWidth or 50, 24)
+    editBox:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    editBox:SetAutoFocus(false)
+
+    container.editBox = editBox
+    container.label = label
+    return container, editBox
+end
+
+local function CreateCheckBox(parent, labelText, onClick)
+    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    check.Text:SetText(labelText)
+    check:SetScript("OnClick", onClick)
+    return check
+end
+
 local function CreateConfigMenu()
     if menuFrame then return end
 
+    -- Se amplía la altura a 440px para acomodar las 3 filas de opciones y las checkboxes cómodamente
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(480, 350)
+    menuFrame:SetSize(500, 440)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true,
-        tileSize = 32,
-        edgeSize = 32,
+        tile = true, tileSize = 32, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
     menuFrame:SetMovable(true)
     menuFrame:EnableMouse(true)
     menuFrame:RegisterForDrag("LeftButton")
-    menuFrame:SetScript("OnDragStart", function(self)
-        self:StartMoving()
-    end)
-    menuFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-    end)
+    menuFrame:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    menuFrame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
 
-    local title = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", menuFrame, "TOP", 0, -12)
-    title:SetText("Shield Bar Settings")
+    local title = CreateLabel(menuFrame, "Shield Bar Settings", "GameFontNormalLarge")
+    title:SetPoint("TOP", menuFrame, "TOP", 0, -14)
 
-    local info = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 16, -40)
-    info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -16, -40)
+    local info = CreateLabel(menuFrame, "Click Unlock to drag the bar. Click Lock to anchor. Use /shield reload to refresh frames.", "GameFontHighlightSmall")
+    info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 18, -40)
+    info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -18, -40)
     info:SetJustifyH("LEFT")
-    info:SetText("Click Unlock to drag the bar. Click Lock to anchor. Use /shield reload to refresh party/group frames.")
 
-    local widthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    widthLabel:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -12)
-    widthLabel:SetText("Width:")
-
-    local widthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    widthEdit:SetSize(50, 24)
-    widthEdit:SetPoint("LEFT", widthLabel, "RIGHT", 12, 0)
-    widthEdit:SetAutoFocus(false)
+    ---------------------------------------------------------------------------
+    -- FILA 1: Dimensiones Principales (Width, Height, Max %, Apply)
+    ---------------------------------------------------------------------------
+    local cWidth, widthEdit = CreateLabeledEditBox(menuFrame, "Width:", 45)
+    cWidth:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -14)
     menuFrame.widthEdit = widthEdit
 
-    local heightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    heightLabel:SetPoint("LEFT", widthEdit, "RIGHT", 12, 0)
-    heightLabel:SetText("Height:")
-
-    local heightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    heightEdit:SetSize(50, 24)
-    heightEdit:SetPoint("LEFT", heightLabel, "RIGHT", 12, 0)
-    heightEdit:SetAutoFocus(false)
+    local cHeight, heightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
+    cHeight:SetPoint("LEFT", cWidth, "RIGHT", 10, 0)
     menuFrame.heightEdit = heightEdit
 
-    local capLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    capLabel:SetPoint("LEFT", heightEdit, "RIGHT", 12, 0)
-    capLabel:SetText("Max %:")
-
-    local capEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    capEdit:SetSize(50, 24)
-    capEdit:SetPoint("LEFT", capLabel, "RIGHT", 12, 0)
-    capEdit:SetAutoFocus(false)
+    local cCap, capEdit = CreateLabeledEditBox(menuFrame, "Max %:", 45)
+    cCap:SetPoint("LEFT", cHeight, "RIGHT", 10, 0)
     menuFrame.capEdit = capEdit
 
-    -- Resource bar pip size editors placed next to the Shield dimensions
-    local resourcePipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resourcePipWidthLabel:SetPoint("TOPLEFT", capEdit, "BOTTOMLEFT", 0, -8)
-    resourcePipWidthLabel:SetText("Resource bar pip width:")
-    local resourcePipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    resourcePipWidthEdit:SetSize(50, 24)
-    resourcePipWidthEdit:SetPoint("LEFT", resourcePipWidthLabel, "RIGHT", 12, 0)
-    resourcePipWidthEdit:SetAutoFocus(false)
-    menuFrame.resourcePipWidthEdit = resourcePipWidthEdit
-
-    local resourcePipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resourcePipHeightLabel:SetPoint("LEFT", resourcePipWidthEdit, "RIGHT", 12, 0)
-    resourcePipHeightLabel:SetText("Resource bar pip height:")
-    local resourcePipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    resourcePipHeightEdit:SetSize(50, 24)
-    resourcePipHeightEdit:SetPoint("LEFT", resourcePipHeightLabel, "RIGHT", 12, 0)
-    resourcePipHeightEdit:SetAutoFocus(false)
-    menuFrame.resourcePipHeightEdit = resourcePipHeightEdit
-
     local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    applyButton:SetSize(70, 24)
-    applyButton:SetPoint("LEFT", capEdit, "RIGHT", 12, 0)
+    applyButton:SetSize(65, 24)
+    applyButton:SetPoint("LEFT", cCap, "RIGHT", 10, 0)
     applyButton:SetText("Apply")
     menuFrame.applyButton = applyButton
 
-    local visibilityCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    visibilityCheck:SetPoint("TOPLEFT", widthLabel, "BOTTOMLEFT", -2, -8)
-    visibilityCheck.Text:SetText("Hide external shield bar")
-    visibilityCheck:SetScript("OnClick", function(self)
-        config.hideExternalBar = self:GetChecked() and true or false
-        UpdateExternalBarVisibility()
-    end)
-    menuFrame.visibilityCheck = visibilityCheck
+    ---------------------------------------------------------------------------
+    -- FILA 2: Personal Resource Bar Pip (Width, Height)
+    ---------------------------------------------------------------------------
+    local cResPipW, resPipWidthEdit = CreateLabeledEditBox(menuFrame, "Resource Pip W:", 45)
+    cResPipW:SetPoint("TOPLEFT", cWidth, "BOTTOMLEFT", 0, -10)
+    menuFrame.resourcePipWidthEdit = resPipWidthEdit
 
-    local healthCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    healthCheck:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 0, -4)
-    healthCheck.Text:SetText("Show health bar (red, 100% base)")
-    healthCheck:SetScript("OnClick", function(self)
-        config.showHealth = self:GetChecked() and true or false
-        UpdateBar()
-    end)
-    menuFrame.healthCheck = healthCheck
+    local cResPipH, resPipHeightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
+    cResPipH:SetPoint("LEFT", cResPipW, "RIGHT", 10, 0)
+    menuFrame.resourcePipHeightEdit = resPipHeightEdit
 
-    local specialResCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    specialResCheck:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 0, -4)
-    specialResCheck.Text:SetText("Show special resources (circles)")
-    specialResCheck:SetScript("OnClick", function(self)
-        config.showSpecialResources = self:GetChecked() and true or false
-        UpdateSpecialResources()
-    end)
-    menuFrame.specialResCheck = specialResCheck
+    ---------------------------------------------------------------------------
+    -- FILA 3: Group Overlay Pip (Width, Height)
+    ---------------------------------------------------------------------------
+    local cGrpPipW, grpPipWidthEdit = CreateLabeledEditBox(menuFrame, "Group Pip W:", 45)
+    cGrpPipW:SetPoint("TOPLEFT", cResPipW, "BOTTOMLEFT", 0, -10)
+    menuFrame.pipWidthEdit = grpPipWidthEdit
 
-    local classOverlayCheck = CreateFrame("CheckButton", nil, menuFrame, "UICheckButtonTemplate")
-    classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -4)
-    classOverlayCheck.Text:SetText("Show special resources on group frames")
-    classOverlayCheck:SetScript("OnClick", function(self)
-        config.showClassResourceOverlay = self:GetChecked() and true or false
-        if addon.SetClassResourceOverlayEnabled then
-            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
-        end
-    end)
-    menuFrame.classOverlayCheck = classOverlayCheck
+    local cGrpPipH, grpPipHeightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
+    cGrpPipH:SetPoint("LEFT", cGrpPipW, "RIGHT", 10, 0)
+    menuFrame.pipHeightEdit = grpPipHeightEdit
 
-    local resLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resLabel:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 2, -10)
-    resLabel:SetText("Personal Resource Bar:")
+    ---------------------------------------------------------------------------
+    -- FILA 4: Personal Resource Bar Position Toggle
+    ---------------------------------------------------------------------------
+    local resLabel = CreateLabel(menuFrame, "Personal Resource Bar:")
+    resLabel:SetPoint("TOPLEFT", cGrpPipW, "BOTTOMLEFT", 0, -12)
 
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    resButton:SetSize(90, 24)
-    resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
+    resButton:SetSize(80, 22)
+    resButton:SetPoint("LEFT", resLabel, "RIGHT", 10, 0)
     resButton.UpdateText = function(self)
         local mode = config.resourceDisplay or "left"
         self:SetText(mode:gsub("^%l", string.upper))
@@ -557,56 +533,76 @@ local function CreateConfigMenu()
     end)
     menuFrame.resButton = resButton
 
-    local pipWidthLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pipWidthLabel:SetPoint("TOPLEFT", resourcePipWidthLabel, "BOTTOMLEFT", 0, -12)
-    pipWidthLabel:SetText("Group pip width:")
-    local pipWidthEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    pipWidthEdit:SetSize(50, 24)
-    pipWidthEdit:SetPoint("LEFT", pipWidthLabel, "RIGHT", 12, 0)
-    pipWidthEdit:SetAutoFocus(false)
-    menuFrame.pipWidthEdit = pipWidthEdit
+    ---------------------------------------------------------------------------
+    -- BLOQUE DE CHECKBOXES (Alineadas verticalmente debajo del bloque de pips)
+    ---------------------------------------------------------------------------
+    local visibilityCheck = CreateCheckBox(menuFrame, "Hide external shield bar", function(self)
+        config.hideExternalBar = self:GetChecked() and true or false
+        UpdateExternalBarVisibility()
+    end)
+    visibilityCheck:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -12)
+    menuFrame.visibilityCheck = visibilityCheck
 
-    local pipHeightLabel = menuFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pipHeightLabel:SetPoint("LEFT", pipWidthEdit, "RIGHT", 12, 0)
-    pipHeightLabel:SetText("Height:")
-    local pipHeightEdit = CreateFrame("EditBox", nil, menuFrame, "InputBoxTemplate")
-    pipHeightEdit:SetSize(50, 24)
-    pipHeightEdit:SetPoint("LEFT", pipHeightLabel, "RIGHT", 12, 0)
-    pipHeightEdit:SetAutoFocus(false)
-    menuFrame.pipHeightEdit = pipHeightEdit
+    local healthCheck = CreateCheckBox(menuFrame, "Show health bar (red, 100% base)", function(self)
+        config.showHealth = self:GetChecked() and true or false
+        UpdateBar()
+    end)
+    healthCheck:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 0, -2)
+    menuFrame.healthCheck = healthCheck
 
+    local specialResCheck = CreateCheckBox(menuFrame, "Show special resources (circles)", function(self)
+        config.showSpecialResources = self:GetChecked() and true or false
+        UpdateSpecialResources()
+    end)
+    specialResCheck:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 0, -2)
+    menuFrame.specialResCheck = specialResCheck
+
+    local classOverlayCheck = CreateCheckBox(menuFrame, "Show special resources on group frames", function(self)
+        config.showClassResourceOverlay = self:GetChecked() and true or false
+        if addon.SetClassResourceOverlayEnabled then
+            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
+        end
+    end)
+    classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -2)
+    menuFrame.classOverlayCheck = classOverlayCheck
+
+    ---------------------------------------------------------------------------
+    -- MANEJO DEL BOTÓN DE APLICAR
+    ---------------------------------------------------------------------------
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
         local height = tonumber(heightEdit:GetText())
         local capPercent = tonumber(capEdit:GetText())
         ApplyBarDimensions(width, height, capPercent)
 
-        local resourcePipWidth = tonumber(resourcePipWidthEdit:GetText())
-        local resourcePipHeight = tonumber(resourcePipHeightEdit:GetText())
+        local resourcePipWidth = tonumber(resPipWidthEdit:GetText())
+        local resourcePipHeight = tonumber(resPipHeightEdit:GetText())
         if addon.SetSpecialResourcePipSize and addon.SetSpecialResourcePipSize(resourcePipWidth, resourcePipHeight) then
             config.specialResourcePipWidth = resourcePipWidth
             config.specialResourcePipHeight = resourcePipHeight
         else
             print("BloodShieldOverlay: resource pip width must be 2-20 and height 2-32.")
-            resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth))
-            resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight))
+            resPipWidthEdit:SetText(tostring(config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth))
+            resPipHeightEdit:SetText(tostring(config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight))
         end
 
-        local pipWidth = tonumber(pipWidthEdit:GetText())
-        local pipHeight = tonumber(pipHeightEdit:GetText())
-        if addon.SetClassResourceOverlayPipSize
-            and addon.SetClassResourceOverlayPipSize(pipWidth, pipHeight) then
+        local pipWidth = tonumber(grpPipWidthEdit:GetText())
+        local pipHeight = tonumber(grpPipHeightEdit:GetText())
+        if addon.SetClassResourceOverlayPipSize and addon.SetClassResourceOverlayPipSize(pipWidth, pipHeight) then
             config.classResourcePipWidth = pipWidth
             config.classResourcePipHeight = pipHeight
         else
             print("BloodShieldOverlay: group pip width must be 4-32 and height 2-20.")
-            pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
-            pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
+            grpPipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
+            grpPipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
         end
     end)
 
+    ---------------------------------------------------------------------------
+    -- BOTONES INFERIORES (Unlock, Lock, Close)
+    ---------------------------------------------------------------------------
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    unlock:SetSize(90, 24)
+    unlock:SetSize(85, 24)
     unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
     unlock:SetText("Unlock")
     unlock:SetScript("OnClick", function()
@@ -615,7 +611,7 @@ local function CreateConfigMenu()
     end)
 
     local lock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    lock:SetSize(90, 24)
+    lock:SetSize(85, 24)
     lock:SetPoint("LEFT", unlock, "RIGHT", 8, 0)
     lock:SetText("Lock")
     lock:SetScript("OnClick", function()
@@ -624,7 +620,7 @@ local function CreateConfigMenu()
     end)
 
     local closeBtn = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    closeBtn:SetSize(90, 24)
+    closeBtn:SetSize(85, 24)
     closeBtn:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
     closeBtn:SetText("Close")
     closeBtn:SetScript("OnClick", function()
