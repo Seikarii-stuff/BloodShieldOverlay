@@ -436,12 +436,32 @@ local function CreateCheckBox(parent, labelText, onClick)
     return check
 end
 
+-- Helpers de arquitectura para creación limpia de UI
+local function CreateLabel(parent, text, font)
+    local label = parent:CreateFontString(nil, "OVERLAY", font or "GameFontNormal")
+    label:SetText(text)
+    return label
+end
+
+local function CreateInputBox(parent, width)
+    local editBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    editBox:SetSize(width or 45, 24)
+    editBox:SetAutoFocus(false)
+    return editBox
+end
+
+local function CreateCheckBox(parent, labelText, onClick)
+    check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    check.Text:SetText(labelText)
+    check:SetScript("OnClick", onClick)
+    return check
+end
+
 local function CreateConfigMenu()
     if menuFrame then return end
 
-    -- Se amplía la altura a 440px para acomodar las 3 filas de opciones y las checkboxes cómodamente
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(500, 440)
+    menuFrame:SetSize(480, 430)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -464,57 +484,82 @@ local function CreateConfigMenu()
     info:SetJustifyH("LEFT")
 
     ---------------------------------------------------------------------------
-    -- FILA 1: Dimensiones Principales (Width, Height, Max %, Apply)
+    -- ENCABEZADOS DE COLUMNA (Estructura de Tabla)
     ---------------------------------------------------------------------------
-    local cWidth, widthEdit = CreateLabeledEditBox(menuFrame, "Width:", 45)
-    cWidth:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -14)
+    -- Columna de etiquetas alineada a x = 20
+    -- Columna Width alineada a x = 200
+    -- Columna Height alineada a x = 265
+    -- Columna Max % alineada a x = 330
+    local colWidthHeader = CreateLabel(menuFrame, "Width", "GameFontNormalSmall")
+    colWidthHeader:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 182, -14)
+
+    local colHeightHeader = CreateLabel(menuFrame, "Height", "GameFontNormalSmall")
+    colHeightHeader:SetPoint("LEFT", colWidthHeader, "LEFT", 65, 0)
+
+    local colMaxHeader = CreateLabel(menuFrame, "Max %", "GameFontNormalSmall")
+    colMaxHeader:SetPoint("LEFT", colHeightHeader, "LEFT", 65, 0)
+
+    ---------------------------------------------------------------------------
+    -- FILA 1: Barra Principal de Escudo (Shield Bar)
+    ---------------------------------------------------------------------------
+    local row1Label = CreateLabel(menuFrame, "Main Shield Bar:")
+    row1Label:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -32)
+
+    local widthEdit = CreateInputBox(menuFrame, 45)
+    widthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -18)
     menuFrame.widthEdit = widthEdit
 
-    local cHeight, heightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
-    cHeight:SetPoint("LEFT", cWidth, "RIGHT", 10, 0)
+    local heightEdit = CreateInputBox(menuFrame, 45)
+    heightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -18)
     menuFrame.heightEdit = heightEdit
 
-    local cCap, capEdit = CreateLabeledEditBox(menuFrame, "Max %:", 45)
-    cCap:SetPoint("LEFT", cHeight, "RIGHT", 10, 0)
+    local capEdit = CreateInputBox(menuFrame, 45)
+    capEdit:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -18)
     menuFrame.capEdit = capEdit
 
     local applyButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    applyButton:SetSize(65, 24)
-    applyButton:SetPoint("LEFT", cCap, "RIGHT", 10, 0)
+    applyButton:SetSize(60, 24)
+    applyButton:SetPoint("LEFT", capEdit, "RIGHT", 12, 0)
     applyButton:SetText("Apply")
     menuFrame.applyButton = applyButton
 
     ---------------------------------------------------------------------------
-    -- FILA 2: Personal Resource Bar Pip (Width, Height)
+    -- FILA 2: Pips de Recurso Personal (Personal Pips)
     ---------------------------------------------------------------------------
-    local cResPipW, resPipWidthEdit = CreateLabeledEditBox(menuFrame, "Resource Pip W:", 45)
-    cResPipW:SetPoint("TOPLEFT", cWidth, "BOTTOMLEFT", 0, -10)
+    local row2Label = CreateLabel(menuFrame, "Personal Pips:")
+    row2Label:SetPoint("TOPLEFT", row1Label, "BOTTOMLEFT", 0, -18)
+
+    local resPipWidthEdit = CreateInputBox(menuFrame, 45)
+    resPipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -46)
     menuFrame.resourcePipWidthEdit = resPipWidthEdit
 
-    local cResPipH, resPipHeightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
-    cResPipH:SetPoint("LEFT", cResPipW, "RIGHT", 10, 0)
+    local resPipHeightEdit = CreateInputBox(menuFrame, 45)
+    resPipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -46)
     menuFrame.resourcePipHeightEdit = resPipHeightEdit
 
     ---------------------------------------------------------------------------
-    -- FILA 3: Group Overlay Pip (Width, Height)
+    -- FILA 3: Pips de Marcos de Grupo (Group Pips)
     ---------------------------------------------------------------------------
-    local cGrpPipW, grpPipWidthEdit = CreateLabeledEditBox(menuFrame, "Group Pip W:", 45)
-    cGrpPipW:SetPoint("TOPLEFT", cResPipW, "BOTTOMLEFT", 0, -10)
+    local row3Label = CreateLabel(menuFrame, "Group Pips:")
+    row3Label:SetPoint("TOPLEFT", row2Label, "BOTTOMLEFT", 0, -18)
+
+    local grpPipWidthEdit = CreateInputBox(menuFrame, 45)
+    grpPipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -74)
     menuFrame.pipWidthEdit = grpPipWidthEdit
 
-    local cGrpPipH, grpPipHeightEdit = CreateLabeledEditBox(menuFrame, "Height:", 45)
-    cGrpPipH:SetPoint("LEFT", cGrpPipW, "RIGHT", 10, 0)
+    local grpPipHeightEdit = CreateInputBox(menuFrame, 45)
+    grpPipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -74)
     menuFrame.pipHeightEdit = grpPipHeightEdit
 
     ---------------------------------------------------------------------------
-    -- FILA 4: Personal Resource Bar Position Toggle
+    -- FILA 4: Posición de la Barra de Recurso Personal
     ---------------------------------------------------------------------------
     local resLabel = CreateLabel(menuFrame, "Personal Resource Bar:")
-    resLabel:SetPoint("TOPLEFT", cGrpPipW, "BOTTOMLEFT", 0, -12)
+    resLabel:SetPoint("TOPLEFT", row3Label, "BOTTOMLEFT", 0, -18)
 
     local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     resButton:SetSize(80, 22)
-    resButton:SetPoint("LEFT", resLabel, "RIGHT", 10, 0)
+    resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
     resButton.UpdateText = function(self)
         local mode = config.resourceDisplay or "left"
         self:SetText(mode:gsub("^%l", string.upper))
@@ -534,13 +579,13 @@ local function CreateConfigMenu()
     menuFrame.resButton = resButton
 
     ---------------------------------------------------------------------------
-    -- BLOQUE DE CHECKBOXES (Alineadas verticalmente debajo del bloque de pips)
+    -- BLOQUE DE CHECKBOXES
     ---------------------------------------------------------------------------
     local visibilityCheck = CreateCheckBox(menuFrame, "Hide external shield bar", function(self)
         config.hideExternalBar = self:GetChecked() and true or false
         UpdateExternalBarVisibility()
     end)
-    visibilityCheck:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -12)
+    visibilityCheck:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -14)
     menuFrame.visibilityCheck = visibilityCheck
 
     local healthCheck = CreateCheckBox(menuFrame, "Show health bar (red, 100% base)", function(self)
@@ -567,7 +612,7 @@ local function CreateConfigMenu()
     menuFrame.classOverlayCheck = classOverlayCheck
 
     ---------------------------------------------------------------------------
-    -- MANEJO DEL BOTÓN DE APLICAR
+    -- BOTÓN DE APLICAR (VALIDACIÓN Y GUARDADO)
     ---------------------------------------------------------------------------
     applyButton:SetScript("OnClick", function()
         local width = tonumber(widthEdit:GetText())
@@ -599,7 +644,7 @@ local function CreateConfigMenu()
     end)
 
     ---------------------------------------------------------------------------
-    -- BOTONES INFERIORES (Unlock, Lock, Close)
+    -- BOTONES INFERIORES
     ---------------------------------------------------------------------------
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(85, 24)
