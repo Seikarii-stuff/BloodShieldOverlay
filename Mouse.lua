@@ -79,9 +79,6 @@ local function CreateCooldown(parent, index)
     frame.BSOMouseIcon = icon
 
     local chargeText = frame:CreateFontString(nil, "OVERLAY")
-    -- Right-anchor the number so single digits start at the right side of the
-    -- icon instead of growing leftward over the cooldown swipe. Two digits
-    -- naturally expand left only when necessary (e.g. 12 charges).
     chargeText:SetPoint("RIGHT", frame, "RIGHT", -0.5, 0)
     chargeText:SetJustifyH("RIGHT")
     chargeText:SetJustifyV("MIDDLE")
@@ -233,8 +230,12 @@ local function UpdateResourcePips()
     end
 
     local radius = CURSOR_RADIUS
-    local step = PI / math_max(1, maximum - 1)
-    local startAngle = (PI * 0.5) - step
+    local spacing = tonumber(config.mouseResourceArcSpacing) or 1.0
+    spacing = math_max(0.5, math_min(1.5, spacing))
+    local baseStep = PI / math_max(1, maximum - 1)
+    local step = baseStep * spacing
+    local arcCenter = PI * 0.5
+    local startAngle = arcCenter - (step * math_max(1, maximum - 1) / 2)
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
