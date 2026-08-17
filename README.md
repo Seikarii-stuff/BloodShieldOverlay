@@ -28,14 +28,23 @@
   - Opción independiente en `/shield`: **Show special resources around mouse**.
   - Reutiliza el mismo proveedor y `RenderResourcePips()` que los recursos especiales de la barra personal y los overlays de grupo; no duplica la lógica de Holy Power, Esencia, Fragmentos de Alma, Chi, Combo Points o Runas.
   - Los pips son **circulares** y siguen el mismo patrón de máscara circular soportado por Blizzard usado en Minimizer.
-  - Se disponen en una **semiluna inferior alrededor del cursor**, conservando el orden lógico del recurso; el último pip queda a la derecha.
+  - Se disponen en una **semiluna izquierda alrededor del cursor**, manteniendo el mismo centro geométrico del overlay y colocando el primer/recurso disponible en la parte superior del arco.
+  - El relleno de los pips es un *eclipse* circular: el fondo y el relleno comparten la misma máscara circular, sin un barrido radial artificial.
   - El addon no recalcula el estado de los recursos cada frame: el estado se actualiza mediante el listener compartido y la posición del conjunto respecto al cursor se refresca con un micro-throttle de ~30 FPS.
-  - `Mouse.lua` mantiene aislada esta presentación para poder añadir en el futuro una semiluna superior con indicadores de cooldown sin mezclar esa lógica con los recursos de clase.
+
+- **Cooldowns alrededor del Ratón**:
+  - Dos slots opcionales independientes, con checkbox y selector de habilidad.
+  - Los dos slots comparten el mismo pool de habilidades disponible para la clase/spec actual.
+  - Una habilidad seleccionada en un slot desaparece del selector del otro, evitando duplicados.
+  - La lista se mantiene en `data/SpellData.lua`, separando **spellID** (API) y **name** (UI).
+  - El módulo utiliza `CooldownFrameTemplate` y deja que Blizzard pinte el estado del cooldown; no calcula el tiempo restante en Lua.
+  - Incluye de entrada Choque Sagrado / Holy Shock y Divine Toll para Paladín, además de Marrowrend y Heart Strike para Blood DK, con listas específicas para las tres specs de cada clase.
+  - Las clases sin recurso especial también pueden usar los slots de cooldown: `Mouse.lua` no depende de que exista un `ResourceProvider` para funcionar.
 
 - **Recursos Especiales en Marcos de Grupo y Raid**:
   - Muestra los recursos especiales del jugador de forma horizontal en la parte inferior de su barra de maná/recurso de clase.
   - Funciona con `CompactPartyFrame`, `CompactRaidFrame`, `PartyFrame` y el modo *Always-In-Party*.
-  - Reutiliza los proveedores de [ResourceProviders.lua](ResourceProviders.lua), sin duplicar reglas específicas de cada clase.
+  - Reutiliza los proveedores de `ResourceProviders.lua`, sin duplicar reglas específicas de cada clase.
   - El descubrimiento se difiere durante combate y se reintenta después del layout de Blizzard para evitar taint y referencias a marcos protegidos.
 
 - **Overlays en Marcos Nativos de Blizzard**:
@@ -83,9 +92,9 @@
   - Mantiene separada la presentación de los datos y utiliza el dispatcher compartido para sus actualizaciones.
 
 5. **[Mouse.lua](Mouse.lua)**
-  - Presentación de los recursos especiales alrededor del cursor.
-  - Pips circulares en semiluna inferior y posicionamiento throttled; reutiliza el proveedor/renderizador compartido.
-  - La semiluna superior queda reservada para futuros indicadores de cooldown.
+  - Presentación de recursos y cooldowns alrededor del cursor.
+  - Recursos en semiluna izquierda; dos slots de cooldown en el lateral derecho.
+  - Usa `CooldownFrameTemplate` para los temporizadores y mantiene separada la presentación de la lógica de recursos.
 
 6. **[Menu.lua](Menu.lua)**
   - Interfaz central de configuración `/shield`, incluida la configuración de la barra Target of Target, el overlay del ratón y el Unlock/Lock global.
@@ -97,16 +106,21 @@
   - Proveedores extensibles para recursos especiales de clase y runas de Caballero de la Muerte.
   - La Esencia de Evoker muestra la recarga secuencial del siguiente pip, mientras que las runas mantienen sus seis recargas independientes.
 
-9. **[Commands.lua](Commands.lua)**
+9. **[data/SpellData.lua](data/SpellData.lua)**
+  - Catálogo de habilidades disponibles para los slots de cooldown del ratón.
+  - Mantiene separados los IDs usados por la API y los nombres humanos mostrados en los desplegables.
+  - Las tablas específicas de spec sobrescriben las listas de fallback por clase.
+
+10. **[Commands.lua](Commands.lua)**
   - Adaptador de comandos `/shield`; delega las operaciones de UI en la API pública del addon.
 
-10. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
+11. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.
 
-11. **[BlizzardFrames.lua](BlizzardFrames.lua)**
+12. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
 
-12. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
+13. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
   - Renderiza horizontalmente los recursos especiales del jugador sobre la barra de recurso de su marco de party/raid.
   - Mantiene separado el descubrimiento de marcos, el renderizado y la lógica de recursos de clase.
 
@@ -134,9 +148,8 @@ Estos tests no sustituyen la validación dentro del cliente PTR/Retail con marco
 - **Target of Target — posible mejora futura**:
   - El frame ya utiliza `SecureUnitButtonTemplate`, por lo que una futura interacción mediante **mouseover/click** para targetear o lanzar hechizos sobre el target mostrado es técnicamente posible.
   - Se mantiene deliberadamente fuera de la implementación actual. Solo se añadirá si el uso real del frame demuestra que aporta suficiente valor como para justificar la complejidad adicional de los secure attributes y las restricciones de combate.
-- **Semiluna superior del overlay del ratón — posible mejora futura**:
-  - `Mouse.lua` deja reservada la semiluna superior para pequeños indicadores de cooldown (por ejemplo, Choque Sagrado o Estrago Divino).
-  - No se implementa todavía; se añadirá únicamente si resulta útil en el uso real y puede integrarse sin convertir el overlay del cursor en un coste de actualización permanente.
+- **Cooldowns del overlay del ratón**:
+  - Los dos slots actuales son una primera implementación deliberadamente pequeña. Si se demuestra útil, la semiluna superior puede ampliarse con más indicadores sin cambiar el catálogo ni la API de `Mouse.lua`.
 - **Futura Idea de Mejora**:
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
