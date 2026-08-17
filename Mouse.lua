@@ -19,7 +19,7 @@ local powerTypes = Enum and Enum.PowerType
 local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 17
-local UPDATE_INTERVAL = 0.006944    -- Extra for only this feature so it doesnt seem laggy
+local UPDATE_INTERVAL = 0.006944
 local DEFAULT_COOLDOWN_SIZE = 12
 local CHARGE_FONT_SIZE = 9
 
@@ -148,7 +148,6 @@ end
 local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
-
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
@@ -157,7 +156,6 @@ local function UpdateCharges(frame, spellID)
             return
         end
     end
-
     text:SetText(nil)
     text:Hide()
 end
@@ -173,7 +171,6 @@ local function ApplyCooldown(frame, spellID)
         end
         return false
     end
-
     local iconTexture = GetSpellTexture(spellID)
     if not iconTexture then
         frame.BSOMouseSpellID = nil
@@ -183,11 +180,9 @@ local function ApplyCooldown(frame, spellID)
         frame:Hide()
         return false
     end
-
     frame.BSOMouseSpellID = spellID
     frame.BSOMouseIcon:SetTexture(iconTexture)
     UpdateCharges(frame, spellID)
-
     local cooldown = frame.BSOMouseCooldown
     if cooldown then
         if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
@@ -204,7 +199,6 @@ local function ApplyCooldown(frame, spellID)
             if start and duration then cooldown:SetCooldown(start, duration) end
         end
     end
-
     frame:Show()
     return true
 end
@@ -220,7 +214,6 @@ local function UpdateResourcePips()
         for index = 1, MAX_PIPS do pips[index]:Hide() end
         return 0
     end
-
     local state = resourceProvider:GetState()
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     maximum = math_min(maximum, MAX_PIPS)
@@ -232,11 +225,14 @@ local function UpdateResourcePips()
     local radius = CURSOR_RADIUS
     local spacing = tonumber(config.mouseResourceArcSpacing) or 1.0
     spacing = math_max(0.5, math_min(1.5, spacing))
+    local arcStart = tonumber(config.mouseResourceArcStart) or 1.0
+    arcStart = math_max(0.5, math_min(1.5, arcStart))
     local baseStep = PI / math_max(1, maximum - 1)
     local step = baseStep * spacing
-    -- Keep the original arc's starting pip anchored exactly where it was.
-    -- Spacing changes only the distance between subsequent pips.
-    local startAngle = (PI * 0.5) - baseStep
+    -- 1.0 is the current/default geometry. This multiplier moves only the
+    -- anchored first pip by a tiny amount while preserving the radius and
+    -- leaving the cooldown icons completely independent.
+    local startAngle = (PI * 0.5) - (baseStep * arcStart)
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
@@ -256,7 +252,6 @@ local function UpdateCooldowns()
     if not config or not overlay then return false end
     local anyVisible = false
     local size = tonumber(config.mouseCooldownPipSize) or DEFAULT_COOLDOWN_SIZE
-
     for index = 1, 2 do
         local frame = cooldownFrames[index]
         frame:SetSize(size, size)
