@@ -34,6 +34,24 @@ local function SetAllBarsLocked(locked)
     config.targetTargetLocked = locked and true or false
 end
 
+local function RefreshMouseCooldownDropdowns()
+    if not menuFrame or not menuFrame.mouseCooldown1Button then return end
+    local options = addon.GetMouseCooldownOptions and addon.GetMouseCooldownOptions() or {}
+
+    local function findName(spellID)
+        for index = 1, #options do
+            local entry = options[index]
+            local id = type(entry) == "number" and entry or entry.id
+            local name = type(entry) == "number" and tostring(entry) or entry.name
+            if id == spellID then return name end
+        end
+        return "None"
+    end
+
+    menuFrame.mouseCooldown1Button:SetText(findName(config.mouseCooldown1Spell))
+    menuFrame.mouseCooldown2Button:SetText(findName(config.mouseCooldown2Spell))
+end
+
 local function Refresh()
     if not menuFrame or not config then return end
     menuFrame.widthEdit:SetText(tostring(config.width))
@@ -51,6 +69,9 @@ local function Refresh()
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay and true or false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget and true or false)
     menuFrame.mouseResourceCheck:SetChecked(config.showMouseSpecialResources and true or false)
+    menuFrame.mouseCooldown1Check:SetChecked(config.showMouseCooldown1 and true or false)
+    menuFrame.mouseCooldown2Check:SetChecked(config.showMouseCooldown2 and true or false)
+    RefreshMouseCooldownDropdowns()
     if menuFrame.resButton then
         local mode = config.resourceDisplay or "left"
         menuFrame.resButton:SetText(mode:gsub("^%l", string.upper))
@@ -109,10 +130,63 @@ local function ApplyPips()
     end
 end
 
+local function SetMouseCooldown(slot, spellID)
+    local otherSlot = slot == 1 and 2 or 1
+    if spellID and config["mouseCooldown" .. otherSlot .. "Spell"] == spellID then
+        return false
+    end
+    config["mouseCooldown" .. slot .. "Spell"] = spellID
+    if addon.RefreshMouseCooldowns then addon.RefreshMouseCooldowns() end
+    RefreshMouseCooldownDropdowns()
+    return true
+end
+
+local function CreateMouseCooldownDropdown(parent, button, slot)
+    button:SetScript("OnClick", function(self)
+        ToggleDropDownMenu(1, nil, self, "cursor", 0, 0)
+    end)
+    button:SetScript("OnShow", function(self)
+        UIDropDownMenu_Initialize(self, function(frame, level)
+            if level ~= 1 then return end
+            local options = addon.GetMouseCooldownOptions and addon.GetMouseCooldownOptions() or {}
+            local otherSlot = slot == 1 and 2 or 1
+            local otherID = config["mouseCooldown" .. otherSlot .. "Spell"]
+
+            local noneInfo = UIDropDownMenu_CreateInfo()
+            noneInfo.text = "None"
+            noneInfo.checked = config["mouseCooldown" .. slot .. "Spell"] == nil
+            noneInfo.func = function()
+                SetMouseCooldown(slot, nil)
+                CloseDropDownMenus()
+            end
+            UIDropDownMenu_AddButton(noneInfo)
+
+            for index = 1, #options do
+                local entry = options[index]
+                local id = type(entry) == "number" and entry or entry.id
+                local name = type(entry) == "number" and tostring(entry) or entry.name
+                if id and id ~= otherID then
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = name or tostring(id)
+                    info.value = id
+                    info.checked = config["mouseCooldown" .. slot .. "Spell"] == id
+                    info.disabled = IsPlayerSpell and not IsPlayerSpell(id) or false
+                    info.func = function()
+                        SetMouseCooldown(slot, id)
+                        CloseDropDownMenus()
+                    end
+                    UIDropDownMenu_AddButton(info)
+                end
+            end
+        end)
+    end)
+    UIDropDownMenu_SetWidth(145, button)
+end
+
 local function CreateConfigMenu()
     if menuFrame then return end
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(500, 545)
+    menuFrame:SetSize(500, 620)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -148,7 +222,6 @@ local function CreateConfigMenu()
     menuFrame.heightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -18)
     menuFrame.capEdit = CreateInputBox(menuFrame, 45)
     menuFrame.capEdit:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -18)
-
     local mainApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     mainApply:SetSize(60, 24)
     mainApply:SetPoint("LEFT", menuFrame.capEdit, "RIGHT", 12, 0)
@@ -237,12 +310,43 @@ local function CreateConfigMenu()
     local mouseResourceCheck = CreateCheckBox(menuFrame, "Show special resources around mouse", function(self)
         local enabled = self:GetChecked() and true or false
         config.showMouseSpecialResources = enabled
-        if addon.SetMouseResourceOverlayEnabled then
-            addon.SetMouseResourceOverlayEnabled(enabled)
-        end
+        if addon.SetMouseResourceOverlayEnabled then addon.SetMouseResourceOverlayEnabled(enabled) end
     end)
     mouseResourceCheck:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 0, -2)
     menuFrame.mouseResourceCheck = mouseResourceCheck
+
+    local mouseHeader = CreateLabel(menuFrame, "Mouse Cooldowns:", "GameFontNormal")
+    mouseHeader:SetPoint("TOPLEFT", mouseResourceCheck, "BOTTOMLEFT", 2, -12)
+
+    local mouseCooldown1Check = CreateCheckBox(menuFrame, "Slot 1", function(self)
+        config.showMouseCooldown1 = self:GetChecked() and true or false
+        if addon.SetMouseResourceOverlayEnabled then
+            addon.SetMouseResourceOverlayEnabled(config.showMouseSpecialResources or config.showMouseCooldown1 or config.showMouseCooldown2)
+        end
+    end)
+    mouseCooldown1Check:SetPoint("TOPLEFT", mouseHeader, "BOTTOMLEFT", -2, -4)
+    menuFrame.mouseCooldown1Check = mouseCooldown1Check
+
+    local mouseCooldown1Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown1", menuFrame, "UIPanelButtonTemplate")
+    mouseCooldown1Button:SetSize(145, 22)
+    mouseCooldown1Button:SetPoint("LEFT", mouseCooldown1Check, "RIGHT", 10, 0)
+    menuFrame.mouseCooldown1Button = mouseCooldown1Button
+    CreateMouseCooldownDropdown(menuFrame, mouseCooldown1Button, 1)
+
+    local mouseCooldown2Check = CreateCheckBox(menuFrame, "Slot 2", function(self)
+        config.showMouseCooldown2 = self:GetChecked() and true or false
+        if addon.SetMouseResourceOverlayEnabled then
+            addon.SetMouseResourceOverlayEnabled(config.showMouseSpecialResources or config.showMouseCooldown1 or config.showMouseCooldown2)
+        end
+    end)
+    mouseCooldown2Check:SetPoint("TOPLEFT", mouseCooldown1Check, "BOTTOMLEFT", 0, -4)
+    menuFrame.mouseCooldown2Check = mouseCooldown2Check
+
+    local mouseCooldown2Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown2", menuFrame, "UIPanelButtonTemplate")
+    mouseCooldown2Button:SetSize(145, 22)
+    mouseCooldown2Button:SetPoint("LEFT", mouseCooldown2Check, "RIGHT", 10, 0)
+    menuFrame.mouseCooldown2Button = mouseCooldown2Button
+    CreateMouseCooldownDropdown(menuFrame, mouseCooldown2Button, 2)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(85, 24)
