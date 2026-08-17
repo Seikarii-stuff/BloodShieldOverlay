@@ -9,7 +9,8 @@ addon.Data = addon.Data or {}
 --   { id = <spellID>, name = "<Spell Name>" }
 --
 -- The name is authoritative for menu display; id is used by the WoW API.
--- Spec-specific tables override the class fallback table below.
+-- Mouse cooldowns intentionally use class-wide lists so the player can choose
+-- from the full set of relevant short/base cooldowns regardless of spec.
 -- ============================================================================
 
 addon.Data.MOUSE_COOLDOWNS = {
@@ -65,38 +66,14 @@ addon.Data.MOUSE_COOLDOWNS = {
     },
     DEMONHUNTER = {
         { id = 183752, name = "Consume Magic" },
-        { id = 191427, name = "Metamorphosis" },
+        { id = 204596, name = "Sigil of Flame" },
+        { id = 195072, name = "Double Jump" },
+        { id = 188501, name = "Spectral Sight" },
     },
     EVOKER = {
-        { id = 351338, name = "Globe of Frost" },
-        { id = 375087, name = "Dragonrage" },
-    },
-}
-
-addon.Data.MOUSE_COOLDOWNS_BY_SPEC = {
-    [65] = {
-        { id = 20473, name = "Holy Shock" },
-        { id = 375576, name = "Divine Toll" },
-        { id = 35395, name = "Crusader Strike" },
-    },
-    [66] = {
-        { id = 31935, name = "Avenger's Shield" },
-        { id = 375576, name = "Divine Toll" },
-    },
-    [70] = {
-        { id = 35395, name = "Crusader Strike" },
-        { id = 375576, name = "Divine Toll" },
-    },
-    [250] = {
-        { id = 290541, name = "Marrowrend" },
-        { id = 206930, name = "Heart Strike" },
-    },
-    [251] = {
-        { id = 49184, name = "Howling Blast" },
-        { id = 49143, name = "Frost Strike" },
-    },
-    [252] = {
-        { id = 85948, name = "Festering Strike" },
-        { id = 55090, name = "Scourge Strike" },
+        { id = 351338, name = "Quell" },
+        { id = 370665, name = "Rescue" },
+        { id = 374251, name = "Renewing Blaze" },
+        { id = 361469, name = "Living Flame" },
     },
 }
