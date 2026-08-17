@@ -1,5 +1,4 @@
 -- Cursor overlay: special resources on the left, cooldowns on the right.
--- Blizzard owns cooldown timing; the addon only assigns spell IDs to Cooldown widgets.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -23,10 +22,6 @@ local CURSOR_RADIUS = 10
 local UPDATE_INTERVAL = 0.033
 local COOLDOWN_SIZE = 8
 local COOLDOWN_GAP = 3
-
--- Cooldowns are the two next pips on the right side of the resource semicircle.
-local COOLDOWN_ANGLE_START = PI * 0.5
-local COOLDOWN_ANGLE_STEP = PI / 6
 
 local enabled = false
 local overlay
@@ -71,9 +66,6 @@ local function CreateCircularPip(parent, index)
     return pip
 end
 
--- Keep the icon and the Cooldown as siblings, exactly like Minimizer's
--- Focus/Target widgets. A Cooldown frame is the timer layer; it is not the
--- icon container. This also means a ready spell is still visible.
 local function CreateCooldown(parent, index)
     local frame = CreateFrame("Frame", "BloodShieldOverlayMouseCooldown" .. index, parent)
     frame:SetSize(COOLDOWN_SIZE, COOLDOWN_SIZE)
@@ -186,9 +178,7 @@ local function ApplyCooldown(frame, spellID)
             end
         elseif GetSpellCooldown then
             local start, duration = GetSpellCooldown(spellID)
-            if start and duration then
-                cooldown:SetCooldown(start, duration)
-            end
+            if start and duration then cooldown:SetCooldown(start, duration) end
         end
     end
 
@@ -205,7 +195,7 @@ local function UpdateResourcePips()
     local resourceProvider = GetResourceProvider()
     if not resourceProvider or not overlay or not config or not config.showMouseSpecialResources then
         for index = 1, MAX_PIPS do pips[index]:Hide() end
-        return false
+        return 0
     end
 
     local state = resourceProvider:GetState()
@@ -213,7 +203,7 @@ local function UpdateResourcePips()
     maximum = math_min(maximum, MAX_PIPS)
     if maximum <= 0 then
         for index = 1, MAX_PIPS do pips[index]:Hide() end
-        return false
+        return 0
     end
 
     local radius = CURSOR_RADIUS
@@ -229,14 +219,13 @@ local function UpdateResourcePips()
             pip:Hide()
         end
     end
-    return true
+    return maximum
 end
 
 local function UpdateCooldowns()
     local config = GetConfig()
     if not config or not overlay then return false end
     local anyVisible = false
-    local radius = CURSOR_RADIUS
 
     for index = 1, 2 do
         local frame = cooldownFrames[index]
@@ -245,13 +234,12 @@ local function UpdateCooldowns()
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
 
-            -- Continue the upper semicircle from the last resource pip.
-            -- Slot 1 is immediately to the right of the top resource pip;
-            -- slot 2 follows it clockwise. They behave visually as the next
-            -- two pips rather than as a separate cluster below the cursor.
-            local angle = COOLDOWN_ANGLE_START - (index - 1) * COOLDOWN_ANGLE_STEP
+            -- The resource semicircle is the left half of the ring. The mouse
+            -- cooldowns are the first two positions on the right half: +1 and
+            -- +2, i.e. the two positions after the semicircle, never -1/-2.
+            local angle = (PI * 0.5) - index * (PI / 6)
             frame:ClearAllPoints()
-            frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
+            frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * CURSOR_RADIUS, math_sin(angle) * CURSOR_RADIUS)
         else
             frame.BSOMouseSpellID = nil
             if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
@@ -264,7 +252,7 @@ end
 
 local function UpdateVisuals()
     if not enabled or not overlay then return end
-    local resourceVisible = UpdateResourcePips()
+    local resourceVisible = UpdateResourcePips() > 0
     local cooldownVisible = UpdateCooldowns()
     if resourceVisible or cooldownVisible then overlay:Show() else overlay:Hide() end
 end
@@ -319,9 +307,7 @@ if addon.RegisterSpecialResourceListener then addon.RegisterSpecialResourceListe
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:SetScript("OnEvent", function()
-    Refresh()
-end)
+eventFrame:SetScript("OnEvent", function() Refresh() end)
 
 addon.RegisterInitializer(function()
     local cfg = addon.PlayerBarConfig.Initialize()
