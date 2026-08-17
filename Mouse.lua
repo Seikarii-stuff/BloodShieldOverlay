@@ -37,6 +37,18 @@ for index = 1, MAX_PIPS do
     pipOrder[index] = index
 end
 
+local function ApplyCircularMask(texture)
+    local mask = texture:GetParent():CreateMaskTexture()
+    mask:SetAllPoints(texture)
+    mask:SetTexture(
+        "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+        "CLAMPTOBLACKADDITIVE",
+        "CLAMPTOBLACKADDITIVE"
+    )
+    texture:AddMaskTexture(mask)
+    return mask
+end
+
 local function CreateCircularPip(parent, index)
     local pip = CreateFrame("StatusBar", nil, parent)
     pip:SetSize(PIP_SIZE, PIP_SIZE)
@@ -49,19 +61,12 @@ local function CreateCircularPip(parent, index)
     local background = pip:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints()
     background:SetColorTexture(0.15, 0.15, 0.15, 0.75)
+    pip.BSOMouseBackgroundMask = ApplyCircularMask(background)
 
-    -- Same supported circular mask pattern used by Minimizer.Widgets.CreatePip.
+    -- Apply the same supported circular mask pattern used by Minimizer.Widgets.CreatePip.
     local fill = pip:GetStatusBarTexture()
     if fill and fill.AddMaskTexture then
-        local mask = pip:CreateMaskTexture()
-        mask:SetAllPoints(fill)
-        mask:SetTexture(
-            "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
-            "CLAMPTOBLACKADDITIVE",
-            "CLAMPTOBLACKADDITIVE"
-        )
-        fill:AddMaskTexture(mask)
-        pip.BSOMouseMask = mask
+        pip.BSOMouseMask = ApplyCircularMask(fill)
     end
 
     pip.BSOMouseIndex = index
@@ -100,7 +105,7 @@ local function UpdatePips()
     local diameter = PIP_SIZE
     local radius = CURSOR_RADIUS
     -- Keep the same center used by the current overlay. Only the semicircle
-    -- side changes: the arc is mirrored from the bottom to the left.
+    -- side changes: the arc is on the LEFT side of that center.
     local centerX = overlay:GetWidth() * 0.5
     local centerY = radius + diameter * 0.5
     local step = PI / math_max(1, maximum - 1)
@@ -108,8 +113,9 @@ local function UpdatePips()
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            -- Left semicircle around the same center, from bottom to top.
-            local angle = (PI * 1.5) + (index - 1) * step
+            -- Left semicircle, from bottom to top. Decreasing the angle is
+            -- what mirrors the previous right-side arc onto the left.
+            local angle = (PI * 1.5) - (index - 1) * step
             pip:ClearAllPoints()
             pip:SetPoint(
                 "CENTER", overlay, "BOTTOMLEFT",
