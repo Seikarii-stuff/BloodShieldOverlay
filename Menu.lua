@@ -154,7 +154,6 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
         noneInfo.text = "None"
         noneInfo.checked = config["mouseCooldown" .. slot .. "Spell"] == nil
         noneInfo.hasArrow = false
-        noneInfo.icon = nil
         noneInfo.func = function()
             SetMouseCooldown(slot, nil)
             CloseDropDownMenus()
@@ -171,7 +170,6 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
                 info.value = id
                 info.checked = config["mouseCooldown" .. slot .. "Spell"] == id
                 info.hasArrow = false
-                info.icon = nil
                 info.func = function()
                     SetMouseCooldown(slot, id)
                     CloseDropDownMenus()
@@ -180,11 +178,8 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
             end
         end
     end)
-    -- Midnight's UIDropDownMenu_SetWidth signature is (width, frame).
-    UIDropDownMenu_SetWidth(145, button)
-    button:SetScript("OnShow", function(self)
-        UIDropDownMenu_SetText(FindSpellName(config["mouseCooldown" .. slot .. "Spell"]), self)
-    end)
+    -- UIDropDownMenu_SetWidth expects the dropdown frame first, width second.
+    UIDropDownMenu_SetWidth(button, 145)
 end
 
 local function CreateConfigMenu()
