@@ -132,12 +132,16 @@ local function ApplyPips()
     local gw = tonumber(menuFrame.pipWidthEdit:GetText())
     local gh = tonumber(menuFrame.pipHeightEdit:GetText())
     local mw = tonumber(menuFrame.mouseCooldownPipSizeEdit:GetText())
-    if not rw or not rh or not gw or not gh or not mw then return false end
+    local spacing = tonumber(menuFrame.mouseResourceArcSpacingEdit:GetText())
+    if not rw or not rh or not gw or not gh or not mw or not spacing then return false end
+    if spacing < 0.5 or spacing > 1.5 then return false end
     local ok = true
     if type(addon.SetSpecialResourcePipSize) == "function" then ok = addon.SetSpecialResourcePipSize(rw, rh) == true and ok end
     if type(addon.SetClassResourceOverlayPipSize) == "function" then ok = addon.SetClassResourceOverlayPipSize(gw, gh) == true and ok end
     config.mouseCooldownPipSize = mw
+    config.mouseResourceArcSpacing = spacing
     if type(addon.RefreshMouseCooldowns) == "function" then addon.RefreshMouseCooldowns() end
+    if type(addon.UpdateMouseResourceOverlay) == "function" then addon.UpdateMouseResourceOverlay() end
     return ok
 end
 
@@ -162,6 +166,7 @@ Refresh = function()
     menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
     menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
     menuFrame.mouseCooldownPipSizeEdit:SetText(tostring(config.mouseCooldownPipSize or 8))
+    menuFrame.mouseResourceArcSpacingEdit:SetText(tostring(config.mouseResourceArcSpacing or 1.0))
 
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar == true)
     menuFrame.healthCheck:SetChecked(config.showHealth ~= false)
@@ -218,6 +223,11 @@ local function CreateConfigMenu()
     Label(menuFrame, "Mouse cooldown pip size"):SetPoint("TOPLEFT", 28, mousePipY)
     menuFrame.mouseCooldownPipSizeEdit = Input(menuFrame, 55)
     menuFrame.mouseCooldownPipSizeEdit:SetPoint("TOPLEFT", 235, mousePipY + 2)
+
+    local mouseArcY = row(32)
+    Label(menuFrame, "Mouse resource arc spacing"):SetPoint("TOPLEFT", 28, mouseArcY)
+    menuFrame.mouseResourceArcSpacingEdit = Input(menuFrame, 55)
+    menuFrame.mouseResourceArcSpacingEdit:SetPoint("TOPLEFT", 235, mouseArcY + 2)
 
     local capY = row(32)
     Label(menuFrame, "Main bar Max %"):SetPoint("TOPLEFT", 28, capY)
