@@ -22,6 +22,7 @@ local DEFAULTS = {
     mouseCooldown2Spell = nil,
     mouseCooldownPipSize = 8,
     mouseResourceArcSpacing = 1.0,
+    mouseResourceArcStart = 1.0,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -76,6 +77,7 @@ local FIELD_VALIDATORS = {
     mouseCooldown2Spell = IsOptionalSpellID,
     mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
     mouseResourceArcSpacing = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
+    mouseResourceArcStart = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
 }
 
 local function ApplyDefaults(db)
