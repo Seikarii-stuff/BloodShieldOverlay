@@ -79,8 +79,11 @@ local function CreateCooldown(parent, index)
     frame.BSOMouseIcon = icon
 
     local chargeText = frame:CreateFontString(nil, "OVERLAY")
-    chargeText:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    chargeText:SetJustifyH("CENTER")
+    -- Right-anchor the number so single digits start at the right side of the
+    -- icon instead of growing leftward over the cooldown swipe. Two digits
+    -- naturally expand left only when necessary (e.g. 12 charges).
+    chargeText:SetPoint("RIGHT", frame, "RIGHT", -0.5, 0)
+    chargeText:SetJustifyH("RIGHT")
     chargeText:SetJustifyV("MIDDLE")
     chargeText:SetFont(STANDARD_TEXT_FONT, CHARGE_FONT_SIZE, "OUTLINE")
     chargeText:SetTextColor(1, 1, 1, 1)
