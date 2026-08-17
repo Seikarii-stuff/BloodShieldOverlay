@@ -11,16 +11,18 @@ local frame, bar, nameText, config
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local type = type
+local math_max = math.max
+local UnitName = UnitName
+local UnitClass = UnitClass
+local UnitHealth = UnitHealth
+local UnitHealthMax = UnitHealthMax
+local C_ClassColor = C_ClassColor
 
 local function UpdateVisuals()
     if not frame or not bar or not nameText or not config or not config.showTargetTarget then return end
 
-    -- UnitName may be a secret string on restricted unit identities. SetText is
-    -- explicitly allowed to consume secret text, so pass it straight through.
     nameText:SetText(UnitName(UNIT))
 
-    -- UnitClass can legitimately return nil for units without class data. Never
-    -- pass that nil to C_ClassColor. For class units Blizzard resolves the color.
     local _, classFilename = UnitClass(UNIT)
     if classFilename ~= nil and C_ClassColor then
         local classColor = C_ClassColor.GetClassColor(classFilename)
@@ -29,7 +31,6 @@ local function UpdateVisuals()
             return
         end
     end
-
     bar:SetStatusBarColor(0.20, 0.85, 0.25, 0.95)
 end
 
@@ -64,13 +65,13 @@ local function SetLocked(locked)
     else
         frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart", function(self)
-            if InCombatLockdown() then return end
-            self:StartMoving()
+            if not InCombatLockdown() then self:StartMoving() end
         end)
         frame:SetScript("OnDragStop", function(self)
-            if InCombatLockdown() then return end
-            self:StopMovingOrSizing()
-            SavePosition()
+            if not InCombatLockdown() then
+                self:StopMovingOrSizing()
+                SavePosition()
+            end
         end)
     end
     return true
@@ -81,13 +82,7 @@ local function Create()
 
     frame = CreateFrame("Button", "BloodShieldOverlayTargetTargetBar", UIParent, "SecureUnitButtonTemplate")
     frame:SetSize(config.targetTargetWidth, config.targetTargetHeight)
-    frame:SetPoint(
-        config.targetTargetPoint,
-        UIParent,
-        config.targetTargetRelativePoint,
-        config.targetTargetXOffset,
-        config.targetTargetYOffset
-    )
+    frame:SetPoint(config.targetTargetPoint, UIParent, config.targetTargetRelativePoint, config.targetTargetXOffset, config.targetTargetYOffset)
     frame:SetFrameStrata("LOW")
     frame:SetAttribute("unit", UNIT)
     frame:SetAttribute("type1", "none")
@@ -106,8 +101,6 @@ local function Create()
     bar:SetOrientation("HORIZONTAL")
     bar:SetFrameLevel(frame:GetFrameLevel() + 1)
 
-    -- FontStrings created by the frame can otherwise end up underneath a child
-    -- StatusBar. Put the text in a dedicated overlay frame above the bar.
     local textOverlay = CreateFrame("Frame", nil, frame)
     textOverlay:SetAllPoints(frame)
     textOverlay:SetFrameLevel(frame:GetFrameLevel() + 10)
@@ -115,7 +108,7 @@ local function Create()
 
     nameText = textOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameText:SetPoint("CENTER", textOverlay, "CENTER", 0, 0)
-    nameText:SetWidth(math.max(1, config.targetTargetWidth - 4))
+    nameText:SetWidth(math_max(1, config.targetTargetWidth - 4))
     nameText:SetJustifyH("CENTER")
     nameText:SetJustifyV("MIDDLE")
     nameText:SetWordWrap(false)
@@ -145,26 +138,33 @@ local function Enable(show)
 end
 
 local function ApplySize(width, height)
-    if type(width) ~= "number" or type(height) ~= "number" or width <= 0 or height <= 0 then
-        return false
-    end
+    if type(width) ~= "number" or type(height) ~= "number" or width <= 0 or height <= 0 then return false end
     if InCombatLockdown() then return false end
     config.targetTargetWidth, config.targetTargetHeight = width, height
     if frame then
         frame:SetSize(width, height)
-        if nameText then nameText:SetWidth(math.max(1, width - 4)) end
+        if nameText then nameText:SetWidth(math_max(1, width - 4)) end
     end
     return true
 end
 
 local events = CreateFrame("Frame")
-for _, eventName in ipairs({ "PLAYER_TARGET_CHANGED", "UNIT_TARGET", "UNIT_HEALTH", "UNIT_MAXHEALTH" }) do
-    events:RegisterEvent(eventName)
-end
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:RegisterEvent("UNIT_TARGET")
+events:RegisterEvent("UNIT_HEALTH")
+events:RegisterEvent("UNIT_MAXHEALTH")
 
-events:SetScript("OnEvent", function(_, _, unit)
-    if not unit or unit == "target" or unit == UNIT then
-        Update()
+events:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_TARGET_CHANGED" then
+        if addon.ScheduleTargetTargetUpdate then addon.ScheduleTargetTargetUpdate() end
+    elseif event == "UNIT_TARGET" then
+        if unit == "target" or unit == UNIT then
+            if addon.ScheduleTargetTargetUpdate then addon.ScheduleTargetTargetUpdate() end
+        end
+    elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
+        if unit == UNIT then
+            if addon.ScheduleTargetTargetUpdate then addon.ScheduleTargetTargetUpdate() end
+        end
     end
 end)
 
@@ -174,6 +174,8 @@ addon.TargetTargetBarAPI = {
     SetLocked = SetLocked,
     Refresh = Update,
 }
+
+addon.RegisterTargetTargetUpdateListener(Update)
 
 addon.RegisterInitializer(function()
     config = addon.PlayerBarConfig.Initialize()
