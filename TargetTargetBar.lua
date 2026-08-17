@@ -1,9 +1,7 @@
 -- Minimal healer target-of-target bar.
--- IMPORTANT: Midnight returns secret values from UnitHealth/UnitHealthMax for
--- protected/hostile units. Never branch on, compare, or otherwise inspect those
--- values. Feed them directly to the Blizzard StatusBar; the game renders them.
--- The frame is a SecureUnitButton so the unit can also be used by @mouseover
--- secure spell macros without this module performing protected casts itself.
+-- Midnight secret values are passed directly to Blizzard StatusBar APIs.
+-- They are never compared, converted, or inspected by this addon.
+-- The frame is a SecureUnitButton so it can be used by secure @mouseover macros.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -17,10 +15,7 @@ local type = type
 
 local function Update()
     if not frame or not config or not config.showTargetTarget then return end
-
-    -- DO NOT call UnitHealthMax and compare the result. In Midnight the value
-    -- can be secret. StatusBar is allowed to consume the secret directly and
-    -- Blizzard performs the rendering internally.
+    -- Never inspect secret health values. Blizzard's StatusBar consumes them.
     bar:SetMinMaxValues(0, UnitHealthMax(UNIT))
     bar:SetValue(UnitHealth(UNIT))
 end
@@ -60,9 +55,6 @@ end
 local function Create()
     if frame or InCombatLockdown() then return frame ~= nil end
 
-    -- SecureUnitButtonTemplate makes this a real unit frame. Because its unit
-    -- attribute is "targettarget", hovering it exposes that unit to secure
-    -- [@mouseover] macros. No insecure spell cast is performed here.
     frame = CreateFrame("Button", "BloodShieldOverlayTargetTargetBar", UIParent, "SecureUnitButtonTemplate")
     frame:SetSize(config.targetTargetWidth, config.targetTargetHeight)
     frame:SetPoint(
@@ -74,6 +66,8 @@ local function Create()
     )
     frame:SetFrameStrata("LOW")
     frame:SetAttribute("unit", UNIT)
+    -- No direct spell/click action yet. The secure unit identity remains
+    -- available to a future @mouseover macro without insecure casts here.
     frame:SetAttribute("type1", "none")
     frame:SetAttribute("type2", "none")
     frame:RegisterForClicks("AnyUp", "AnyDown")
@@ -90,13 +84,7 @@ local function Create()
     bar:SetOrientation("HORIZONTAL")
     bar:SetFrameLevel(frame:GetFrameLevel() + 1)
 
-    -- Blizzard owns visibility based on the secure unit. This avoids any
-    -- insecure UnitExists/branching logic and means the addon never needs to
-    -- inspect whether the secret unit currently exists.
-    if RegisterUnitWatch then
-        RegisterUnitWatch(frame)
-    end
-
+    if RegisterUnitWatch then RegisterUnitWatch(frame) end
     SetLocked(config.targetTargetLocked)
     Update()
     return true
@@ -104,12 +92,10 @@ end
 
 local function Enable(show)
     if InCombatLockdown() then return false end
-
     config.showTargetTarget = show and true or false
+
     if not config.showTargetTarget then
-        if frame and UnregisterUnitWatch then
-            UnregisterUnitWatch(frame)
-        end
+        if frame and UnregisterUnitWatch then UnregisterUnitWatch(frame) end
         if frame then frame:Hide() end
         return true
     end
@@ -125,7 +111,6 @@ local function ApplySize(width, height)
         return false
     end
     if InCombatLockdown() then return false end
-
     config.targetTargetWidth, config.targetTargetHeight = width, height
     if frame then frame:SetSize(width, height) end
     return true
@@ -133,8 +118,8 @@ end
 
 local function BuildOptions(menu)
     if options or not menu then return end
-
     menu:SetHeight(math.max(menu:GetHeight(), 500))
+
     local anchor = menu.classOverlayCheck or menu.specialResCheck
     local p = CreateFrame("Frame", nil, menu)
     p:SetSize(440, 95)
@@ -192,17 +177,13 @@ local function BuildOptions(menu)
     unlock:SetSize(75, 22)
     unlock:SetPoint("TOPLEFT", wl, "BOTTOMLEFT", -4, -8)
     unlock:SetText("Unlock")
-    unlock:SetScript("OnClick", function()
-        SetLocked(false)
-    end)
+    unlock:SetScript("OnClick", function() SetLocked(false) end)
 
     local lock = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
     lock:SetSize(65, 22)
     lock:SetPoint("LEFT", unlock, "RIGHT", 6, 0)
     lock:SetText("Lock")
-    lock:SetScript("OnClick", function()
-        SetLocked(true)
-    end)
+    lock:SetScript("OnClick", function() SetLocked(true) end)
 end
 
 local function RefreshOptions()
@@ -213,37 +194,28 @@ local function RefreshOptions()
 end
 
 local function HookMenu()
-    if not addon.PlayerBarAPI or not addon.PlayerBarAPI.ShowConfigMenu then return end
-    if addon.PlayerBarAPI.ShowConfigMenu.__tt then return end
+    if not addon.ShowConfigMenu or not hooksecurefunc then return end
+    if addon._TargetTargetConfigHooked then return end
 
-    local old = addon.PlayerBarAPI.ShowConfigMenu
-    local show = function(...)
-        old(...)
+    -- ShowConfigMenu is a function, not a table. The previous implementation
+    -- tried to attach a marker field to it, which is invalid in Lua 5.1.
+    -- hooksecurefunc preserves Blizzard/addon ownership of the original method.
+    hooksecurefunc(addon, "ShowConfigMenu", function()
         local menu = _G.BloodShieldOverlayConfig
         if menu then
             BuildOptions(menu)
             RefreshOptions()
         end
-    end
-    show.__tt = true
-    addon.PlayerBarAPI.ShowConfigMenu = show
-    addon.ShowConfigMenu = show
+    end)
+    addon._TargetTargetConfigHooked = true
 end
 
 local events = CreateFrame("Frame")
-for _, eventName in ipairs({
-    "PLAYER_TARGET_CHANGED",
-    "UNIT_TARGET",
-    "UNIT_HEALTH",
-    "UNIT_MAXHEALTH",
-}) do
+for _, eventName in ipairs({ "PLAYER_TARGET_CHANGED", "UNIT_TARGET", "UNIT_HEALTH", "UNIT_MAXHEALTH" }) do
     events:RegisterEvent(eventName)
 end
 
 events:SetScript("OnEvent", function(_, _, unit)
-    -- Event payloads are ordinary unit-token strings here. We do not inspect
-    -- any health value; Update passes the potentially-secret values straight
-    -- into Blizzard's StatusBar implementation.
     if not unit or unit == "target" or unit == UNIT then
         Update()
     end
@@ -267,8 +239,6 @@ addon.RegisterInitializer(function()
     config.targetTargetXOffset = config.targetTargetXOffset or 0
     config.targetTargetYOffset = config.targetTargetYOffset or -140
 
-    if config.showTargetTarget then
-        Create()
-    end
+    if config.showTargetTarget then Create() end
     HookMenu()
 end)
