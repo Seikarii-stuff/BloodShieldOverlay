@@ -27,25 +27,29 @@ local function CreateCheckBox(parent, labelText, onClick)
     return check
 end
 
+local function SetAllBarsLocked(locked)
+    if addon.PlayerBarAPI and addon.PlayerBarAPI.SetLocked then addon.PlayerBarAPI.SetLocked(locked) end
+    if addon.TargetTargetBarAPI and addon.TargetTargetBarAPI.SetLocked then addon.TargetTargetBarAPI.SetLocked(locked) end
+    config.locked = locked and true or false
+    config.targetTargetLocked = locked and true or false
+end
+
 local function Refresh()
     if not menuFrame or not config then return end
-
     menuFrame.widthEdit:SetText(tostring(config.width))
     menuFrame.heightEdit:SetText(tostring(config.height))
     menuFrame.capEdit:SetText(tostring((config.capMultiplier or 2) * 100))
+    menuFrame.targetTargetWidthEdit:SetText(tostring(config.targetTargetWidth))
+    menuFrame.targetTargetHeightEdit:SetText(tostring(config.targetTargetHeight))
     menuFrame.resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth))
     menuFrame.resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight))
     menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth))
     menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight))
-
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar and true or false)
     menuFrame.healthCheck:SetChecked(config.showHealth and true or false)
     menuFrame.specialResCheck:SetChecked(config.showSpecialResources and true or false)
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay and true or false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget and true or false)
-    menuFrame.targetTargetWidthEdit:SetText(tostring(config.targetTargetWidth))
-    menuFrame.targetTargetHeightEdit:SetText(tostring(config.targetTargetHeight))
-
     if menuFrame.resButton then
         local mode = config.resourceDisplay or "left"
         menuFrame.resButton:SetText(mode:gsub("^%l", string.upper))
@@ -57,7 +61,6 @@ local function ApplyMainBar()
     local height = tonumber(menuFrame.heightEdit:GetText())
     local capPercent = tonumber(menuFrame.capEdit:GetText())
     local minCap = addon.PlayerBarConfig.GetMinCapPercent()
-
     if not width or width <= 0 or not height or height <= 0 then
         print("BloodShieldOverlay: width and height must be positive numbers.")
         return
@@ -66,44 +69,10 @@ local function ApplyMainBar()
         print(string.format("BloodShieldOverlay: Max %% must be at least %d.", minCap))
         return
     end
-
-    config.width = width
-    config.height = height
-    config.capMultiplier = capPercent / 100
-
-    local bar = _G.BloodShieldOverlayBar
-    if bar then
-        bar:SetSize(width, height)
-    end
-
-    -- Reuse the existing Core 30 Hz player-update pipeline rather than adding
-    -- a second update loop just for the menu.
-    if addon.ScheduleUnitUpdate then
-        addon.ScheduleUnitUpdate("player")
-    end
-end
-
-local function ApplyPips()
-    local rw = tonumber(menuFrame.resourcePipWidthEdit:GetText())
-    local rh = tonumber(menuFrame.resourcePipHeightEdit:GetText())
-    if addon.SetSpecialResourcePipSize and addon.SetSpecialResourcePipSize(rw, rh) then
-        config.specialResourcePipWidth = rw
-        config.specialResourcePipHeight = rh
-    else
-        print("BloodShieldOverlay: resource pip width must be 2-20 and height 2-32.")
-        menuFrame.resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth))
-        menuFrame.resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight))
-    end
-
-    local gw = tonumber(menuFrame.pipWidthEdit:GetText())
-    local gh = tonumber(menuFrame.pipHeightEdit:GetText())
-    if addon.SetClassResourceOverlayPipSize and addon.SetClassResourceOverlayPipSize(gw, gh) then
-        config.classResourcePipWidth = gw
-        config.classResourcePipHeight = gh
-    else
-        print("BloodShieldOverlay: group pip width must be 4-32 and height 2-20.")
-        menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth))
-        menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight))
+    if addon.PlayerBarAPI and addon.PlayerBarAPI.ApplyDimensions then
+        if addon.PlayerBarAPI.ApplyDimensions(width, height, capPercent) then
+            config.width, config.height, config.capMultiplier = width, height, capPercent / 100
+        end
     end
 end
 
@@ -118,9 +87,29 @@ local function ApplyTargetTarget()
     end
 end
 
+local function ApplyPips()
+    local rw = tonumber(menuFrame.resourcePipWidthEdit:GetText())
+    local rh = tonumber(menuFrame.resourcePipHeightEdit:GetText())
+    if addon.SetSpecialResourcePipSize and addon.SetSpecialResourcePipSize(rw, rh) then
+        config.specialResourcePipWidth, config.specialResourcePipHeight = rw, rh
+    else
+        print("BloodShieldOverlay: resource pip width must be 2-20 and height 2-32.")
+        menuFrame.resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth))
+        menuFrame.resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight))
+    end
+    local gw = tonumber(menuFrame.pipWidthEdit:GetText())
+    local gh = tonumber(menuFrame.pipHeightEdit:GetText())
+    if addon.SetClassResourceOverlayPipSize and addon.SetClassResourceOverlayPipSize(gw, gh) then
+        config.classResourcePipWidth, config.classResourcePipHeight = gw, gh
+    else
+        print("BloodShieldOverlay: group pip width must be 4-32 and height 2-20.")
+        menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth))
+        menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight))
+    end
+end
+
 local function CreateConfigMenu()
     if menuFrame then return end
-
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
     menuFrame:SetSize(500, 545)
     menuFrame:SetPoint("CENTER")
@@ -138,10 +127,7 @@ local function CreateConfigMenu()
 
     local title = CreateLabel(menuFrame, "Shield Bar Settings", "GameFontNormalLarge")
     title:SetPoint("TOP", menuFrame, "TOP", 0, -14)
-
-    local info = CreateLabel(menuFrame,
-        "Click Unlock to drag the bar. Click Lock to anchor. Use /shield reload to refresh frames.",
-        "GameFontHighlightSmall")
+    local info = CreateLabel(menuFrame, "Unlock moves all addon bars. Lock anchors them. Use /shield reload to refresh frames.", "GameFontHighlightSmall")
     info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 18, -40)
     info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -18, -40)
     info:SetJustifyH("LEFT")
@@ -168,23 +154,42 @@ local function CreateConfigMenu()
     mainApply:SetText("Apply")
     mainApply:SetScript("OnClick", ApplyMainBar)
 
+    local targetRow = CreateLabel(menuFrame, "Target of Target:")
+    targetRow:SetPoint("TOPLEFT", row1, "BOTTOMLEFT", 0, -12)
+    menuFrame.targetTargetWidthEdit = CreateInputBox(menuFrame, 45)
+    menuFrame.targetTargetWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -44)
+    menuFrame.targetTargetHeightEdit = CreateInputBox(menuFrame, 45)
+    menuFrame.targetTargetHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -44)
+    local targetApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    targetApply:SetSize(60, 24)
+    targetApply:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -44)
+    targetApply:SetText("Apply")
+    targetApply:SetScript("OnClick", ApplyTargetTarget)
+    local targetCheck = CreateCheckBox(menuFrame, "Show target of target frame", function(self)
+        local enabled = self:GetChecked() and true or false
+        if addon.TargetTargetBarAPI and addon.TargetTargetBarAPI.Enable then
+            if not addon.TargetTargetBarAPI.Enable(enabled) then self:SetChecked(config.showTargetTarget and true or false) end
+        end
+    end)
+    targetCheck:SetPoint("LEFT", targetApply, "RIGHT", 10, 0)
+    menuFrame.targetTargetCheck = targetCheck
+
     local row2 = CreateLabel(menuFrame, "Personal Pips:")
-    row2:SetPoint("TOPLEFT", row1, "BOTTOMLEFT", 0, -18)
+    row2:SetPoint("TOPLEFT", targetRow, "BOTTOMLEFT", 0, -18)
     menuFrame.resourcePipWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.resourcePipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -46)
+    menuFrame.resourcePipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -74)
     menuFrame.resourcePipHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.resourcePipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -46)
+    menuFrame.resourcePipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -74)
 
     local row3 = CreateLabel(menuFrame, "Group Pips:")
     row3:SetPoint("TOPLEFT", row2, "BOTTOMLEFT", 0, -18)
     menuFrame.pipWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.pipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -74)
+    menuFrame.pipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -102)
     menuFrame.pipHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.pipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -74)
-
+    menuFrame.pipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -102)
     local pipApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     pipApply:SetSize(60, 24)
-    pipApply:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -74)
+    pipApply:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -102)
     pipApply:SetText("Apply")
     pipApply:SetScript("OnClick", ApplyPips)
 
@@ -194,13 +199,9 @@ local function CreateConfigMenu()
     resButton:SetSize(80, 22)
     resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
     resButton:SetScript("OnClick", function(self)
-        if config.resourceDisplay == "left" then
-            config.resourceDisplay = "right"
-        elseif config.resourceDisplay == "right" then
-            config.resourceDisplay = "none"
-        else
-            config.resourceDisplay = "left"
-        end
+        if config.resourceDisplay == "left" then config.resourceDisplay = "right"
+        elseif config.resourceDisplay == "right" then config.resourceDisplay = "none"
+        else config.resourceDisplay = "left" end
         self:SetText(config.resourceDisplay:gsub("^%l", string.upper))
         if addon.UpdateSpecialResourcesLayout then addon.UpdateSpecialResourcesLayout() end
         if addon.ScheduleUnitUpdate then addon.ScheduleUnitUpdate("player") end
@@ -213,96 +214,35 @@ local function CreateConfigMenu()
     end)
     visibilityCheck:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -14)
     menuFrame.visibilityCheck = visibilityCheck
-
     local healthCheck = CreateCheckBox(menuFrame, "Show health bar (red, 100% base)", function(self)
         config.showHealth = self:GetChecked() and true or false
         if addon.ScheduleUnitUpdate then addon.ScheduleUnitUpdate("player") end
     end)
     healthCheck:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 0, -2)
     menuFrame.healthCheck = healthCheck
-
     local specialResCheck = CreateCheckBox(menuFrame, "Show special resources (circles)", function(self)
         config.showSpecialResources = self:GetChecked() and true or false
         if addon.UpdateSpecialResources then addon.UpdateSpecialResources() end
     end)
     specialResCheck:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 0, -2)
     menuFrame.specialResCheck = specialResCheck
-
     local classOverlayCheck = CreateCheckBox(menuFrame, "Show special resources on group frames", function(self)
         config.showClassResourceOverlay = self:GetChecked() and true or false
-        if addon.SetClassResourceOverlayEnabled then
-            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
-        end
+        if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
     end)
     classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -2)
     menuFrame.classOverlayCheck = classOverlayCheck
-
-    ---------------------------------------------------------------------------
-    -- Target of Target: deliberately uses the same row/column language and
-    -- controls as the rest of this menu. It is not a separate popup.
-    ---------------------------------------------------------------------------
-    local targetTitle = CreateLabel(menuFrame, "Target of Target:")
-    targetTitle:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 0, -14)
-
-    local targetCheck = CreateCheckBox(menuFrame, "Show target of target frame", function(self)
-        local enabled = self:GetChecked() and true or false
-        if addon.TargetTargetBarAPI and addon.TargetTargetBarAPI.Enable then
-            if not addon.TargetTargetBarAPI.Enable(enabled) then
-                self:SetChecked(config.showTargetTarget and true or false)
-            end
-        end
-    end)
-    targetCheck:SetPoint("TOPLEFT", targetTitle, "BOTTOMLEFT", -2, -2)
-    menuFrame.targetTargetCheck = targetCheck
-
-    local tw = CreateLabel(menuFrame, "Width", "GameFontNormalSmall")
-    tw:SetPoint("TOPLEFT", targetCheck, "BOTTOMLEFT", 4, -6)
-    menuFrame.targetTargetWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.targetTargetWidthEdit:SetPoint("LEFT", tw, "RIGHT", 8, 0)
-
-    local th = CreateLabel(menuFrame, "Height", "GameFontNormalSmall")
-    th:SetPoint("LEFT", menuFrame.targetTargetWidthEdit, "RIGHT", 16, 0)
-    menuFrame.targetTargetHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.targetTargetHeightEdit:SetPoint("LEFT", th, "RIGHT", 8, 0)
-
-    local targetApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    targetApply:SetSize(60, 22)
-    targetApply:SetPoint("LEFT", menuFrame.targetTargetHeightEdit, "RIGHT", 12, 0)
-    targetApply:SetText("Apply")
-    targetApply:SetScript("OnClick", ApplyTargetTarget)
-
-    local targetUnlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    targetUnlock:SetSize(75, 22)
-    targetUnlock:SetPoint("TOPLEFT", tw, "BOTTOMLEFT", -4, -8)
-    targetUnlock:SetText("Unlock")
-    targetUnlock:SetScript("OnClick", function()
-        if addon.TargetTargetBarAPI then addon.TargetTargetBarAPI.SetLocked(false) end
-    end)
-
-    local targetLock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    targetLock:SetSize(65, 22)
-    targetLock:SetPoint("LEFT", targetUnlock, "RIGHT", 6, 0)
-    targetLock:SetText("Lock")
-    targetLock:SetScript("OnClick", function()
-        if addon.TargetTargetBarAPI then addon.TargetTargetBarAPI.SetLocked(true) end
-    end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(85, 24)
     unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
     unlock:SetText("Unlock")
-    unlock:SetScript("OnClick", function()
-        if addon.PlayerBarAPI then addon.PlayerBarAPI.SetLocked(false) end
-    end)
-
+    unlock:SetScript("OnClick", function() SetAllBarsLocked(false) end)
     local lock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     lock:SetSize(85, 24)
     lock:SetPoint("LEFT", unlock, "RIGHT", 8, 0)
     lock:SetText("Lock")
-    lock:SetScript("OnClick", function()
-        if addon.PlayerBarAPI then addon.PlayerBarAPI.SetLocked(true) end
-    end)
-
+    lock:SetScript("OnClick", function() SetAllBarsLocked(true) end)
     local closeBtn = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     closeBtn:SetSize(85, 24)
     closeBtn:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
@@ -317,18 +257,10 @@ local function ShowConfigMenu()
     menuFrame:Show()
 end
 
-addon.MenuAPI = {
-    ShowConfigMenu = ShowConfigMenu,
-    Refresh = Refresh,
-}
+addon.MenuAPI = { ShowConfigMenu = ShowConfigMenu, Refresh = Refresh }
 
 addon.RegisterInitializer(function()
     config = addon.PlayerBarConfig.Initialize()
-
-    -- Menu.lua is the sole owner of the active /shield UI. PlayerBar's legacy
-    -- menu remains unreachable for compatibility, but its API is replaced here.
-    if addon.PlayerBarAPI then
-        addon.PlayerBarAPI.ShowConfigMenu = ShowConfigMenu
-    end
+    if addon.PlayerBarAPI then addon.PlayerBarAPI.ShowConfigMenu = ShowConfigMenu end
     addon.ShowConfigMenu = ShowConfigMenu
 end)
