@@ -19,9 +19,8 @@ local function UpdateVisuals()
     -- explicitly allowed to consume secret text, so pass it straight through.
     nameText:SetText(UnitName(UNIT))
 
-    -- UnitClass can legitimately return nil for units without class data (for
-    -- example NPCs). Never pass that nil to C_ClassColor. For units that do
-    -- provide a class filename, Blizzard resolves the class color for us.
+    -- UnitClass can legitimately return nil for units without class data. Never
+    -- pass that nil to C_ClassColor. For class units Blizzard resolves the color.
     local _, classFilename = UnitClass(UNIT)
     if classFilename ~= nil and C_ClassColor then
         local classColor = C_ClassColor.GetClassColor(classFilename)
@@ -31,13 +30,11 @@ local function UpdateVisuals()
         end
     end
 
-    -- Non-class units retain the neutral default.
     bar:SetStatusBarColor(0.20, 0.85, 0.25, 0.95)
 end
 
 local function UpdateHealth()
     if not frame or not bar or not config or not config.showTargetTarget then return end
-    -- Never inspect secret health values. Blizzard's StatusBar consumes them.
     bar:SetMinMaxValues(0, UnitHealthMax(UNIT))
     bar:SetValue(UnitHealth(UNIT))
 end
@@ -93,8 +90,6 @@ local function Create()
     )
     frame:SetFrameStrata("LOW")
     frame:SetAttribute("unit", UNIT)
-    -- No direct spell/click action yet. Secure unit identity remains available
-    -- for the future interaction feature without performing protected actions.
     frame:SetAttribute("type1", "none")
     frame:SetAttribute("type2", "none")
     frame:RegisterForClicks("AnyUp", "AnyDown")
@@ -111,8 +106,16 @@ local function Create()
     bar:SetOrientation("HORIZONTAL")
     bar:SetFrameLevel(frame:GetFrameLevel() + 1)
 
-    nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    nameText:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    -- FontStrings created by the frame can otherwise end up underneath a child
+    -- StatusBar. Put the text in a dedicated overlay frame above the bar.
+    local textOverlay = CreateFrame("Frame", nil, frame)
+    textOverlay:SetAllPoints(frame)
+    textOverlay:SetFrameLevel(frame:GetFrameLevel() + 10)
+    textOverlay:EnableMouse(false)
+
+    nameText = textOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    nameText:SetPoint("CENTER", textOverlay, "CENTER", 0, 0)
+    nameText:SetWidth(math.max(1, config.targetTargetWidth - 4))
     nameText:SetJustifyH("CENTER")
     nameText:SetJustifyV("MIDDLE")
     nameText:SetWordWrap(false)
@@ -147,7 +150,10 @@ local function ApplySize(width, height)
     end
     if InCombatLockdown() then return false end
     config.targetTargetWidth, config.targetTargetHeight = width, height
-    if frame then frame:SetSize(width, height) end
+    if frame then
+        frame:SetSize(width, height)
+        if nameText then nameText:SetWidth(math.max(1, width - 4)) end
+    end
     return true
 end
 
