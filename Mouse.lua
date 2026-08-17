@@ -18,8 +18,8 @@ local powerTypes = Enum and Enum.PowerType
 
 local MAX_PIPS = 7
 local PIP_SIZE = 5
-local CURSOR_RADIUS = 10
-local UPDATE_INTERVAL = 0.033
+local CURSOR_RADIUS = 15
+local UPDATE_INTERVAL = 0.001
 local DEFAULT_COOLDOWN_SIZE = 8
 
 local enabled = false
