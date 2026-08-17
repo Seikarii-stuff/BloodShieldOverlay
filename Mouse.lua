@@ -1,4 +1,4 @@
--- Cursor overlay: special resources on the left, cooldowns on the right.
+-- Cursor overlay: special resources on the left, cooldowns flanking the arc.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -200,10 +200,15 @@ local function UpdateResourcePips()
 
     local radius = CURSOR_RADIUS
     local step = PI / math_max(1, maximum - 1)
+    -- Shift the whole resource semicircle one pip toward the right.
+    -- This makes the existing +2 cooldown position become the first
+    -- slot immediately before the arc, while the other cooldown sits
+    -- immediately after its far endpoint.
+    local startAngle = (PI * 0.5) - step
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            local angle = (PI * 0.5) + (index - 1) * step
+            local angle = startAngle + (index - 1) * step
             pip:ClearAllPoints()
             pip:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
             pip:Show()
@@ -228,9 +233,10 @@ local function UpdateCooldowns()
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
 
-            -- +1 and +2: the first two positions on the right-hand side,
-            -- following the upper semicircle rather than occupying its -1/-2 slots.
-            local angle = (PI * 0.5) - index * (PI / 6)
+            -- Cooldown 1 stays at the old +2 position (30 degrees), now
+            -- immediately before the shifted resource arc. Cooldown 2 is
+            -- immediately after the far end (270 degrees).
+            local angle = index == 1 and (PI / 6) or (PI * 1.5)
             frame:ClearAllPoints()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * CURSOR_RADIUS, math_sin(angle) * CURSOR_RADIUS)
         else
