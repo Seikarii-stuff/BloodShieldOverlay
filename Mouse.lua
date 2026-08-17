@@ -79,6 +79,11 @@ local function CreateCooldown(parent, index)
     if frame.SetReverse then frame:SetReverse(false) end
     if frame.SetHideCountdownNumbers then frame:SetHideCountdownNumbers(true) end
     if frame.SetSwipeTexture then frame:SetSwipeTexture("Interface\\Masks\\CircleMaskScalable") end
+
+    local icon = frame:CreateTexture(nil, "BACKGROUND")
+    icon:SetAllPoints(frame)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    frame.BSOMouseIcon = icon
     frame.BSOMouseSpellID = nil
     frame:Hide()
     return frame
@@ -115,53 +120,69 @@ local function FindSpellEntry(spellID)
     return nil
 end
 
+local function GetSpellTexture(spellID)
+    if C_Spell and C_Spell.GetSpellTexture then
+        local texture = C_Spell.GetSpellTexture(spellID)
+        if texture then return texture end
+    end
+    if GetSpellTexture then
+        return GetSpellTexture(spellID)
+    end
+    return nil
+end
+
 local function ApplyCooldown(frame, spellID)
     if not frame or not spellID or not FindSpellEntry(spellID) then
         if frame then
             frame.BSOMouseSpellID = nil
+            if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
             frame:Hide()
         end
         return false
     end
 
     frame.BSOMouseSpellID = spellID
+    if frame.BSOMouseIcon then
+        frame.BSOMouseIcon:SetTexture(GetSpellTexture(spellID))
+    end
 
-    -- Do not inspect start/duration values. Midnight can make cooldown values
-    -- secret under addon-restricted conditions. Blizzard's Cooldown widget is
-    -- explicitly designed to consume these values and paint the result itself.
+    -- The icon is the persistent visual for the selected spell. The Cooldown
+    -- widget is only the timer layer on top of it. Do not require cooldown data
+    -- to exist before showing the frame: a spell that is ready still needs to
+    -- be visible in the mouse overlay.
+    local cooldownApplied = false
+
     if C_Spell and C_Spell.GetSpellCooldownDuration and frame.SetCooldownFromDurationObject then
         local duration = C_Spell.GetSpellCooldownDuration(spellID)
         if duration then
             frame:SetCooldownFromDurationObject(duration, true)
-            frame:Show()
-            return true
+            cooldownApplied = true
         end
     end
 
-    if C_Spell and C_Spell.GetSpellCooldown then
+    if not cooldownApplied and C_Spell and C_Spell.GetSpellCooldown then
         local info = C_Spell.GetSpellCooldown(spellID)
         if info then
             if frame.SetCooldownTable then
                 frame:SetCooldownTable(info)
+                cooldownApplied = true
             elseif frame.SetCooldownFromExpression then
                 frame:SetCooldownFromExpression(spellID)
+                cooldownApplied = true
             end
-            frame:Show()
-            return true
         end
     end
 
-    if GetSpellCooldown then
+    if not cooldownApplied and GetSpellCooldown then
         local start, duration = GetSpellCooldown(spellID)
         if start ~= nil and duration ~= nil then
             frame:SetCooldown(start, duration)
-            frame:Show()
-            return true
+            cooldownApplied = true
         end
     end
 
-    frame:Hide()
-    return false
+    frame:Show()
+    return true
 end
 
 local function GetConfig()
@@ -218,6 +239,7 @@ local function UpdateCooldowns()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
         else
             frame.BSOMouseSpellID = nil
+            if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
             frame:Hide()
         end
     end
