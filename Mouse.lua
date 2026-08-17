@@ -20,8 +20,7 @@ local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 10
 local UPDATE_INTERVAL = 0.033
-local COOLDOWN_SIZE = 8
-local COOLDOWN_GAP = 3
+local DEFAULT_COOLDOWN_SIZE = 8
 
 local enabled = false
 local overlay
@@ -68,7 +67,7 @@ end
 
 local function CreateCooldown(parent, index)
     local frame = CreateFrame("Frame", "BloodShieldOverlayMouseCooldown" .. index, parent)
-    frame:SetSize(COOLDOWN_SIZE, COOLDOWN_SIZE)
+    frame:SetSize(DEFAULT_COOLDOWN_SIZE, DEFAULT_COOLDOWN_SIZE)
     frame:SetFrameLevel((parent:GetFrameLevel() or 0) + 6)
     frame:EnableMouse(false)
     frame:Hide()
@@ -131,9 +130,7 @@ local function GetSpellTexture(spellID)
         local texture = C_Spell.GetSpellTexture(spellID)
         if texture then return texture end
     end
-    if GetSpellTexture then
-        return GetSpellTexture(spellID)
-    end
+    if GetSpellTexture then return GetSpellTexture(spellID) end
     return nil
 end
 
@@ -164,17 +161,12 @@ local function ApplyCooldown(frame, spellID)
     if cooldown then
         if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
             local duration = C_Spell.GetSpellCooldownDuration(spellID)
-            if duration then
-                cooldown:SetCooldownFromDurationObject(duration)
-            end
+            if duration then cooldown:SetCooldownFromDurationObject(duration) end
         elseif C_Spell and C_Spell.GetSpellCooldown then
             local info = C_Spell.GetSpellCooldown(spellID)
             if info then
-                if cooldown.SetCooldownFromExpression then
-                    cooldown:SetCooldownFromExpression(spellID)
-                elseif cooldown.SetCooldownTable then
-                    cooldown:SetCooldownTable(info)
-                end
+                if cooldown.SetCooldownFromExpression then cooldown:SetCooldownFromExpression(spellID)
+                elseif cooldown.SetCooldownTable then cooldown:SetCooldownTable(info) end
             end
         elseif GetSpellCooldown then
             local start, duration = GetSpellCooldown(spellID)
@@ -226,17 +218,18 @@ local function UpdateCooldowns()
     local config = GetConfig()
     if not config or not overlay then return false end
     local anyVisible = false
+    local size = tonumber(config.mouseCooldownPipSize) or DEFAULT_COOLDOWN_SIZE
 
     for index = 1, 2 do
         local frame = cooldownFrames[index]
+        frame:SetSize(size, size)
         local spellID = config["mouseCooldown" .. index .. "Spell"]
         local slotEnabled = config["showMouseCooldown" .. index] == true
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
 
-            -- The resource semicircle is the left half of the ring. The mouse
-            -- cooldowns are the first two positions on the right half: +1 and
-            -- +2, i.e. the two positions after the semicircle, never -1/-2.
+            -- +1 and +2: the first two positions on the right-hand side,
+            -- following the upper semicircle rather than occupying its -1/-2 slots.
             local angle = (PI * 0.5) - index * (PI / 6)
             frame:ClearAllPoints()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * CURSOR_RADIUS, math_sin(angle) * CURSOR_RADIUS)
