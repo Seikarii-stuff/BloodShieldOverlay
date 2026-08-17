@@ -283,7 +283,7 @@ local function CreateConfigMenu()
         end
     end)
     menuFrame.mouseResourceCheck = AddCheck("Show special resources around mouse", function(self)
-        config.showMouseSpecialResources = self:GetChecked()
+        config.showMouseSpecialResources = self:GetChecked() == true
         RefreshMouseOverlay()
     end)
 
@@ -291,7 +291,7 @@ local function CreateConfigMenu()
     menuFrame.mouseCooldown1Check = Check(menuFrame, "Show mouse cooldown 1")
     menuFrame.mouseCooldown1Check:SetPoint("TOPLEFT", 24, cd1Y)
     menuFrame.mouseCooldown1Check:SetScript("OnClick", function(self)
-        config.showMouseCooldown1 = self:GetChecked()
+        config.showMouseCooldown1 = self:GetChecked() == true
         RefreshMouseOverlay()
     end)
     menuFrame.mouseCooldown1Button = CreateSpellDropdown(menuFrame, "BloodShieldOverlayMouseCooldownDropdown1", 1)
@@ -301,7 +301,7 @@ local function CreateConfigMenu()
     menuFrame.mouseCooldown2Check = Check(menuFrame, "Show mouse cooldown 2")
     menuFrame.mouseCooldown2Check:SetPoint("TOPLEFT", 24, cd2Y)
     menuFrame.mouseCooldown2Check:SetScript("OnClick", function(self)
-        config.showMouseCooldown2 = self:GetChecked()
+        config.showMouseCooldown2 = self:GetChecked() == true
         RefreshMouseOverlay()
     end)
     menuFrame.mouseCooldown2Button = CreateSpellDropdown(menuFrame, "BloodShieldOverlayMouseCooldownDropdown2", 2)
