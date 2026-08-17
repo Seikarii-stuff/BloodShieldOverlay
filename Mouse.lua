@@ -234,8 +234,9 @@ local function UpdateResourcePips()
     spacing = math_max(0.5, math_min(1.5, spacing))
     local baseStep = PI / math_max(1, maximum - 1)
     local step = baseStep * spacing
-    local arcCenter = PI * 0.5
-    local startAngle = arcCenter - (step * math_max(1, maximum - 1) / 2)
+    -- Keep the original arc's starting pip anchored exactly where it was.
+    -- Spacing changes only the distance between subsequent pips.
+    local startAngle = (PI * 0.5) - baseStep
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
