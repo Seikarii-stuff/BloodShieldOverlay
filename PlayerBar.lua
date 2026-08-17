@@ -196,6 +196,16 @@ function addon.SetPlayerBarDimensions(width, height, capPercent)
     return true
 end
 
+function addon.SetPlayerBarResourceDisplay(mode)
+    if mode ~= "left" and mode ~= "right" and mode ~= "none" then
+        return false
+    end
+    config.resourceDisplay = mode
+    UpdateResourceBarLayout()
+    UpdateSpecialResources()
+    return true
+end
+
 local function CreateSpecialResources()
     if specialResourceContainer or not bar then return end
     specialResourceContainer = CreateFrame("Frame", nil, resourceBar)
@@ -355,6 +365,9 @@ addon.PlayerBarAPI = {
         config.showSpecialResources = shown == true
         if not bar then CreateBar() end
         UpdateSpecialResources()
+    end,
+    SetResourceDisplay = function(mode)
+        return addon.SetPlayerBarResourceDisplay(mode)
     end,
     ApplyDimensions = function(width, height, capPercent)
         return addon.SetPlayerBarDimensions(width, height, capPercent)
