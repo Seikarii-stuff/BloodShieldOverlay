@@ -9,6 +9,10 @@ addon.HandleSlashCommand = function(msg)
     if msg == "" then
         if addon.MenuAPI and addon.MenuAPI.ShowConfigMenu then
             addon.MenuAPI.ShowConfigMenu()
+        elseif addon.ShowConfigMenu then
+            addon.ShowConfigMenu()
+        else
+            print("BloodShieldOverlay: configuration panel is not ready yet.")
         end
     elseif msg == "reload" then
         if addon.RequestRefresh then
