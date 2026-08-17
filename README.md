@@ -24,6 +24,14 @@
   - Respeta las restricciones de *secret values* de Midnight: los valores protegidos se entregan directamente a los widgets de Blizzard sin compararlos, convertirlos o inspeccionarlos.
   - Sus actualizaciones visuales utilizan el mismo **micro-throttle compartido de ~30 FPS** que el resto del addon.
 
+- **Recursos Especiales Alrededor del Ratón**:
+  - Opción independiente en `/shield`: **Show special resources around mouse**.
+  - Reutiliza el mismo proveedor y `RenderResourcePips()` que los recursos especiales de la barra personal y los overlays de grupo; no duplica la lógica de Holy Power, Esencia, Fragmentos de Alma, Chi, Combo Points o Runas.
+  - Los pips son **circulares** y siguen el mismo patrón de máscara circular soportado por Blizzard usado en Minimizer.
+  - Se disponen en una **semiluna inferior alrededor del cursor**, conservando el orden lógico del recurso; el último pip queda a la derecha.
+  - El addon no recalcula el estado de los recursos cada frame: el estado se actualiza mediante el listener compartido y la posición del conjunto respecto al cursor se refresca con un micro-throttle de ~30 FPS.
+  - `Mouse.lua` mantiene aislada esta presentación para poder añadir en el futuro una semiluna superior con indicadores de cooldown sin mezclar esa lógica con los recursos de clase.
+
 - **Recursos Especiales en Marcos de Grupo y Raid**:
   - Muestra los recursos especiales del jugador de forma horizontal en la parte inferior de su barra de maná/recurso de clase.
   - Funciona con `CompactPartyFrame`, `CompactRaidFrame`, `PartyFrame` y el modo *Always-In-Party*.
@@ -37,6 +45,7 @@
 - **Arquitectura de Alto Rendimiento**:
   - El procesamiento de eventos rápidos (`UNIT_ABSORB_AMOUNT_CHANGED`, `UNIT_HEALTH`) usa un throttle bajo demanda y reutiliza sus colas internas; la creación de overlays queda limitada a los ciclos de descubrimiento.
   - **Micro-Throttle (30 FPS / ~0.033s)**: Agrupa las ráfagas intensas de curación/absorción y las actualizaciones del Target of Target en combate a ~30 FPS para evitar sobrecargar el renderizador visual de WoW.
+  - El overlay del ratón no tiene un loop de actualización de recursos propio: solo actualiza su posición con el cursor a ~30 FPS mientras está activo.
   - **Escaneo Inteligente sin `EnumerateFrames()`**: Acceso dirigido con caché de clave débil (*weak-table*) para descubrir marcos sin recorrer todos los frames globales.
   - La barra personal solo usa el `OnUpdate` compartido y throttled del dispatcher; no crea un bucle de renderizado propio.
 
@@ -73,26 +82,31 @@
   - Barra compacta de Target of Target, nombre, color de clase y posicionamiento.
   - Mantiene separada la presentación de los datos y utiliza el dispatcher compartido para sus actualizaciones.
 
-5. **[Menu.lua](Menu.lua)**
-  - Interfaz central de configuración `/shield`, incluida la configuración de la barra Target of Target y el Unlock/Lock global.
+5. **[Mouse.lua](Mouse.lua)**
+  - Presentación de los recursos especiales alrededor del cursor.
+  - Pips circulares en semiluna inferior y posicionamiento throttled; reutiliza el proveedor/renderizador compartido.
+  - La semiluna superior queda reservada para futuros indicadores de cooldown.
 
-6. **[Configuration.lua](Configuration.lua)**
+6. **[Menu.lua](Menu.lua)**
+  - Interfaz central de configuración `/shield`, incluida la configuración de la barra Target of Target, el overlay del ratón y el Unlock/Lock global.
+
+7. **[Configuration.lua](Configuration.lua)**
   - Defaults, migración y perfiles almacenados (`BloodShieldOverlayProfiles`).
 
-7. **[ResourceProviders.lua](ResourceProviders.lua)**
+8. **[ResourceProviders.lua](ResourceProviders.lua)**
   - Proveedores extensibles para recursos especiales de clase y runas de Caballero de la Muerte.
   - La Esencia de Evoker muestra la recarga secuencial del siguiente pip, mientras que las runas mantienen sus seis recargas independientes.
 
-8. **[Commands.lua](Commands.lua)**
+9. **[Commands.lua](Commands.lua)**
   - Adaptador de comandos `/shield`; delega las operaciones de UI en la API pública del addon.
 
-9. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
+10. **[AbsorbIndicator.lua](AbsorbIndicator.lua)**
    - Helper ligero para la creación de StatusBar transparentes al ratón sobre los marcos de salud.
 
-10. **[BlizzardFrames.lua](BlizzardFrames.lua)**
+11. **[BlizzardFrames.lua](BlizzardFrames.lua)**
    - Descubrimiento dirigido de marcos de Blizzard y vinculación de overlays mediante `hooksecurefunc` y caché débil (`healthBarCache`).
 
-11. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
+12. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
   - Renderiza horizontalmente los recursos especiales del jugador sobre la barra de recurso de su marco de party/raid.
   - Mantiene separado el descubrimiento de marcos, el renderizado y la lógica de recursos de clase.
 
@@ -120,6 +134,9 @@ Estos tests no sustituyen la validación dentro del cliente PTR/Retail con marco
 - **Target of Target — posible mejora futura**:
   - El frame ya utiliza `SecureUnitButtonTemplate`, por lo que una futura interacción mediante **mouseover/click** para targetear o lanzar hechizos sobre el target mostrado es técnicamente posible.
   - Se mantiene deliberadamente fuera de la implementación actual. Solo se añadirá si el uso real del frame demuestra que aporta suficiente valor como para justificar la complejidad adicional de los secure attributes y las restricciones de combate.
+- **Semiluna superior del overlay del ratón — posible mejora futura**:
+  - `Mouse.lua` deja reservada la semiluna superior para pequeños indicadores de cooldown (por ejemplo, Choque Sagrado o Estrago Divino).
+  - No se implementa todavía; se añadirá únicamente si resulta útil en el uso real y puede integrarse sin convertir el overlay del cursor en un coste de actualización permanente.
 - **Futura Idea de Mejora**:
   - Añadir en el menú gráfico una opción para activar/desactivar individualmente los overlays de Party/Raid de forma independiente a la barra principal.
 
