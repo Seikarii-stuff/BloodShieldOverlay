@@ -50,6 +50,7 @@ local function Refresh()
     menuFrame.specialResCheck:SetChecked(config.showSpecialResources and true or false)
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay and true or false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget and true or false)
+    menuFrame.mouseResourceCheck:SetChecked(config.showMouseSpecialResources and true or false)
     if menuFrame.resButton then
         local mode = config.resourceDisplay or "left"
         menuFrame.resButton:SetText(mode:gsub("^%l", string.upper))
@@ -232,6 +233,16 @@ local function CreateConfigMenu()
     end)
     classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -2)
     menuFrame.classOverlayCheck = classOverlayCheck
+
+    local mouseResourceCheck = CreateCheckBox(menuFrame, "Show special resources around mouse", function(self)
+        local enabled = self:GetChecked() and true or false
+        config.showMouseSpecialResources = enabled
+        if addon.SetMouseResourceOverlayEnabled then
+            addon.SetMouseResourceOverlayEnabled(enabled)
+        end
+    end)
+    mouseResourceCheck:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 0, -2)
+    menuFrame.mouseResourceCheck = mouseResourceCheck
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(85, 24)
