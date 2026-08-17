@@ -5,7 +5,7 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 3, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 4, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
@@ -15,6 +15,7 @@ local DEFAULTS = {
     targetTargetWidth = 130, targetTargetHeight = 10, targetTargetLocked = true,
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
+    showMouseSpecialResources = false,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -61,6 +62,7 @@ local FIELD_VALIDATORS = {
     targetTargetRelativePoint = IsPoint,
     targetTargetXOffset = function(value) return type(value) == "number" end,
     targetTargetYOffset = function(value) return type(value) == "number" end,
+    showMouseSpecialResources = IsBoolean,
 }
 
 local function ApplyDefaults(db)
