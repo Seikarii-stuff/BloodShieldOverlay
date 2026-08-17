@@ -17,6 +17,7 @@ TargetTargetBar.lua
 data/SpellData.lua
 Mouse.lua
 Menu.lua
+ResourceDisplayMenu.lua
 options.lua
 Commands.lua
 BlizzardFrames.lua
