@@ -29,6 +29,10 @@ local DEFAULTS = addon.PlayerBarConfig.GetDefaults()
 local MIN_CAP_PERCENT = addon.PlayerBarConfig.GetMinCapPercent()
 local config = {}
 
+-- Forward declaration: SetPlayerBarDimensions can be called by the menu before
+-- the UpdateBar implementation appears later in this file.
+local UpdateBar
+
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then
         return UnitGetTotalAbsorbs(unit) or 0
@@ -306,7 +310,7 @@ local function UpdateExternalBarVisibility()
     end
 end
 
-local function UpdateBar(absorb, maxHP)
+UpdateBar = function(absorb, maxHP)
     if not bar then CreateBar() end
     if not bar then return end
     if config.hideExternalBar then
@@ -353,10 +357,12 @@ addon.PlayerBarAPI = {
     IsLocked = function() return config.locked end,
     SetLocked = function(locked)
         config.locked = locked and true or false
+        if not bar then CreateBar() end
         UpdateBarLock()
     end,
     SetHidden = function(hidden)
         config.hideExternalBar = hidden and true or false
+        if not bar then CreateBar() end
         UpdateExternalBarVisibility()
         if not hidden then UpdateBar() end
     end,
