@@ -65,15 +65,15 @@ addon.Data.MOUSE_COOLDOWNS = {
         { id = 102558, name = "Incarnation" },
     },
     DEMONHUNTER = {
-        { id = 183752, name = "Consume Magic" },
-        { id = 204596, name = "Sigil of Flame" },
-        { id = 195072, name = "Double Jump" },
-        { id = 188501, name = "Spectral Sight" },
+        { id = 183752, name = "Disrupt" },
+        { id = 232893, name = "Felblade" },
+        { id = 188499, name = "Blade Dance" },
+        { id = 258920, name = "Immolation Aura" },
     },
     EVOKER = {
-        { id = 351338, name = "Quell" },
-        { id = 370665, name = "Rescue" },
-        { id = 374251, name = "Renewing Blaze" },
-        { id = 361469, name = "Living Flame" },
+        { id = 357208, name = "Fire Breath" },
+        { id = 359073, name = "Eternity Surge" },
+        { id = 355936, name = "Dream Breath" },
+        { id = 367226, name = "Spiritbloom" },
     },
 }
