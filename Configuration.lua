@@ -5,12 +5,16 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 2, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 3, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
     specialResourcePipWidth = 2, specialResourcePipHeight = 10,
     resourceDisplay = "left",
+    showTargetTarget = false,
+    targetTargetWidth = 100, targetTargetHeight = 8, targetTargetLocked = true,
+    targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
+    targetTargetXOffset = 0, targetTargetYOffset = -140,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -32,14 +36,9 @@ local function EnsureProfileStore()
     return BloodShieldOverlayProfiles
 end
 
--- One validator per config field instead of a hand-written if/then per key.
--- Each validator receives the current value and returns true when it's
--- acceptable; an invalid or missing value falls back to DEFAULTS[key]. This
--- also means a newly-added config field can't be forgotten: if it's in
--- DEFAULTS but not in FIELD_VALIDATORS, ApplyDefaults still no-ops it in
--- (via the DEFAULTS copy above) even without a bespoke range check.
 local function IsPositiveNumber(value) return type(value) == "number" and value > 0 end
 local function IsBoolean(value) return type(value) == "boolean" end
+local function IsPoint(value) return type(value) == "string" and value ~= "" end
 
 local FIELD_VALIDATORS = {
     width = IsPositiveNumber,
@@ -54,6 +53,14 @@ local FIELD_VALIDATORS = {
     specialResourcePipWidth = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
     specialResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 32 end,
     resourceDisplay = function(value) return type(value) == "string" and RESOURCE_DISPLAY_MODES[value] == true end,
+    showTargetTarget = IsBoolean,
+    targetTargetWidth = IsPositiveNumber,
+    targetTargetHeight = IsPositiveNumber,
+    targetTargetLocked = IsBoolean,
+    targetTargetPoint = IsPoint,
+    targetTargetRelativePoint = IsPoint,
+    targetTargetXOffset = function(value) return type(value) == "number" end,
+    targetTargetYOffset = function(value) return type(value) == "number" end,
 }
 
 local function ApplyDefaults(db)
