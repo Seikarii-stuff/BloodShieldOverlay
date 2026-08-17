@@ -5,7 +5,7 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 5, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 6, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
@@ -21,6 +21,7 @@ local DEFAULTS = {
     mouseCooldown1Spell = nil,
     mouseCooldown2Spell = nil,
     mouseCooldownPipSize = 8,
+    mouseResourceArcSpacing = 1.0,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -74,6 +75,7 @@ local FIELD_VALIDATORS = {
     mouseCooldown1Spell = IsOptionalSpellID,
     mouseCooldown2Spell = IsOptionalSpellID,
     mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
+    mouseResourceArcSpacing = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
 }
 
 local function ApplyDefaults(db)
