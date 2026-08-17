@@ -20,6 +20,7 @@ local DEFAULTS = {
     showMouseCooldown2 = false,
     mouseCooldown1Spell = nil,
     mouseCooldown2Spell = nil,
+    mouseCooldownPipSize = 8,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -72,6 +73,7 @@ local FIELD_VALIDATORS = {
     showMouseCooldown2 = IsBoolean,
     mouseCooldown1Spell = IsOptionalSpellID,
     mouseCooldown2Spell = IsOptionalSpellID,
+    mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
 }
 
 local function ApplyDefaults(db)
