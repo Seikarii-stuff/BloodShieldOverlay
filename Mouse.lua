@@ -1,6 +1,6 @@
 -- Cursor-side special-resource overlay.
 -- Reuses the shared special-resource provider/state renderer; only the presentation
--- (circular pips + lower semicircle placement) is unique to this module.
+-- (circular pips + left semicircle placement) is unique to this module.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -99,22 +99,22 @@ local function UpdatePips()
 
     local diameter = PIP_SIZE
     local radius = CURSOR_RADIUS
-    local centerX = overlay:GetWidth() * 0.5
-    local centerY = radius + diameter * 0.5
+    local centerX = radius + diameter * 0.5
+    local centerY = overlay:GetHeight() * 0.5
     local step = PI / math_max(1, maximum - 1)
 
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            -- Lower semicircle, ordered left-to-right while preserving the
-            -- provider's existing pip order. The rightmost pip remains the
-            -- final/last resource in the same order as the normal overlay.
-            local angle = PI - (index - 1) * step
+            -- Left semicircle, ordered bottom-to-top while preserving the
+            -- provider's existing pip order. The final/last resource remains
+            -- at the upper end of the arc.
+            local angle = (PI * 1.5) - (index - 1) * step
             pip:ClearAllPoints()
             pip:SetPoint(
                 "CENTER", overlay, "BOTTOMLEFT",
                 centerX + math_cos(angle) * radius,
-                centerY - math_sin(angle) * radius
+                centerY + math_sin(angle) * radius
             )
             pip:Show()
         else
