@@ -19,8 +19,9 @@ local powerTypes = Enum and Enum.PowerType
 local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 17
-local UPDATE_INTERVAL = 0.006944    --Extra for only this feature so it doesnt seem laggy
+local UPDATE_INTERVAL = 0.006944    -- Extra for only this feature so it doesnt seem laggy
 local DEFAULT_COOLDOWN_SIZE = 12
+local CHARGE_FONT_SIZE = 9
 
 local enabled = false
 local overlay
@@ -76,6 +77,16 @@ local function CreateCooldown(parent, index)
     icon:SetAllPoints()
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     frame.BSOMouseIcon = icon
+
+    local chargeText = frame:CreateFontString(nil, "OVERLAY")
+    chargeText:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    chargeText:SetJustifyH("CENTER")
+    chargeText:SetJustifyV("MIDDLE")
+    chargeText:SetFont(STANDARD_TEXT_FONT, CHARGE_FONT_SIZE, "OUTLINE")
+    chargeText:SetTextColor(1, 1, 1, 1)
+    chargeText:SetShadowOffset(0, 0)
+    chargeText:Hide()
+    frame.BSOMouseChargeText = chargeText
 
     local cooldown = CreateFrame("Cooldown", "BloodShieldOverlayMouseCooldownTimer" .. index, frame, "CooldownFrameTemplate")
     cooldown:SetAllPoints()
@@ -134,11 +145,29 @@ local function GetSpellTexture(spellID)
     return nil
 end
 
+local function UpdateCharges(frame, spellID)
+    local text = frame and frame.BSOMouseChargeText
+    if not text then return end
+
+    if C_Spell and C_Spell.GetSpellCharges then
+        local charges = C_Spell.GetSpellCharges(spellID)
+        if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
+            text:SetText(tostring(charges.currentCharges))
+            text:Show()
+            return
+        end
+    end
+
+    text:SetText(nil)
+    text:Hide()
+end
+
 local function ApplyCooldown(frame, spellID)
     if not frame or not spellID or not FindSpellEntry(spellID) then
         if frame then
             frame.BSOMouseSpellID = nil
             if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseChargeText then frame.BSOMouseChargeText:Hide() end
             if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
@@ -149,6 +178,7 @@ local function ApplyCooldown(frame, spellID)
     if not iconTexture then
         frame.BSOMouseSpellID = nil
         frame.BSOMouseIcon:SetTexture(nil)
+        frame.BSOMouseChargeText:Hide()
         frame.BSOMouseCooldown:Clear()
         frame:Hide()
         return false
@@ -156,6 +186,7 @@ local function ApplyCooldown(frame, spellID)
 
     frame.BSOMouseSpellID = spellID
     frame.BSOMouseIcon:SetTexture(iconTexture)
+    UpdateCharges(frame, spellID)
 
     local cooldown = frame.BSOMouseCooldown
     if cooldown then
@@ -200,10 +231,6 @@ local function UpdateResourcePips()
 
     local radius = CURSOR_RADIUS
     local step = PI / math_max(1, maximum - 1)
-    -- Shift the whole resource semicircle one pip toward the right.
-    -- This makes the existing +2 cooldown position become the first
-    -- slot immediately before the arc, while the other cooldown sits
-    -- immediately after its far endpoint.
     local startAngle = (PI * 0.5) - step
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
@@ -232,16 +259,13 @@ local function UpdateCooldowns()
         local slotEnabled = config["showMouseCooldown" .. index] == true
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
-
-            -- Cooldown 1 stays at the old +2 position (30 degrees), now
-            -- immediately before the shifted resource arc. Cooldown 2 is
-            -- immediately after the far end (270 degrees).
             local angle = index == 1 and (PI / 6) or (PI * 1.5)
             frame:ClearAllPoints()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * CURSOR_RADIUS, math_sin(angle) * CURSOR_RADIUS)
         else
             frame.BSOMouseSpellID = nil
             if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseChargeText then frame.BSOMouseChargeText:Hide() end
             if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
