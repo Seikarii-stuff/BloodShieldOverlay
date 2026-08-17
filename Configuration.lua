@@ -12,7 +12,7 @@ local DEFAULTS = {
     specialResourcePipWidth = 2, specialResourcePipHeight = 10,
     resourceDisplay = "left",
     showTargetTarget = false,
-    targetTargetWidth = 100, targetTargetHeight = 8, targetTargetLocked = true,
+    targetTargetWidth = 130, targetTargetHeight = 10, targetTargetLocked = true,
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
 }
