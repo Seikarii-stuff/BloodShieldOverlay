@@ -13,6 +13,7 @@ AbsorbIndicator.lua
 Configuration.lua
 ResourceProviders.lua
 PlayerBar.lua
+TargetTargetBar.lua
 options.lua
 Commands.lua
 BlizzardFrames.lua
