@@ -102,11 +102,7 @@ end
 
 local function GetMouseCooldownOptions()
     local data = addon.Data and addon.Data.MOUSE_COOLDOWNS
-    local bySpec = addon.Data and addon.Data.MOUSE_COOLDOWNS_BY_SPEC
     if not data then return {} end
-    local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization and C_SpecializationInfo.GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo and select(1, GetSpecializationInfo(specIndex))
-    if specID and bySpec and bySpec[specID] then return bySpec[specID] end
     return data[playerClass] or {}
 end
 
