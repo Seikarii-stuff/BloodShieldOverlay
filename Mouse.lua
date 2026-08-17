@@ -67,25 +67,35 @@ local function CreateCircularPip(parent, index)
     return pip
 end
 
+-- Keep the icon and the Cooldown as siblings, exactly like Minimizer's
+-- Focus/Target widgets. A Cooldown frame is the timer layer; it is not the
+-- icon container. This also means a ready spell is still visible.
 local function CreateCooldown(parent, index)
-    local frame = CreateFrame("Cooldown", "BloodShieldOverlayMouseCooldown" .. index, parent, "CooldownFrameTemplate")
+    local frame = CreateFrame("Frame", "BloodShieldOverlayMouseCooldown" .. index, parent)
     frame:SetSize(COOLDOWN_SIZE, COOLDOWN_SIZE)
     frame:SetFrameLevel((parent:GetFrameLevel() or 0) + 6)
     frame:EnableMouse(false)
-    if frame.SetDrawEdge then frame:SetDrawEdge(false) end
-    if frame.SetUseCircularEdge then frame:SetUseCircularEdge(true) end
-    if frame.SetDrawSwipe then frame:SetDrawSwipe(true) end
-    if frame.SetDrawBling then frame:SetDrawBling(false) end
-    if frame.SetReverse then frame:SetReverse(false) end
-    if frame.SetHideCountdownNumbers then frame:SetHideCountdownNumbers(true) end
-    if frame.SetSwipeTexture then frame:SetSwipeTexture("Interface\\Masks\\CircleMaskScalable") end
+    frame:Hide()
 
-    local icon = frame:CreateTexture(nil, "BACKGROUND")
-    icon:SetAllPoints(frame)
+    local icon = frame:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     frame.BSOMouseIcon = icon
+
+    local cooldown = CreateFrame("Cooldown", "BloodShieldOverlayMouseCooldownTimer" .. index, frame, "CooldownFrameTemplate")
+    cooldown:SetAllPoints()
+    cooldown:SetFrameLevel((frame:GetFrameLevel() or 0) + 1)
+    cooldown:EnableMouse(false)
+    if cooldown.SetDrawEdge then cooldown:SetDrawEdge(false) end
+    if cooldown.SetUseCircularEdge then cooldown:SetUseCircularEdge(true) end
+    if cooldown.SetDrawSwipe then cooldown:SetDrawSwipe(true) end
+    if cooldown.SetDrawBling then cooldown:SetDrawBling(false) end
+    if cooldown.SetReverse then cooldown:SetReverse(false) end
+    if cooldown.SetHideCountdownNumbers then cooldown:SetHideCountdownNumbers(true) end
+    if cooldown.SetSwipeTexture then cooldown:SetSwipeTexture("Interface\\Masks\\CircleMaskScalable") end
+
+    frame.BSOMouseCooldown = cooldown
     frame.BSOMouseSpellID = nil
-    frame:Hide()
     return frame
 end
 
@@ -136,51 +146,52 @@ local function ApplyCooldown(frame, spellID)
         if frame then
             frame.BSOMouseSpellID = nil
             if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
         return false
     end
 
+    local iconTexture = GetSpellTexture(spellID)
+    if not iconTexture then
+        frame.BSOMouseSpellID = nil
+        frame.BSOMouseIcon:SetTexture(nil)
+        frame.BSOMouseCooldown:Clear()
+        frame:Hide()
+        return false
+    end
+
     frame.BSOMouseSpellID = spellID
-    if frame.BSOMouseIcon then
-        frame.BSOMouseIcon:SetTexture(GetSpellTexture(spellID))
-    end
+    frame.BSOMouseIcon:SetTexture(iconTexture)
 
-    -- The icon is the persistent visual for the selected spell. The Cooldown
-    -- widget is only the timer layer on top of it. Do not require cooldown data
-    -- to exist before showing the frame: a spell that is ready still needs to
-    -- be visible in the mouse overlay.
-    local cooldownApplied = false
-
-    if C_Spell and C_Spell.GetSpellCooldownDuration and frame.SetCooldownFromDurationObject then
-        local duration = C_Spell.GetSpellCooldownDuration(spellID)
-        if duration then
-            frame:SetCooldownFromDurationObject(duration, true)
-            cooldownApplied = true
-        end
-    end
-
-    if not cooldownApplied and C_Spell and C_Spell.GetSpellCooldown then
-        local info = C_Spell.GetSpellCooldown(spellID)
-        if info then
-            if frame.SetCooldownTable then
-                frame:SetCooldownTable(info)
-                cooldownApplied = true
-            elseif frame.SetCooldownFromExpression then
-                frame:SetCooldownFromExpression(spellID)
-                cooldownApplied = true
+    local cooldown = frame.BSOMouseCooldown
+    if cooldown then
+        -- Match Minimizer's working implementation: prefer the modern
+        -- duration-object API, then the newer table API, then legacy API.
+        if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
+            local duration = C_Spell.GetSpellCooldownDuration(spellID)
+            if duration then
+                cooldown:SetCooldownFromDurationObject(duration)
+            end
+        elseif C_Spell and C_Spell.GetSpellCooldown then
+            local info = C_Spell.GetSpellCooldown(spellID)
+            if info then
+                if cooldown.SetCooldownFromExpression then
+                    cooldown:SetCooldownFromExpression(spellID)
+                elseif cooldown.SetCooldownTable then
+                    cooldown:SetCooldownTable(info)
+                end
+            end
+        elseif GetSpellCooldown then
+            local start, duration = GetSpellCooldown(spellID)
+            if start and duration then
+                cooldown:SetCooldown(start, duration)
             end
         end
     end
 
-    if not cooldownApplied and GetSpellCooldown then
-        local start, duration = GetSpellCooldown(spellID)
-        if start ~= nil and duration ~= nil then
-            frame:SetCooldown(start, duration)
-            cooldownApplied = true
-        end
-    end
-
+    -- Just like Minimizer Focus/Target: showing the container is independent
+    -- of whether the spell is currently on cooldown.
     frame:Show()
     return true
 end
@@ -233,13 +244,13 @@ local function UpdateCooldowns()
         local slotEnabled = config["showMouseCooldown" .. index] == true
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
-            -- Keep the two cooldown widgets on the opposite half from resources.
             local angle = (PI * 1.5) - (index - 1) * (COOLDOWN_SIZE + COOLDOWN_GAP) / math_max(radius, 1)
             frame:ClearAllPoints()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
         else
             frame.BSOMouseSpellID = nil
             if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
     end
