@@ -153,11 +153,13 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
         local noneInfo = UIDropDownMenu_CreateInfo()
         noneInfo.text = "None"
         noneInfo.checked = config["mouseCooldown" .. slot .. "Spell"] == nil
+        noneInfo.hasArrow = false
+        noneInfo.icon = nil
         noneInfo.func = function()
             SetMouseCooldown(slot, nil)
             CloseDropDownMenus()
         end
-        UIDropDownMenu_AddButton(noneInfo)
+        UIDropDownMenu_AddButton(noneInfo, level)
 
         for index = 1, #options do
             local entry = options[index]
@@ -168,16 +170,18 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
                 info.text = name or tostring(id)
                 info.value = id
                 info.checked = config["mouseCooldown" .. slot .. "Spell"] == id
-                info.disabled = IsPlayerSpell and not IsPlayerSpell(id) or false
+                info.hasArrow = false
+                info.icon = nil
                 info.func = function()
                     SetMouseCooldown(slot, id)
                     CloseDropDownMenus()
                 end
-                UIDropDownMenu_AddButton(info)
+                UIDropDownMenu_AddButton(info, level)
             end
         end
     end)
-    UIDropDownMenu_SetWidth(145, button)
+    -- Midnight signature is (frame, width), not (width, frame).
+    UIDropDownMenu_SetWidth(button, 145)
     button:SetScript("OnShow", function(self)
         UIDropDownMenu_SetText(FindSpellName(config["mouseCooldown" .. slot .. "Spell"]), self)
     end)
@@ -200,178 +204,144 @@ local function CreateConfigMenu()
     menuFrame:SetScript("OnDragStart", function(self) self:StartMoving() end)
     menuFrame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
 
-    local title = CreateLabel(menuFrame, "Shield Bar Settings", "GameFontNormalLarge")
-    title:SetPoint("TOP", menuFrame, "TOP", 0, -14)
-    local info = CreateLabel(menuFrame, "Unlock moves all addon bars. Lock anchors them. Use /shield reload to refresh frames.", "GameFontHighlightSmall")
-    info:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 18, -40)
-    info:SetPoint("TOPRIGHT", menuFrame, "TOPRIGHT", -18, -40)
-    info:SetJustifyH("LEFT")
+    local title = CreateLabel(menuFrame, "BloodShieldOverlay", "GameFontHighlightLarge")
+    title:SetPoint("TOP", 0, -20)
 
-    local colWidthHeader = CreateLabel(menuFrame, "Width", "GameFontNormalSmall")
-    colWidthHeader:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 182, -14)
-    local colHeightHeader = CreateLabel(menuFrame, "Height", "GameFontNormalSmall")
-    colHeightHeader:SetPoint("LEFT", colWidthHeader, "LEFT", 65, 0)
-    local colMaxHeader = CreateLabel(menuFrame, "Max %", "GameFontNormalSmall")
-    colMaxHeader:SetPoint("LEFT", colHeightHeader, "LEFT", 65, 0)
+    local y = -58
+    local function nextRow(height)
+        local rowY = y
+        y = y - (height or 30)
+        return rowY
+    end
 
-    local row1 = CreateLabel(menuFrame, "Main Shield Bar:")
-    row1:SetPoint("TOPLEFT", info, "BOTTOMLEFT", 0, -32)
-    menuFrame.widthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.widthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -18)
-    menuFrame.heightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.heightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -18)
-    menuFrame.capEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.capEdit:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -18)
-    local mainApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    mainApply:SetSize(60, 24)
-    mainApply:SetPoint("LEFT", menuFrame.capEdit, "RIGHT", 12, 0)
-    mainApply:SetText("Apply")
-    mainApply:SetScript("OnClick", ApplyMainBar)
+    local function AddSizeRow(label, widthField, heightField)
+        local rowY = nextRow(32)
+        CreateLabel(menuFrame, label):SetPoint("TOPLEFT", 30, rowY)
+        widthField:SetPoint("TOPLEFT", 210, rowY + 3)
+        heightField:SetPoint("TOPLEFT", 275, rowY + 3)
+    end
 
-    local targetRow = CreateLabel(menuFrame, "Target of Target:")
-    targetRow:SetPoint("TOPLEFT", row1, "BOTTOMLEFT", 0, -12)
-    menuFrame.targetTargetWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.targetTargetWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -44)
-    menuFrame.targetTargetHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.targetTargetHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -44)
-    local targetApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    targetApply:SetSize(60, 24)
-    targetApply:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -44)
-    targetApply:SetText("Apply")
-    targetApply:SetScript("OnClick", ApplyTargetTarget)
-    local targetCheck = CreateCheckBox(menuFrame, "Show target of target frame", function(self)
-        local enabled = self:GetChecked() and true or false
-        if addon.TargetTargetBarAPI and addon.TargetTargetBarAPI.Enable then
-            if not addon.TargetTargetBarAPI.Enable(enabled) then self:SetChecked(config.showTargetTarget and true or false) end
-        end
+    menuFrame.widthEdit = CreateInputBox(menuFrame, 55)
+    menuFrame.heightEdit = CreateInputBox(menuFrame, 55)
+    AddSizeRow("Main bar Width / Height", menuFrame.widthEdit, menuFrame.heightEdit)
+
+    menuFrame.targetTargetWidthEdit = CreateInputBox(menuFrame, 55)
+    menuFrame.targetTargetHeightEdit = CreateInputBox(menuFrame, 55)
+    AddSizeRow("Target of Target Width / Height", menuFrame.targetTargetWidthEdit, menuFrame.targetTargetHeightEdit)
+
+    menuFrame.resourcePipWidthEdit = CreateInputBox(menuFrame, 55)
+    menuFrame.resourcePipHeightEdit = CreateInputBox(menuFrame, 55)
+    AddSizeRow("Special Resource Width / Height", menuFrame.resourcePipWidthEdit, menuFrame.resourcePipHeightEdit)
+
+    menuFrame.pipWidthEdit = CreateInputBox(menuFrame, 55)
+    menuFrame.pipHeightEdit = CreateInputBox(menuFrame, 55)
+    AddSizeRow("Group Resource Width / Height", menuFrame.pipWidthEdit, menuFrame.pipHeightEdit)
+
+    local capRow = nextRow(32)
+    CreateLabel(menuFrame, "Main bar Max %"):SetPoint("TOPLEFT", 30, capRow)
+    menuFrame.capEdit = CreateInputBox(menuFrame, 70)
+    menuFrame.capEdit:SetPoint("TOPLEFT", 210, capRow + 3)
+
+    local checkY = nextRow(32)
+    menuFrame.visibilityCheck = CreateCheckBox(menuFrame, "Hide external bar", function(self)
+        config.hideExternalBar = self:GetChecked()
+        if addon.PlayerBarAPI and addon.PlayerBarAPI.Refresh then addon.PlayerBarAPI.Refresh() end
     end)
-    targetCheck:SetPoint("LEFT", targetApply, "RIGHT", 10, 0)
-    menuFrame.targetTargetCheck = targetCheck
+    menuFrame.visibilityCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local row2 = CreateLabel(menuFrame, "Personal Pips:")
-    row2:SetPoint("TOPLEFT", targetRow, "BOTTOMLEFT", 0, -18)
-    menuFrame.resourcePipWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.resourcePipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -74)
-    menuFrame.resourcePipHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.resourcePipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -74)
-
-    local row3 = CreateLabel(menuFrame, "Group Pips:")
-    row3:SetPoint("TOPLEFT", row2, "BOTTOMLEFT", 0, -18)
-    menuFrame.pipWidthEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.pipWidthEdit:SetPoint("LEFT", colWidthHeader, "LEFT", -4, -102)
-    menuFrame.pipHeightEdit = CreateInputBox(menuFrame, 45)
-    menuFrame.pipHeightEdit:SetPoint("LEFT", colHeightHeader, "LEFT", -4, -102)
-    local pipApply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    pipApply:SetSize(60, 24)
-    pipApply:SetPoint("LEFT", colMaxHeader, "LEFT", -4, -102)
-    pipApply:SetText("Apply")
-    pipApply:SetScript("OnClick", ApplyPips)
-
-    local resLabel = CreateLabel(menuFrame, "Personal Resource Bar:")
-    resLabel:SetPoint("TOPLEFT", row3, "BOTTOMLEFT", 0, -18)
-    local resButton = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    resButton:SetSize(80, 22)
-    resButton:SetPoint("LEFT", resLabel, "RIGHT", 12, 0)
-    resButton:SetScript("OnClick", function(self)
-        if config.resourceDisplay == "left" then config.resourceDisplay = "right"
-        elseif config.resourceDisplay == "right" then config.resourceDisplay = "none"
-        else config.resourceDisplay = "left" end
-        self:SetText(config.resourceDisplay:gsub("^%l", string.upper))
-        if addon.UpdateSpecialResourcesLayout then addon.UpdateSpecialResourcesLayout() end
-        if addon.ScheduleUnitUpdate then addon.ScheduleUnitUpdate("player") end
+    checkY = nextRow(28)
+    menuFrame.healthCheck = CreateCheckBox(menuFrame, "Show health", function(self)
+        config.showHealth = self:GetChecked()
+        if addon.PlayerBarAPI and addon.PlayerBarAPI.Refresh then addon.PlayerBarAPI.Refresh() end
     end)
-    menuFrame.resButton = resButton
+    menuFrame.healthCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local visibilityCheck = CreateCheckBox(menuFrame, "Hide external shield bar", function(self)
-        config.hideExternalBar = self:GetChecked() and true or false
-        if addon.PlayerBarAPI and addon.PlayerBarAPI.SetHidden then addon.PlayerBarAPI.SetHidden(config.hideExternalBar) end
+    checkY = nextRow(28)
+    menuFrame.specialResCheck = CreateCheckBox(menuFrame, "Show special resources", function(self)
+        config.showSpecialResources = self:GetChecked()
+        if addon.PlayerBarAPI and addon.PlayerBarAPI.Refresh then addon.PlayerBarAPI.Refresh() end
     end)
-    visibilityCheck:SetPoint("TOPLEFT", resLabel, "BOTTOMLEFT", -2, -14)
-    menuFrame.visibilityCheck = visibilityCheck
-    local healthCheck = CreateCheckBox(menuFrame, "Show health bar (red, 100% base)", function(self)
-        config.showHealth = self:GetChecked() and true or false
-        if addon.ScheduleUnitUpdate then addon.ScheduleUnitUpdate("player") end
-    end)
-    healthCheck:SetPoint("TOPLEFT", visibilityCheck, "BOTTOMLEFT", 0, -2)
-    menuFrame.healthCheck = healthCheck
-    local specialResCheck = CreateCheckBox(menuFrame, "Show special resources (circles)", function(self)
-        config.showSpecialResources = self:GetChecked() and true or false
-        if addon.UpdateSpecialResources then addon.UpdateSpecialResources() end
-    end)
-    specialResCheck:SetPoint("TOPLEFT", healthCheck, "BOTTOMLEFT", 0, -2)
-    menuFrame.specialResCheck = specialResCheck
-    local classOverlayCheck = CreateCheckBox(menuFrame, "Show special resources on group frames", function(self)
-        config.showClassResourceOverlay = self:GetChecked() and true or false
-        if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
-    end)
-    classOverlayCheck:SetPoint("TOPLEFT", specialResCheck, "BOTTOMLEFT", 0, -2)
-    menuFrame.classOverlayCheck = classOverlayCheck
+    menuFrame.specialResCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local mouseResourceCheck = CreateCheckBox(menuFrame, "Show special resources around mouse", function(self)
-        local enabled = self:GetChecked() and true or false
-        config.showMouseSpecialResources = enabled
-        if addon.SetMouseResourceOverlayEnabled then addon.SetMouseResourceOverlayEnabled(enabled or config.showMouseCooldown1 or config.showMouseCooldown2) end
+    checkY = nextRow(28)
+    menuFrame.classOverlayCheck = CreateCheckBox(menuFrame, "Show group resource overlay", function(self)
+        config.showClassResourceOverlay = self:GetChecked()
+        if addon.ClassResourceOverlayAPI and addon.ClassResourceOverlayAPI.Refresh then addon.ClassResourceOverlayAPI.Refresh() end
     end)
-    mouseResourceCheck:SetPoint("TOPLEFT", classOverlayCheck, "BOTTOMLEFT", 0, -2)
-    menuFrame.mouseResourceCheck = mouseResourceCheck
+    menuFrame.classOverlayCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local mouseHeader = CreateLabel(menuFrame, "Mouse Cooldowns:", "GameFontNormal")
-    mouseHeader:SetPoint("TOPLEFT", mouseResourceCheck, "BOTTOMLEFT", 2, -12)
-
-    local mouseCooldown1Check = CreateCheckBox(menuFrame, "Slot 1", function(self)
-        config.showMouseCooldown1 = self:GetChecked() and true or false
-        if addon.SetMouseResourceOverlayEnabled then addon.SetMouseResourceOverlayEnabled(config.showMouseSpecialResources or config.showMouseCooldown1 or config.showMouseCooldown2) end
+    checkY = nextRow(28)
+    menuFrame.targetTargetCheck = CreateCheckBox(menuFrame, "Show target of target frame", function(self)
+        config.showTargetTarget = self:GetChecked()
+        if addon.TargetTargetBarAPI and addon.TargetTargetBarAPI.Refresh then addon.TargetTargetBarAPI.Refresh() end
     end)
-    mouseCooldown1Check:SetPoint("TOPLEFT", mouseHeader, "BOTTOMLEFT", -2, -4)
-    menuFrame.mouseCooldown1Check = mouseCooldown1Check
+    menuFrame.targetTargetCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local mouseCooldown1Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown1", menuFrame, "UIDropDownMenuTemplate")
-    mouseCooldown1Button:SetSize(155, 22)
-    mouseCooldown1Button:SetPoint("LEFT", mouseCooldown1Check, "RIGHT", 0, 0)
-    menuFrame.mouseCooldown1Button = mouseCooldown1Button
-    CreateMouseCooldownDropdown(menuFrame, mouseCooldown1Button, 1)
-
-    local mouseCooldown2Check = CreateCheckBox(menuFrame, "Slot 2", function(self)
-        config.showMouseCooldown2 = self:GetChecked() and true or false
-        if addon.SetMouseResourceOverlayEnabled then addon.SetMouseResourceOverlayEnabled(config.showMouseSpecialResources or config.showMouseCooldown1 or config.showMouseCooldown2) end
+    checkY = nextRow(28)
+    menuFrame.mouseResourceCheck = CreateCheckBox(menuFrame, "Show special resources around mouse", function(self)
+        config.showMouseSpecialResources = self:GetChecked()
+        if addon.SetMouseResourceOverlayEnabled then addon.SetMouseResourceOverlayEnabled(self:GetChecked()) end
     end)
-    mouseCooldown2Check:SetPoint("TOPLEFT", mouseCooldown1Check, "BOTTOMLEFT", 0, -4)
-    menuFrame.mouseCooldown2Check = mouseCooldown2Check
+    menuFrame.mouseResourceCheck:SetPoint("TOPLEFT", 30, checkY)
 
-    local mouseCooldown2Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown2", menuFrame, "UIDropDownMenuTemplate")
-    mouseCooldown2Button:SetSize(155, 22)
-    mouseCooldown2Button:SetPoint("LEFT", mouseCooldown2Check, "RIGHT", 0, 0)
-    menuFrame.mouseCooldown2Button = mouseCooldown2Button
-    CreateMouseCooldownDropdown(menuFrame, mouseCooldown2Button, 2)
+    checkY = nextRow(28)
+    menuFrame.mouseCooldown1Check = CreateCheckBox(menuFrame, "Show mouse cooldown 1", function(self)
+        config.showMouseCooldown1 = self:GetChecked()
+        if addon.RefreshMouseCooldowns then addon.RefreshMouseCooldowns() end
+    end)
+    menuFrame.mouseCooldown1Check:SetPoint("TOPLEFT", 30, checkY)
+
+    menuFrame.mouseCooldown1Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown1", menuFrame, "UIDropDownMenuTemplate")
+    menuFrame.mouseCooldown1Button:SetPoint("TOPLEFT", 245, checkY - 4)
+    CreateMouseCooldownDropdown(menuFrame, menuFrame.mouseCooldown1Button, 1)
+
+    checkY = nextRow(28)
+    menuFrame.mouseCooldown2Check = CreateCheckBox(menuFrame, "Show mouse cooldown 2", function(self)
+        config.showMouseCooldown2 = self:GetChecked()
+        if addon.RefreshMouseCooldowns then addon.RefreshMouseCooldowns() end
+    end)
+    menuFrame.mouseCooldown2Check:SetPoint("TOPLEFT", 30, checkY)
+
+    menuFrame.mouseCooldown2Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown2", menuFrame, "UIDropDownMenuTemplate")
+    menuFrame.mouseCooldown2Button:SetPoint("TOPLEFT", 245, checkY - 4)
+    CreateMouseCooldownDropdown(menuFrame, menuFrame.mouseCooldown2Button, 2)
+
+    local applyRow = nextRow(36)
+    local apply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    apply:SetSize(100, 24)
+    apply:SetPoint("TOPLEFT", 30, applyRow)
+    apply:SetText("Apply")
+    apply:SetScript("OnClick", function()
+        ApplyMainBar()
+        ApplyTargetTarget()
+        ApplyPips()
+        Refresh()
+    end)
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    unlock:SetSize(85, 24)
-    unlock:SetPoint("BOTTOMLEFT", menuFrame, "BOTTOMLEFT", 16, 16)
-    unlock:SetText("Unlock")
-    unlock:SetScript("OnClick", function() SetAllBarsLocked(false) end)
-    local lock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    lock:SetSize(85, 24)
-    lock:SetPoint("LEFT", unlock, "RIGHT", 8, 0)
-    lock:SetText("Lock")
-    lock:SetScript("OnClick", function() SetAllBarsLocked(true) end)
-    local closeBtn = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    closeBtn:SetSize(85, 24)
-    closeBtn:SetPoint("BOTTOMRIGHT", menuFrame, "BOTTOMRIGHT", -16, 16)
-    closeBtn:SetText("Close")
-    closeBtn:SetScript("OnClick", function() menuFrame:Hide() end)
+    unlock:SetSize(100, 24)
+    unlock:SetPoint("TOPLEFT", 140, applyRow)
+    unlock:SetText(config and config.locked == false and "Lock" or "Unlock")
+    unlock:SetScript("OnClick", function(self)
+        local shouldLock = not (config.locked == false)
+        SetAllBarsLocked(shouldLock)
+        self:SetText(shouldLock and "Unlock" or "Lock")
+    end)
+
+    local close = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
+    close:SetSize(100, 24)
+    close:SetPoint("TOPLEFT", 250, applyRow)
+    close:SetText("Close")
+    close:SetScript("OnClick", function() menuFrame:Hide() end)
 end
 
-local function ShowConfigMenu()
-    if not config then config = addon.PlayerBarConfig.Initialize() end
+function addon.ShowConfigMenu()
+    config = addon.PlayerBarConfig.Initialize()
     CreateConfigMenu()
     Refresh()
     menuFrame:Show()
 end
 
-addon.MenuAPI = { ShowConfigMenu = ShowConfigMenu, Refresh = Refresh }
-
 addon.RegisterInitializer(function()
     config = addon.PlayerBarConfig.Initialize()
-    if addon.PlayerBarAPI then addon.PlayerBarAPI.ShowConfigMenu = ShowConfigMenu end
-    addon.ShowConfigMenu = ShowConfigMenu
 end)
