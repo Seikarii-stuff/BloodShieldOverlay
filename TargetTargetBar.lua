@@ -10,7 +10,6 @@ local W, H = 130, 10
 local frame, bar, nameText, config
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
-local tonumber, tostring = tonumber, tostring
 local type = type
 
 local function UpdateVisuals()
@@ -20,17 +19,20 @@ local function UpdateVisuals()
     -- explicitly allowed to consume secret text, so pass it straight through.
     nameText:SetText(UnitName(UNIT))
 
-    -- UnitClass's first return can be secret, but classFilename (second return)
-    -- is not. Resolve the Blizzard class color from that filename and pass the
-    -- resulting color directly to the StatusBar. No secret value is inspected.
+    -- UnitClass can legitimately return nil for units without class data (for
+    -- example NPCs). Never pass that nil to C_ClassColor. For units that do
+    -- provide a class filename, Blizzard resolves the class color for us.
     local _, classFilename = UnitClass(UNIT)
-    local classColor = C_ClassColor and C_ClassColor.GetClassColor(classFilename)
-    if classColor then
-        bar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 0.95)
-    else
-        -- Non-class units (for example NPCs) retain the neutral default.
-        bar:SetStatusBarColor(0.20, 0.85, 0.25, 0.95)
+    if classFilename ~= nil and C_ClassColor then
+        local classColor = C_ClassColor.GetClassColor(classFilename)
+        if classColor then
+            bar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 0.95)
+            return
+        end
     end
+
+    -- Non-class units retain the neutral default.
+    bar:SetStatusBarColor(0.20, 0.85, 0.25, 0.95)
 end
 
 local function UpdateHealth()
