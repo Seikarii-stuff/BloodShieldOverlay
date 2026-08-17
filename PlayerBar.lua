@@ -29,14 +29,10 @@ local DEFAULTS = addon.PlayerBarConfig.GetDefaults()
 local MIN_CAP_PERCENT = addon.PlayerBarConfig.GetMinCapPercent()
 local config = {}
 
--- Forward declaration: SetPlayerBarDimensions can be called by the menu before
--- the UpdateBar implementation appears later in this file.
 local UpdateBar
 
 local function GetAbsorbAmount(unit)
-    if UnitGetTotalAbsorbs then
-        return UnitGetTotalAbsorbs(unit) or 0
-    end
+    if UnitGetTotalAbsorbs then return UnitGetTotalAbsorbs(unit) or 0 end
     return 0
 end
 
@@ -44,13 +40,9 @@ local function SaveBarPosition()
     if not bar then return end
     local point, _, relativePoint, xOffset, yOffset = bar:GetPoint()
     if type(point) ~= "string" or type(relativePoint) ~= "string"
-        or type(xOffset) ~= "number" or type(yOffset) ~= "number" then
-        return
-    end
-    config.point = point
-    config.relativePoint = relativePoint
-    config.xOffset = xOffset
-    config.yOffset = yOffset
+        or type(xOffset) ~= "number" or type(yOffset) ~= "number" then return end
+    config.point, config.relativePoint = point, relativePoint
+    config.xOffset, config.yOffset = xOffset, yOffset
 end
 
 local function UpdateBarLock()
@@ -123,8 +115,7 @@ local function UpdateResourceBarLayout()
 end
 
 for index = 1, MAX_SPECIAL_CIRCLES do
-    specialProgress[index] = 0
-    specialOrder[index] = index
+    specialProgress[index], specialOrder[index] = 0, index
 end
 
 local specialResourceProvider = addon.GetSpecialResourceProvider(playerClass, powerTypes)
@@ -135,23 +126,19 @@ local function UpdateSpecialResourcesLayout()
         specialResourceContainer:Hide()
         return
     end
-
     local maxPower = specialResourceProvider and specialResourceProvider.GetMax() or 0
     maxPower = math_min(maxPower, MAX_SPECIAL_CIRCLES)
     if maxPower <= 0 then
         specialResourceContainer:Hide()
         return
     end
-
-    local parentWidth = resourceBar:GetWidth()
-    local parentHeight = resourceBar:GetHeight()
+    local parentWidth, parentHeight = resourceBar:GetWidth(), resourceBar:GetHeight()
     local customWidth = config.specialResourcePipWidth or DEFAULTS.specialResourcePipWidth
     local customHeight = config.specialResourcePipHeight or DEFAULTS.specialResourcePipHeight
     local slotSize = math_min(math_max(3, customHeight), math_floor(parentHeight / maxPower))
     if slotSize < 3 then slotSize = 3 end
     local circleWidth = math_max(2, math_min(customWidth, math_max(2, parentWidth - 2)))
     local xOffset = math_max(1, (parentWidth - circleWidth) / 2)
-
     specialResourceContainer:Show()
     for index = 1, MAX_SPECIAL_CIRCLES do
         local circle = specialCircles[specialOrder[index]]
@@ -187,16 +174,13 @@ addon.UpdateSpecialResources = UpdateSpecialResources
 function addon.SetSpecialResourcePipSize(width, height)
     if type(width) ~= "number" or type(height) ~= "number" then return false end
     if width < 2 or width > 20 or height < 2 or height > 32 then return false end
-    config.specialResourcePipWidth = width
-    config.specialResourcePipHeight = height
+    config.specialResourcePipWidth, config.specialResourcePipHeight = width, height
     UpdateSpecialResourcesLayout()
     return true
 end
 
 function addon.SetPlayerBarDimensions(width, height, capPercent)
-    if type(width) ~= "number" or type(height) ~= "number" or type(capPercent) ~= "number" then
-        return false
-    end
+    if type(width) ~= "number" or type(height) ~= "number" or type(capPercent) ~= "number" then return false end
     if width <= 0 or height <= 0 then
         print("BloodShieldOverlay: width and height must be positive numbers.")
         return false
@@ -205,12 +189,10 @@ function addon.SetPlayerBarDimensions(width, height, capPercent)
         print(string.format("BloodShieldOverlay: Max %% must be at least %d.", MIN_CAP_PERCENT))
         return false
     end
-    config.width = width
-    config.height = height
+    config.width, config.height = width, height
     config.capMultiplier = capPercent / 100
     if bar then bar:SetSize(width, height) end
     UpdateBar()
-    UpdateTickMarks()
     return true
 end
 
@@ -318,11 +300,9 @@ UpdateBar = function(absorb, maxHP)
         return
     end
     bar:Show()
-
     absorb = absorb or GetAbsorbAmount("player")
     maxHP = maxHP or UnitHealthMax("player") or 1
     local currentHP = UnitHealth("player") or maxHP
-
     if config.showHealth then
         healthBar:Show()
         healthBar:SetMinMaxValues(0, maxHP)
@@ -330,7 +310,6 @@ UpdateBar = function(absorb, maxHP)
     else
         healthBar:Hide()
     end
-
     local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
     if displayMax > 0 then
         bar:SetMinMaxValues(0, displayMax)
@@ -339,7 +318,6 @@ UpdateBar = function(absorb, maxHP)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
     end
-
     if config.resourceDisplay ~= "none" then
         resourceBar:Show()
         local curPower = UnitPower("player") or 0
@@ -356,27 +334,35 @@ end
 addon.PlayerBarAPI = {
     IsLocked = function() return config.locked end,
     SetLocked = function(locked)
-        config.locked = locked and true or false
+        config.locked = locked == true
         if not bar then CreateBar() end
         UpdateBarLock()
     end,
     SetHidden = function(hidden)
-        config.hideExternalBar = hidden and true or false
+        config.hideExternalBar = hidden == true
         if not bar then CreateBar() end
         UpdateExternalBarVisibility()
         if not hidden then UpdateBar() end
+    end,
+    SetHealthShown = function(shown)
+        config.showHealth = shown == true
+        if not bar then CreateBar() end
+        if healthBar then
+            if config.showHealth and not config.hideExternalBar then healthBar:Show() else healthBar:Hide() end
+        end
+    end,
+    SetSpecialResourcesShown = function(shown)
+        config.showSpecialResources = shown == true
+        if not bar then CreateBar() end
+        UpdateSpecialResources()
     end,
     ApplyDimensions = function(width, height, capPercent)
         return addon.SetPlayerBarDimensions(width, height, capPercent)
     end,
     Reset = function()
         config = addon.PlayerBarConfig.Reset()
-        if addon.SetClassResourceOverlayEnabled then
-            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
-        end
-        if addon.SetClassResourceOverlayPipSize then
-            addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight)
-        end
+        if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
+        if addon.SetClassResourceOverlayPipSize then addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight) end
         if bar then
             bar:ClearAllPoints()
             bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
@@ -390,15 +376,9 @@ addon.PlayerBarAPI = {
 
 addon.RegisterInitializer(function()
     config = addon.PlayerBarConfig.Initialize()
-    if addon.SetClassResourceOverlayEnabled then
-        addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
-    end
-    if addon.SetClassResourceOverlayPipSize then
-        addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight)
-    end
-    if addon.SetSpecialResourcePipSize then
-        addon.SetSpecialResourcePipSize(config.specialResourcePipWidth, config.specialResourcePipHeight)
-    end
+    if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
+    if addon.SetClassResourceOverlayPipSize then addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight) end
+    if addon.SetSpecialResourcePipSize then addon.SetSpecialResourcePipSize(config.specialResourcePipWidth, config.specialResourcePipHeight) end
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end)
