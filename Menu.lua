@@ -51,8 +51,10 @@ end
 
 local function RefreshMouseCooldownDropdowns()
     if not menuFrame or not menuFrame.mouseCooldown1Button then return end
-    UIDropDownMenu_SetText(FindSpellName(config.mouseCooldown1Spell), menuFrame.mouseCooldown1Button)
-    UIDropDownMenu_SetText(FindSpellName(config.mouseCooldown2Spell), menuFrame.mouseCooldown2Button)
+    -- Midnight UIDropDownMenu_SetText(frame, text). Keep this in the same
+    -- argument order as Minimizer's known-good menu implementation.
+    UIDropDownMenu_SetText(menuFrame.mouseCooldown1Button, FindSpellName(config.mouseCooldown1Spell))
+    UIDropDownMenu_SetText(menuFrame.mouseCooldown2Button, FindSpellName(config.mouseCooldown2Spell))
 end
 
 local function Refresh()
@@ -178,7 +180,6 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
             end
         end
     end)
-    -- UIDropDownMenu_SetWidth expects the dropdown frame first, width second.
     UIDropDownMenu_SetWidth(button, 145)
 end
 
