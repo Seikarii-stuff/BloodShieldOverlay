@@ -1,6 +1,5 @@
 -- Central /shield configuration UI.
--- Numeric fields are staged and committed with Apply ALL.
--- Checkboxes and spell selections are immediate, like the rest of the addon.
+-- Numeric fields are staged and committed with Apply ALL. Checkboxes and spell selections are immediate.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -40,12 +39,8 @@ end
 
 local function SetAllBarsLocked(locked)
     locked = locked == true
-    if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetLocked) == "function" then
-        addon.PlayerBarAPI.SetLocked(locked)
-    end
-    if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.SetLocked) == "function" then
-        addon.TargetTargetBarAPI.SetLocked(locked)
-    end
+    if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetLocked) == "function" then addon.PlayerBarAPI.SetLocked(locked) end
+    if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.SetLocked) == "function" then addon.TargetTargetBarAPI.SetLocked(locked) end
     config.locked = locked
     config.targetTargetLocked = locked
 end
@@ -58,9 +53,7 @@ local function SpellName(spellID)
     if not spellID then return "None" end
     for _, entry in ipairs(SpellOptions()) do
         local id = type(entry) == "number" and entry or entry.id
-        if id == spellID then
-            return (type(entry) == "table" and entry.name) or tostring(id)
-        end
+        if id == spellID then return (type(entry) == "table" and entry.name) or tostring(id) end
     end
     return "None"
 end
@@ -80,7 +73,6 @@ end
 local function CreateSpellDropdown(parent, name, slot)
     local dropdown = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
     dropdown:SetSize(160, 28)
-
     dropdown.initialize = function(_, level)
         if level ~= 1 then return end
         local selected = config["mouseCooldown" .. slot .. "Spell"]
@@ -90,10 +82,7 @@ local function CreateSpellDropdown(parent, name, slot)
         local none = UIDropDownMenu_CreateInfo()
         none.text = "None"
         none.checked = selected == nil
-        none.func = function()
-            SetMouseSpell(slot, nil)
-            CloseDropDownMenus()
-        end
+        none.func = function() SetMouseSpell(slot, nil); CloseDropDownMenus() end
         UIDropDownMenu_AddButton(none, level)
 
         for _, entry in ipairs(SpellOptions()) do
@@ -104,15 +93,11 @@ local function CreateSpellDropdown(parent, name, slot)
                 info.text = nameText
                 info.value = id
                 info.checked = selected == id
-                info.func = function()
-                    SetMouseSpell(slot, id)
-                    CloseDropDownMenus()
-                end
+                info.func = function() SetMouseSpell(slot, id); CloseDropDownMenus() end
                 UIDropDownMenu_AddButton(info, level)
             end
         end
     end
-
     UIDropDownMenu_Initialize(dropdown, dropdown.initialize)
     UIDropDownMenu_SetWidth(dropdown, 145)
     return dropdown
@@ -131,16 +116,14 @@ local function ApplyMainBar()
         print(string.format("BloodShieldOverlay: Max %% must be at least %d.", minCap))
         return false
     end
-    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function"
-        and addon.PlayerBarAPI.ApplyDimensions(width, height, cap) == true
+    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function" and addon.PlayerBarAPI.ApplyDimensions(width, height, cap) == true
 end
 
 local function ApplyTargetTarget()
     local width = tonumber(menuFrame.targetTargetWidthEdit:GetText())
     local height = tonumber(menuFrame.targetTargetHeightEdit:GetText())
     if not width or width <= 0 or not height or height <= 0 then return false end
-    return addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.ApplySize) == "function"
-        and addon.TargetTargetBarAPI.ApplySize(width, height) == true
+    return addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.ApplySize) == "function" and addon.TargetTargetBarAPI.ApplySize(width, height) == true
 end
 
 local function ApplyPips()
@@ -148,14 +131,13 @@ local function ApplyPips()
     local rh = tonumber(menuFrame.resourcePipHeightEdit:GetText())
     local gw = tonumber(menuFrame.pipWidthEdit:GetText())
     local gh = tonumber(menuFrame.pipHeightEdit:GetText())
-    if not rw or not rh or not gw or not gh then return false end
+    local mw = tonumber(menuFrame.mouseCooldownPipSizeEdit:GetText())
+    if not rw or not rh or not gw or not gh or not mw then return false end
     local ok = true
-    if type(addon.SetSpecialResourcePipSize) == "function" then
-        ok = addon.SetSpecialResourcePipSize(rw, rh) == true and ok
-    end
-    if type(addon.SetClassResourceOverlayPipSize) == "function" then
-        ok = addon.SetClassResourceOverlayPipSize(gw, gh) == true and ok
-    end
+    if type(addon.SetSpecialResourcePipSize) == "function" then ok = addon.SetSpecialResourcePipSize(rw, rh) == true and ok end
+    if type(addon.SetClassResourceOverlayPipSize) == "function" then ok = addon.SetClassResourceOverlayPipSize(gw, gh) == true and ok end
+    config.mouseCooldownPipSize = mw
+    if type(addon.RefreshMouseCooldowns) == "function" then addon.RefreshMouseCooldowns() end
     return ok
 end
 
@@ -163,11 +145,8 @@ local function ApplyAll()
     local okMain = ApplyMainBar()
     local okTarget = ApplyTargetTarget()
     local okPips = ApplyPips()
-    if okMain and okTarget and okPips then
-        print("BloodShieldOverlay: size / cap settings applied.")
-    else
-        print("BloodShieldOverlay: one or more size settings could not be applied.")
-    end
+    if okMain and okTarget and okPips then print("BloodShieldOverlay: size / cap settings applied.")
+    else print("BloodShieldOverlay: one or more size settings could not be applied.") end
     Refresh()
 end
 
@@ -182,6 +161,7 @@ Refresh = function()
     menuFrame.resourcePipHeightEdit:SetText(tostring(config.specialResourcePipHeight or 10))
     menuFrame.pipWidthEdit:SetText(tostring(config.classResourcePipWidth or 12))
     menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
+    menuFrame.mouseCooldownPipSizeEdit:SetText(tostring(config.mouseCooldownPipSize or 8))
 
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar == true)
     menuFrame.healthCheck:SetChecked(config.showHealth ~= false)
@@ -207,10 +187,8 @@ local function CreateConfigMenu()
     menuFrame:RegisterForDrag("LeftButton")
     menuFrame:SetClampedToScreen(true)
     menuFrame:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
     menuFrame:SetScript("OnDragStart", function(self) self:StartMoving() end)
     menuFrame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
@@ -219,11 +197,7 @@ local function CreateConfigMenu()
     Label(menuFrame, "Width / height / max % fields below are staged until Apply ALL. Checkboxes apply instantly.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
 
     local y = -70
-    local function row(step)
-        local current = y
-        y = y - (step or 30)
-        return current
-    end
+    local function row(step) local current = y; y = y - (step or 30); return current end
     local function SizeRow(text, widthBox, heightBox)
         local ry = row(32)
         Label(menuFrame, text):SetPoint("TOPLEFT", 28, ry)
@@ -240,6 +214,11 @@ local function CreateConfigMenu()
     menuFrame.pipWidthEdit, menuFrame.pipHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Group Resource Width / Height", menuFrame.pipWidthEdit, menuFrame.pipHeightEdit)
 
+    local mousePipY = row(32)
+    Label(menuFrame, "Mouse cooldown pip size"):SetPoint("TOPLEFT", 28, mousePipY)
+    menuFrame.mouseCooldownPipSizeEdit = Input(menuFrame, 55)
+    menuFrame.mouseCooldownPipSizeEdit:SetPoint("TOPLEFT", 235, mousePipY + 2)
+
     local capY = row(32)
     Label(menuFrame, "Main bar Max %"):SetPoint("TOPLEFT", 28, capY)
     menuFrame.capEdit = Input(menuFrame, 70)
@@ -254,33 +233,23 @@ local function CreateConfigMenu()
 
     menuFrame.visibilityCheck = AddCheck("Hide external bar", function(self)
         config.hideExternalBar = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHidden) == "function" then
-            addon.PlayerBarAPI.SetHidden(config.hideExternalBar)
-        end
+        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHidden) == "function" then addon.PlayerBarAPI.SetHidden(config.hideExternalBar) end
     end)
     menuFrame.healthCheck = AddCheck("Show health", function(self)
         config.showHealth = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHealthShown) == "function" then
-            addon.PlayerBarAPI.SetHealthShown(config.showHealth)
-        end
+        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHealthShown) == "function" then addon.PlayerBarAPI.SetHealthShown(config.showHealth) end
     end)
     menuFrame.specialResCheck = AddCheck("Show special resources", function(self)
         config.showSpecialResources = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetSpecialResourcesShown) == "function" then
-            addon.PlayerBarAPI.SetSpecialResourcesShown(config.showSpecialResources)
-        end
+        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetSpecialResourcesShown) == "function" then addon.PlayerBarAPI.SetSpecialResourcesShown(config.showSpecialResources) end
     end)
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self)
         config.showClassResourceOverlay = self:GetChecked()
-        if type(addon.SetClassResourceOverlayEnabled) == "function" then
-            addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay)
-        end
+        if type(addon.SetClassResourceOverlayEnabled) == "function" then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
     end)
     menuFrame.targetTargetCheck = AddCheck("Show target of target frame", function(self)
         config.showTargetTarget = self:GetChecked()
-        if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then
-            addon.TargetTargetBarAPI.Enable(config.showTargetTarget)
-        end
+        if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end
     end)
     menuFrame.mouseResourceCheck = AddCheck("Show special resources around mouse", function(self)
         config.showMouseSpecialResources = self:GetChecked() == true
@@ -342,10 +311,6 @@ function addon.ShowConfigMenu()
 end
 
 addon.MenuAPI = addon.MenuAPI or {}
-addon.MenuAPI.ShowConfigMenu = function()
-    addon.ShowConfigMenu()
-end
+addon.MenuAPI.ShowConfigMenu = function() addon.ShowConfigMenu() end
 
-addon.RegisterInitializer(function()
-    config = addon.PlayerBarConfig.Initialize()
-end)
+addon.RegisterInitializer(function() config = addon.PlayerBarConfig.Initialize() end)
