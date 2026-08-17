@@ -14,6 +14,7 @@ Configuration.lua
 ResourceProviders.lua
 PlayerBar.lua
 TargetTargetBar.lua
+data/SpellData.lua
 Mouse.lua
 Menu.lua
 options.lua
