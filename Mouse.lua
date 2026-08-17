@@ -99,17 +99,17 @@ local function UpdatePips()
 
     local diameter = PIP_SIZE
     local radius = CURSOR_RADIUS
-    local centerX = radius + diameter * 0.5
-    local centerY = overlay:GetHeight() * 0.5
+    -- Keep the same center used by the current overlay. Only the semicircle
+    -- side changes: the arc is mirrored from the bottom to the left.
+    local centerX = overlay:GetWidth() * 0.5
+    local centerY = radius + diameter * 0.5
     local step = PI / math_max(1, maximum - 1)
 
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            -- Left semicircle, ordered bottom-to-top while preserving the
-            -- provider's existing pip order. The final/last resource remains
-            -- at the upper end of the arc.
-            local angle = (PI * 1.5) - (index - 1) * step
+            -- Left semicircle around the same center, from bottom to top.
+            local angle = (PI * 1.5) + (index - 1) * step
             pip:ClearAllPoints()
             pip:SetPoint(
                 "CENTER", overlay, "BOTTOMLEFT",
@@ -146,8 +146,6 @@ local function SetEnabled(value)
     end
 
     if InCombatLockdown() then
-        -- This feature only creates/moves ordinary visual frames, but avoid
-        -- changing parent/anchor state during combat if the UI is restricted.
         return true
     end
 
