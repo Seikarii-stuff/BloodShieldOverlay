@@ -51,8 +51,8 @@ end
 
 local function RefreshMouseCooldownDropdowns()
     if not menuFrame or not menuFrame.mouseCooldown1Button then return end
-    menuFrame.mouseCooldown1Button:SetText(FindSpellName(config.mouseCooldown1Spell))
-    menuFrame.mouseCooldown2Button:SetText(FindSpellName(config.mouseCooldown2Spell))
+    UIDropDownMenu_SetText(FindSpellName(config.mouseCooldown1Spell), menuFrame.mouseCooldown1Button)
+    UIDropDownMenu_SetText(FindSpellName(config.mouseCooldown2Spell), menuFrame.mouseCooldown2Button)
 end
 
 local function Refresh()
@@ -180,8 +180,8 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
             end
         end
     end)
-    -- Midnight signature is (frame, width), not (width, frame).
-    UIDropDownMenu_SetWidth(button, 145)
+    -- Midnight's UIDropDownMenu_SetWidth signature is (width, frame).
+    UIDropDownMenu_SetWidth(145, button)
     button:SetScript("OnShow", function(self)
         UIDropDownMenu_SetText(FindSpellName(config["mouseCooldown" .. slot .. "Spell"]), self)
     end)
