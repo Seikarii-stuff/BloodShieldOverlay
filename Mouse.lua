@@ -20,9 +20,9 @@ local resourceProvider = addon.GetSpecialResourceProvider(playerClass, powerType
 if not resourceProvider then return end
 
 local MAX_PIPS = 7
-local PIP_SIZE = 10
+local PIP_SIZE = 5
 local PIP_GAP = 3
-local CURSOR_RADIUS = 22
+local CURSOR_RADIUS = 10
 local UPDATE_INTERVAL = 0.033
 
 local enabled = false
