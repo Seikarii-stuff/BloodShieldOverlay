@@ -51,8 +51,6 @@ end
 
 local function RefreshMouseCooldownDropdowns()
     if not menuFrame or not menuFrame.mouseCooldown1Button then return end
-    -- Midnight UIDropDownMenu_SetText(frame, text). Keep this in the same
-    -- argument order as Minimizer's known-good menu implementation.
     UIDropDownMenu_SetText(menuFrame.mouseCooldown1Button, FindSpellName(config.mouseCooldown1Spell))
     UIDropDownMenu_SetText(menuFrame.mouseCooldown2Button, FindSpellName(config.mouseCooldown2Spell))
 end
@@ -144,8 +142,11 @@ local function SetMouseCooldown(slot, spellID)
     return true
 end
 
-local function CreateMouseCooldownDropdown(parent, button, slot)
-    UIDropDownMenu_Initialize(button, function(frame, level)
+-- UIDropDownMenuTemplate must be hosted by a Frame, matching the known-good
+-- Minimizer implementation. A Button here is not a valid dropdown owner on
+-- Midnight and breaks SetText/SetWidth internally.
+local function CreateMouseCooldownDropdown(parent, frame, slot)
+    UIDropDownMenu_Initialize(frame, function(dropdownFrame, level)
         if level ~= 1 then return end
 
         local options = GetMouseCooldownOptions()
@@ -180,7 +181,7 @@ local function CreateMouseCooldownDropdown(parent, button, slot)
             end
         end
     end)
-    UIDropDownMenu_SetWidth(button, 145)
+    UIDropDownMenu_SetWidth(frame, 145)
 end
 
 local function CreateConfigMenu()
@@ -287,7 +288,7 @@ local function CreateConfigMenu()
     end)
     menuFrame.mouseCooldown1Check:SetPoint("TOPLEFT", 30, checkY)
 
-    menuFrame.mouseCooldown1Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown1", menuFrame, "UIDropDownMenuTemplate")
+    menuFrame.mouseCooldown1Button = CreateFrame("Frame", "BloodShieldOverlayMouseCooldownDropdown1", menuFrame, "UIDropDownMenuTemplate")
     menuFrame.mouseCooldown1Button:SetPoint("TOPLEFT", 245, checkY - 4)
     CreateMouseCooldownDropdown(menuFrame, menuFrame.mouseCooldown1Button, 1)
 
@@ -298,7 +299,7 @@ local function CreateConfigMenu()
     end)
     menuFrame.mouseCooldown2Check:SetPoint("TOPLEFT", 30, checkY)
 
-    menuFrame.mouseCooldown2Button = CreateFrame("Button", "BloodShieldOverlayMouseCooldownDropdown2", menuFrame, "UIDropDownMenuTemplate")
+    menuFrame.mouseCooldown2Button = CreateFrame("Frame", "BloodShieldOverlayMouseCooldownDropdown2", menuFrame, "UIDropDownMenuTemplate")
     menuFrame.mouseCooldown2Button:SetPoint("TOPLEFT", 245, checkY - 4)
     CreateMouseCooldownDropdown(menuFrame, menuFrame.mouseCooldown2Button, 2)
 
@@ -336,6 +337,13 @@ function addon.ShowConfigMenu()
     CreateConfigMenu()
     Refresh()
     menuFrame:Show()
+end
+
+-- Public menu API used by Commands.lua and other modules. Keep the compatibility
+-- alias addon.ShowConfigMenu as well because options.lua already uses it.
+addon.MenuAPI = addon.MenuAPI or {}
+addon.MenuAPI.ShowConfigMenu = function()
+    addon.ShowConfigMenu()
 end
 
 addon.RegisterInitializer(function()
