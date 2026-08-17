@@ -1,14 +1,15 @@
--- Public chat command adapter for the standalone player bar.
-
+-- Public chat command adapter.
+-- Menu ownership lives exclusively in Menu.lua.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 addon.HandleSlashCommand = function(msg)
-    local bar = addon.PlayerBarAPI
-    if not bar then return end
     msg = msg and msg:lower():gsub("^%s*(.-)%s*$", "%1") or ""
+
     if msg == "" then
-        bar.ShowConfigMenu()
+        if addon.MenuAPI and addon.MenuAPI.ShowConfigMenu then
+            addon.MenuAPI.ShowConfigMenu()
+        end
     elseif msg == "reload" then
         if addon.RequestRefresh then
             addon.RequestRefresh()
