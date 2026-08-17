@@ -5,7 +5,7 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 4, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 5, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
@@ -16,6 +16,10 @@ local DEFAULTS = {
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
     showMouseSpecialResources = false,
+    showMouseCooldown1 = false,
+    showMouseCooldown2 = false,
+    mouseCooldown1Spell = nil,
+    mouseCooldown2Spell = nil,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -40,6 +44,7 @@ end
 local function IsPositiveNumber(value) return type(value) == "number" and value > 0 end
 local function IsBoolean(value) return type(value) == "boolean" end
 local function IsPoint(value) return type(value) == "string" and value ~= "" end
+local function IsOptionalSpellID(value) return value == nil or (type(value) == "number" and value > 0) end
 
 local FIELD_VALIDATORS = {
     width = IsPositiveNumber,
@@ -63,6 +68,10 @@ local FIELD_VALIDATORS = {
     targetTargetXOffset = function(value) return type(value) == "number" end,
     targetTargetYOffset = function(value) return type(value) == "number" end,
     showMouseSpecialResources = IsBoolean,
+    showMouseCooldown1 = IsBoolean,
+    showMouseCooldown2 = IsBoolean,
+    mouseCooldown1Spell = IsOptionalSpellID,
+    mouseCooldown2Spell = IsOptionalSpellID,
 }
 
 local function ApplyDefaults(db)
