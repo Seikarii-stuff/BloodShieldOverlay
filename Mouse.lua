@@ -22,7 +22,6 @@ local resourceProvider = addon.GetSpecialResourceProvider and addon.GetSpecialRe
 
 local MAX_PIPS = 7
 local PIP_SIZE = 5
-local PIP_GAP = 3
 local CURSOR_RADIUS = 10
 local UPDATE_INTERVAL = 0.033
 local COOLDOWN_SIZE = 8
@@ -45,11 +44,7 @@ local function ApplyCircularMask(texture)
     local parent = texture:GetParent()
     local mask = parent:CreateMaskTexture()
     mask:SetAllPoints(texture)
-    mask:SetTexture(
-        "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
-        "CLAMPTOBLACKADDITIVE",
-        "CLAMPTOBLACKADDITIVE"
-    )
+    mask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     texture:AddMaskTexture(mask)
     return mask
 end
@@ -97,47 +92,37 @@ end
 
 local function EnsureOverlay()
     if overlay then return end
-
     overlay = CreateFrame("Frame", "BloodShieldOverlayMouseResources", UIParent)
     overlay:SetSize(48, 30)
     overlay:SetFrameStrata("HIGH")
     overlay:EnableMouse(false)
     overlay:Hide()
-
-    for index = 1, MAX_PIPS do
-        pips[index] = CreateCircularPip(overlay, index)
-    end
-    for index = 1, 2 do
-        cooldownFrames[index] = CreateCooldown(overlay, index)
-    end
+    for index = 1, MAX_PIPS do pips[index] = CreateCircularPip(overlay, index) end
+    for index = 1, 2 do cooldownFrames[index] = CreateCooldown(overlay, index) end
 end
 
 local function GetMouseCooldownOptions()
     local data = addon.Data and addon.Data.MOUSE_COOLDOWNS
     local bySpec = addon.Data and addon.Data.MOUSE_COOLDOWNS_BY_SPEC
-    if not data then return nil end
-
+    if not data then return {} end
     local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization and C_SpecializationInfo.GetSpecialization()
     local specID = specIndex and GetSpecializationInfo and select(1, GetSpecializationInfo(specIndex))
-    if specID and bySpec and bySpec[specID] then
-        return bySpec[specID]
-    end
-    return data[playerClass]
+    if specID and bySpec and bySpec[specID] then return bySpec[specID] end
+    return data[playerClass] or {}
 end
 
-local function IsSpellKnown(spellID)
+local function IsSpellKnownByPlayer(spellID)
     if not spellID then return false end
-    if IsPlayerSpell then return IsPlayerSpell(spellID) end
-    if IsSpellKnown then return IsSpellKnown(spellID) end
+    if IsPlayerSpell then return IsPlayerSpell(spellID) == true end
+    if C_Spell and C_Spell.IsSpellUsable then
+        return C_Spell.IsSpellUsable(spellID) == true
+    end
     return true
 end
 
 local function FindSpellEntry(spellID)
     if not spellID then return nil end
-    local options = GetMouseCooldownOptions()
-    if not options then return nil end
-    for index = 1, #options do
-        local entry = options[index]
+    for _, entry in ipairs(GetMouseCooldownOptions()) do
         local id = type(entry) == "number" and entry or entry.id
         if id == spellID then return entry end
     end
@@ -146,7 +131,7 @@ end
 
 local function ApplyCooldown(frame, spellID)
     if not frame then return false end
-    if not spellID or not FindSpellEntry(spellID) or not IsSpellKnown(spellID) then
+    if not spellID or not FindSpellEntry(spellID) or not IsSpellKnownByPlayer(spellID) then
         frame.BSOMouseSpellID = nil
         frame:Hide()
         return false
@@ -163,11 +148,8 @@ local function ApplyCooldown(frame, spellID)
     elseif C_Spell and C_Spell.GetSpellCooldown then
         local info = C_Spell.GetSpellCooldown(spellID)
         if info then
-            if frame.SetCooldownFromExpression then
-                frame:SetCooldownFromExpression(spellID)
-            elseif frame.SetCooldownTable then
-                frame:SetCooldownTable(info)
-            end
+            if frame.SetCooldownFromExpression then frame:SetCooldownFromExpression(spellID)
+            elseif frame.SetCooldownTable then frame:SetCooldownTable(info) end
             applied = true
         end
     elseif GetSpellCooldown then
@@ -187,56 +169,47 @@ local function GetConfig()
 end
 
 local function UpdateResourcePips()
-    if not resourceProvider or not overlay then return end
+    local config = GetConfig()
+    if not resourceProvider or not overlay or not config or not config.showMouseSpecialResources then
+        for index = 1, MAX_PIPS do pips[index]:Hide() end
+        return false
+    end
 
     local state = resourceProvider:GetState()
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     maximum = math_min(maximum, MAX_PIPS)
-
     if maximum <= 0 then
         for index = 1, MAX_PIPS do pips[index]:Hide() end
-        return
+        return false
     end
 
-    local radius = CURSOR_RADIUS
-    local centerX = overlay:GetWidth() * 0.5
-    local centerY = overlay:GetHeight() * 0.5
+    local radius = 10
     local step = PI / math_max(1, maximum - 1)
-
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
         if index <= maximum then
-            -- Left semicircle, now ordered top-to-bottom so the available/first
-            -- resource is at the natural top position rather than the bottom.
             local angle = (PI * 0.5) + (index - 1) * step
             pip:ClearAllPoints()
-            pip:SetPoint(
-                "CENTER", overlay, "CENTER",
-                math_cos(angle) * radius,
-                math_sin(angle) * radius
-            )
+            pip:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
             pip:Show()
         else
             pip:Hide()
         end
     end
+    return true
 end
 
 local function UpdateCooldowns()
     local config = GetConfig()
-    if not config or not overlay then return end
-
+    if not config or not overlay then return false end
     local anyVisible = false
-    local ids = { config.mouseCooldown1Spell, config.mouseCooldown2Spell }
-    local centerX = overlay:GetWidth() * 0.5
-    local centerY = overlay:GetHeight() * 0.5
-    local radius = CURSOR_RADIUS
+    local radius = 10
 
     for index = 1, 2 do
         local frame = cooldownFrames[index]
         local spellID = config["mouseCooldown" .. index .. "Spell"]
-        local enabledSlot = config["showMouseCooldown" .. index] == true
-        if enabledSlot and spellID then
+        local slotEnabled = config["showMouseCooldown" .. index] == true
+        if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
             local angle = (PI * 1.5) - (index - 1) * (COOLDOWN_SIZE + COOLDOWN_GAP) / math_max(radius, 1)
             frame:ClearAllPoints()
@@ -251,37 +224,29 @@ end
 
 local function UpdateVisuals()
     if not enabled or not overlay then return end
-    UpdateResourcePips()
-    UpdateCooldowns()
-
-    local resourceVisible = resourceProvider ~= nil
-    local cooldownVisible = false
-    for index = 1, 2 do
-        if cooldownFrames[index]:IsShown() then cooldownVisible = true break end
-    end
+    local resourceVisible = UpdateResourcePips()
+    local cooldownVisible = UpdateCooldowns()
     if resourceVisible or cooldownVisible then overlay:Show() else overlay:Hide() end
 end
 
 local function UpdateCursorPosition()
     if not enabled or not overlay then return end
-
     local cursorX, cursorY = GetCursorPosition()
     local scale = UIParent:GetEffectiveScale()
     if not cursorX or not cursorY or not scale or scale <= 0 then return end
-
     overlay:ClearAllPoints()
     overlay:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cursorX / scale, cursorY / scale - 1)
 end
 
 local function SetEnabled(value)
-    enabled = value and true or false
+    enabled = value == true
     EnsureOverlay()
-
     if not enabled then
         overlay:Hide()
+        for index = 1, MAX_PIPS do pips[index]:Hide() end
+        for index = 1, 2 do cooldownFrames[index]:Hide() end
         return true
     end
-
     if InCombatLockdown() then return true end
     UpdateVisuals()
     UpdateCursorPosition()
@@ -308,13 +273,11 @@ overlay:SetScript("OnUpdate", OnUpdate)
 addon.GetMouseCooldownOptions = GetMouseCooldownOptions
 addon.SetMouseResourceOverlayEnabled = SetEnabled
 addon.UpdateMouseResourceOverlay = Refresh
-addon.RefreshMouseCooldowns = UpdateCooldowns
+addon.RefreshMouseCooldowns = Refresh
 
-if addon.RegisterSpecialResourceListener then
-    addon.RegisterSpecialResourceListener(Refresh)
-end
+if addon.RegisterSpecialResourceListener then addon.RegisterSpecialResourceListener(Refresh) end
 
 addon.RegisterInitializer(function()
-    local config = addon.PlayerBarConfig.Initialize()
-    SetEnabled(config.showMouseSpecialResources or config.showMouseCooldown1 or config.showMouseCooldown2)
+    local cfg = addon.PlayerBarConfig.Initialize()
+    SetEnabled(cfg.showMouseSpecialResources == true or cfg.showMouseCooldown1 == true or cfg.showMouseCooldown2 == true)
 end)
