@@ -24,6 +24,10 @@ local UPDATE_INTERVAL = 0.033
 local COOLDOWN_SIZE = 8
 local COOLDOWN_GAP = 3
 
+-- Cooldowns are the two next pips on the right side of the resource semicircle.
+local COOLDOWN_ANGLE_START = PI * 0.5
+local COOLDOWN_ANGLE_STEP = PI / 6
+
 local enabled = false
 local overlay
 local pips = {}
@@ -166,8 +170,6 @@ local function ApplyCooldown(frame, spellID)
 
     local cooldown = frame.BSOMouseCooldown
     if cooldown then
-        -- Match Minimizer's working implementation: prefer the modern
-        -- duration-object API, then the newer table API, then legacy API.
         if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
             local duration = C_Spell.GetSpellCooldownDuration(spellID)
             if duration then
@@ -190,8 +192,6 @@ local function ApplyCooldown(frame, spellID)
         end
     end
 
-    -- Just like Minimizer Focus/Target: showing the container is independent
-    -- of whether the spell is currently on cooldown.
     frame:Show()
     return true
 end
@@ -244,7 +244,12 @@ local function UpdateCooldowns()
         local slotEnabled = config["showMouseCooldown" .. index] == true
         if slotEnabled and spellID then
             if ApplyCooldown(frame, spellID) then anyVisible = true end
-            local angle = (PI * 1.5) - (index - 1) * (COOLDOWN_SIZE + COOLDOWN_GAP) / math_max(radius, 1)
+
+            -- Continue the upper semicircle from the last resource pip.
+            -- Slot 1 is immediately to the right of the top resource pip;
+            -- slot 2 follows it clockwise. They behave visually as the next
+            -- two pips rather than as a separate cluster below the cursor.
+            local angle = COOLDOWN_ANGLE_START - (index - 1) * COOLDOWN_ANGLE_STEP
             frame:ClearAllPoints()
             frame:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
         else
