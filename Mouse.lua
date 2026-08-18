@@ -38,6 +38,7 @@ local function EnsureOverlay()
 
     addon.MouseResources:Initialize(overlay)
     addon.MouseCooldowns:Initialize(overlay)
+    overlay:SetScript("OnUpdate", OnUpdate)
 end
 
 local function UpdateCursorPosition()
@@ -88,7 +89,7 @@ local function Refresh()
     UpdateCursorPosition()
 end
 
-local function OnUpdate(_, elapsed)
+function OnUpdate(_, elapsed)
     if not enabled then return end
 
     cursorElapsed = cursorElapsed + elapsed
@@ -121,9 +122,6 @@ local function OnEvent(_, event, spellID)
     Refresh()
 end
 
-EnsureOverlay()
-overlay:SetScript("OnUpdate", OnUpdate)
-
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
@@ -147,6 +145,7 @@ end
 
 addon.RegisterInitializer(function()
     mouseConfig = addon.PlayerBarConfig.Initialize()
+    EnsureOverlay()
     SetEnabled(
         mouseConfig.showMouseSpecialResources == true
         or mouseConfig.showMouseCooldown1 == true
