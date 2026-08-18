@@ -16,6 +16,7 @@ local enabled = false
 local overlay
 local mouseConfig
 local cursorElapsed, resourceElapsed = 0, 0
+local EnsureOverlay
 
 local function GetConfig()
     if mouseConfig then return mouseConfig end
@@ -97,7 +98,7 @@ local function OnUpdate(_, elapsed)
     addon.MouseCooldowns:UpdateGlow(elapsed)
 end
 
-local function EnsureOverlay()
+EnsureOverlay = function()
     if overlay then return end
 
     overlay = CreateFrame("Frame", "BloodShieldOverlayMouseResources", UIParent)
