@@ -21,7 +21,38 @@ addon.HandleSlashCommand = function(msg)
         else
             print("BloodShieldOverlay: group reload unavailable.")
         end
+    elseif msg == "raidprof start" then
+        if addon.Raid40ProfilerStart then
+            addon.Raid40ProfilerStart()
+        else
+            print("BloodShieldOverlay: raid profiler unavailable.")
+        end
+    elseif msg == "raidprof stop" then
+        if addon.Raid40ProfilerStop then
+            addon.Raid40ProfilerStop()
+        else
+            print("BloodShieldOverlay: raid profiler unavailable.")
+        end
+    elseif msg == "raidprof reset" then
+        if addon.Raid40Profiler then
+            addon.Raid40Profiler:Reset()
+            print("BloodShieldOverlay: raid40 profiler reset.")
+        else
+            print("BloodShieldOverlay: raid profiler unavailable.")
+        end
+    elseif msg == "raidprof report" then
+        if addon.Raid40Profiler then
+            addon.Raid40Profiler:Report()
+        else
+            print("BloodShieldOverlay: raid profiler unavailable.")
+        end
+    elseif msg == "raidprof status" then
+        if addon.Raid40Profiler then
+            print("BloodShieldOverlay raid40 profiler enabled=" .. tostring(addon.Raid40Profiler:IsEnabled()))
+        else
+            print("BloodShieldOverlay: raid profiler unavailable.")
+        end
     else
-        print("BloodShieldOverlay commands: /shield to open the menu, /shield reload to refresh group frames.")
+        print("BloodShieldOverlay commands: /shield to open the menu, /shield reload to refresh group frames, /shield raidprof start|stop|reset|report|status")
     end
 end
