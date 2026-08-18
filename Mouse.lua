@@ -17,6 +17,7 @@ local mouseConfig
 local cursorElapsed, resourceElapsed = 0, 0
 local EnsureOverlay
 local eventFrame
+local OnUpdate
 
 local function GetConfig()
     if mouseConfig then return mouseConfig end
@@ -104,7 +105,7 @@ local function Refresh()
     UpdateCursorPosition()
 end
 
-function OnUpdate(_, elapsed)
+OnUpdate = function(_, elapsed)
     if not enabled then return end
 
     -- Cursor tracking is deliberately independent of the global graphics rate.
