@@ -16,16 +16,18 @@ local ipairs = ipairs
 local next = next
 local pairs = pairs
 local type = type
-local table_wipe = table.wipe
 local string_find = string.find
 local manager = CreateFrame("Frame")
 
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 local healthBarCache = setmetatable({}, { __mode = "k" })
-local foundHealthBars = setmetatable({}, { __mode = "k" })
 local discoveryPending = false
 local pendingRefresh = false
+local fullRefreshPending = false
+local dirtyUnits = {}
+local unitFrames = {}
+local compactMode = nil
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
@@ -42,6 +44,10 @@ local ForEachCompactFrame = addon.ForEachCompactFrame
 
 local function InRaidMode()
     return IsInRaid and IsInRaid() or false
+end
+
+local function GetCurrentMode()
+    return InRaidMode() and "raid" or "party"
 end
 
 local function GetHealthBar(frame)
@@ -76,10 +82,31 @@ local function GetHealthBar(frame)
     return healthBar
 end
 
-local function IsSupportedUnit(unit)
+local function IsSupportedUnit(unit, mode)
     if type(unit) ~= "string" then return false end
-    if InRaidMode() then return RAID_UNITS[unit] == true end
+    mode = mode or compactMode or GetCurrentMode()
+    if mode == "raid" then return RAID_UNITS[unit] == true end
     return PARTY_UNITS[unit] == true
+end
+
+local function RemoveFrame(frame, unit)
+    if not frame then return end
+    unit = unit or unitFrames[frame]
+    if unit then
+        local entries = overlays[unit]
+        if entries then
+            local healthBar = GetHealthBar(frame)
+            local entry = healthBar and overlaysByHealthBar[healthBar]
+            if entry and entry.unit == unit then
+                entry.overlay:Hide()
+                entry.unit = nil
+                overlaysByHealthBar[healthBar] = nil
+            end
+            if healthBar then entries[healthBar] = nil end
+            if not next(entries) then overlays[unit] = nil end
+        end
+    end
+    unitFrames[frame] = nil
 end
 
 local function AddOverlay(unit, healthBar)
@@ -89,12 +116,77 @@ local function AddOverlay(unit, healthBar)
         overlaysByHealthBar[healthBar] = entry
     end
 
-    if entry.unit == unit then return end
+    if entry.unit == unit then return entry end
     if entry.unit and overlays[entry.unit] then overlays[entry.unit][healthBar] = nil end
 
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
+    return entry
+end
+
+local function ReconcileFrame(frame, mode)
+    if IsForbiddenFrame(frame) then return end
+    mode = mode or compactMode or GetCurrentMode()
+    local previousUnit = unitFrames[frame]
+    local unit = GetUnit(frame)
+
+    if previousUnit and previousUnit ~= unit then
+        RemoveFrame(frame, previousUnit)
+    end
+
+    if not unit or not IsSupportedUnit(unit, mode) then
+        unitFrames[frame] = nil
+        return
+    end
+
+    local healthBar = GetHealthBar(frame)
+    if not healthBar then
+        unitFrames[frame] = unit
+        return
+    end
+
+    AddOverlay(unit, healthBar)
+    unitFrames[frame] = unit
+end
+
+local function ReconcileUnit(unit, mode)
+    if not unit then return end
+    mode = mode or compactMode or GetCurrentMode()
+    local frame = unitFrames[unit]
+    if frame then
+        ReconcileFrame(frame, mode)
+        return
+    end
+
+    -- A unit may have just been assigned a new Blizzard frame. Ask Blizzard's
+    -- authoritative frame pool for the current frame, but only once for this
+    -- dirty unit; never perform a full tree scan.
+    ForEachCompactFrame(function(candidate)
+        if GetUnit(candidate) == unit then
+            ReconcileFrame(candidate, mode)
+        end
+    end)
+end
+
+local function MarkUnitDirty(unit)
+    if unit and IsSupportedUnit(unit) then dirtyUnits[unit] = true end
+end
+
+local function DiscoverAllCompactFrames()
+    local mode = GetCurrentMode()
+    compactMode = mode
+    local seenFrames = {}
+    ForEachCompactFrame(function(frame)
+        seenFrames[frame] = true
+        ReconcileFrame(frame, mode)
+    end)
+
+    for frame, unit in pairs(unitFrames) do
+        if not seenFrames[frame] then
+            RemoveFrame(frame, unit)
+        end
+    end
 end
 
 local function TryEnsurePartyFramesVisible()
@@ -111,9 +203,6 @@ local function TryEnsurePartyFramesVisible()
         if shown then frame:Show() else frame:Hide() end
     end
 
-    -- Only one Blizzard group-frame representation is active from our side:
-    -- party/solo when not in a raid, raid frames when in a raid. A raid can have
-    -- fewer than five members; IsInRaid() is the authoritative distinction.
     if PartyFrame then
         SetShown(PartyFrame, not inRaid)
         if not inRaid and PartyFrame.Update then PartyFrame:Update() end
@@ -153,55 +242,13 @@ local function GetPersonalResourceHealthBar()
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
-local function TryAddFrameOverlay(frame)
-    if IsForbiddenFrame(frame) then return end
-    local unit = GetUnit(frame)
-    if unit and IsSupportedUnit(unit) then
-        local healthBar = GetHealthBar(frame)
-        if healthBar then
-            AddOverlay(unit, healthBar)
-            foundHealthBars[healthBar] = true
+local function AddDirtyUnitsToUpdate()
+    local mode = GetCurrentMode()
+    for unit in pairs(dirtyUnits) do
+        if IsSupportedUnit(unit, mode) then
+            ReconcileUnit(unit, mode)
         end
-    end
-end
-
-local function ScanCompactFrames()
-    ForEachCompactFrame(TryAddFrameOverlay)
-end
-
-local function DiscoverFrames()
-    if InCombatLockdown() then
-        pendingRefresh = true
-        return
-    end
-
-    TryEnsurePartyFramesVisible()
-    table_wipe(foundHealthBars)
-
-    local playerHealthBar = GetPlayerFrameHealthBar()
-    if playerHealthBar then
-        AddOverlay("player", playerHealthBar)
-        foundHealthBars[playerHealthBar] = true
-    end
-
-    local personalResourceHealthBar = GetPersonalResourceHealthBar()
-    if personalResourceHealthBar then
-        AddOverlay("player", personalResourceHealthBar)
-        foundHealthBars[personalResourceHealthBar] = true
-    end
-
-    ScanCompactFrames()
-
-    for unit, entries in pairs(overlays) do
-        for healthBar, entry in pairs(entries) do
-            if not foundHealthBars[healthBar] then
-                entry.overlay:Hide()
-                entry.unit = nil
-                entries[healthBar] = nil
-                overlaysByHealthBar[healthBar] = nil
-            end
-        end
-        if not next(entries) then overlays[unit] = nil end
+        dirtyUnits[unit] = nil
     end
 end
 
@@ -215,6 +262,30 @@ end
 
 local function UpdateAll()
     for unit in pairs(overlays) do UpdateUnit(unit) end
+end
+
+local function DiscoverFrames()
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
+
+    TryEnsurePartyFramesVisible()
+
+    local mode = GetCurrentMode()
+    if fullRefreshPending or compactMode ~= mode then
+        fullRefreshPending = false
+        dirtyUnits = {}
+        DiscoverAllCompactFrames()
+    else
+        AddDirtyUnitsToUpdate()
+    end
+
+    local playerHealthBar = GetPlayerFrameHealthBar()
+    if playerHealthBar then AddOverlay("player", playerHealthBar) end
+
+    local personalResourceHealthBar = GetPersonalResourceHealthBar()
+    if personalResourceHealthBar then AddOverlay("player", personalResourceHealthBar) end
 end
 
 local function DiscoverAndUpdate()
@@ -240,7 +311,10 @@ QueueDiscoverAndUpdate = function()
 end
 
 addon.RequestRefresh = QueueDiscoverAndUpdate
-addon.RegisterLayoutListener(QueueDiscoverAndUpdate)
+addon.RegisterLayoutListener(function()
+    fullRefreshPending = true
+    QueueDiscoverAndUpdate()
+end)
 
 addon.RegisterInitializer(function()
     addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
@@ -252,6 +326,7 @@ addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
             pendingRefresh = false
+            fullRefreshPending = true
             QueueDiscoverAndUpdate()
         end
     end)
@@ -263,11 +338,8 @@ if hooksecurefunc then
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
         local unit = GetUnit(frame)
         if unit and IsSupportedUnit(unit) then
-            local healthBar = GetHealthBar(frame)
-            if healthBar then
-                AddOverlay(unit, healthBar)
-                if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
-            end
+            ReconcileFrame(frame)
+            if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
         end
     end
     if _G.CompactUnitFrame_UpdateAll then hooksecurefunc("CompactUnitFrame_UpdateAll", OnCompactUnitFrameUpdated) end
@@ -281,6 +353,7 @@ local function OnEditModeExit()
     editModeExitPending = true
     C_Timer.After(0.2, function()
         editModeExitPending = false
+        fullRefreshPending = true
         QueueDiscoverAndUpdate()
     end)
 end
@@ -296,17 +369,8 @@ manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "NAME_PLATE_UNIT_REMOVED" then
-        if unit then
-            local nameplate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
-            if nameplate then
-                local bar = GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame or nameplate)
-                if bar and overlaysByHealthBar[bar] then
-                    local entry = overlaysByHealthBar[bar]
-                    entry.overlay:Hide()
-                    if entry.unit and overlays[entry.unit] then overlays[entry.unit][bar] = nil end
-                    overlaysByHealthBar[bar] = nil
-                end
-            end
+        if unit and UnitIsUnit(unit, "player") then
+            QueueDiscoverAndUpdate()
         end
         return
     end
