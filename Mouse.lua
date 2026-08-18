@@ -87,14 +87,29 @@ local function CreateCooldown(parent, index)
     chargeText:Hide()
     frame.BSOMouseChargeText = chargeText
 
+    -- Custom spell-proc alert. The Blizzard ActionButton glow API is not
+    -- available on this client, so make the proc unmistakable ourselves.
     local glow = frame:CreateTexture(nil, "OVERLAY")
     glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
     glow:SetBlendMode("ADD")
-    glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -4, 4)
-    glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 4, -4)
-    glow:SetVertexColor(1.0, 0.72, 0.05, 0.95)
+    glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -7, 7)
+    glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 7, -7)
+    glow:SetVertexColor(1.0, 0.55, 0.02, 1.0)
+    glow:SetAlpha(0)
     glow:Hide()
     frame.BSOMouseGlow = glow
+
+    -- A second, larger flash layer gives the proc a visible pulse rather
+    -- than looking like the icon merely changed color.
+    local flash = frame:CreateTexture(nil, "OVERLAY")
+    flash:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    flash:SetBlendMode("ADD")
+    flash:SetPoint("TOPLEFT", frame, "TOPLEFT", -11, 11)
+    flash:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 11, -11)
+    flash:SetVertexColor(1.0, 0.82, 0.15, 1.0)
+    flash:SetAlpha(0)
+    flash:Hide()
+    frame.BSOMouseGlowFlash = flash
 
     local cooldown = CreateFrame("Cooldown", "BloodShieldOverlayMouseCooldownTimer" .. index, frame, "CooldownFrameTemplate")
     cooldown:SetAllPoints()
@@ -111,6 +126,7 @@ local function CreateCooldown(parent, index)
     frame.BSOMouseCooldown = cooldown
     frame.BSOMouseSpellID = nil
     frame.BSOMouseGlowActive = false
+    frame.BSOMouseGlowPhase = 0
     return frame
 end
 
@@ -118,10 +134,16 @@ local function SetSpellGlow(frame, active)
     if not frame then return end
     frame.BSOMouseGlowActive = active == true
     if frame.BSOMouseGlowActive then
+        frame.BSOMouseGlowPhase = 0
         frame.BSOMouseGlow:Show()
+        frame.BSOMouseGlowFlash:Show()
+        frame.BSOMouseGlow:SetAlpha(1.0)
+        frame.BSOMouseGlowFlash:SetAlpha(1.0)
     else
         frame.BSOMouseGlow:Hide()
-        frame.BSOMouseGlow:SetAlpha(0.95)
+        frame.BSOMouseGlowFlash:Hide()
+        frame.BSOMouseGlow:SetAlpha(0)
+        frame.BSOMouseGlowFlash:SetAlpha(0)
     end
 end
 
@@ -135,6 +157,17 @@ local function RefreshSpellGlow(frame)
         active = C_SpellActivationOverlay.IsSpellOverlayed(frame.BSOMouseSpellID) == true
     end
     SetSpellGlow(frame, active)
+end
+
+local function UpdateSpellGlow(frame, elapsed)
+    if not frame or not frame.BSOMouseGlowActive then return end
+    frame.BSOMouseGlowPhase = (frame.BSOMouseGlowPhase or 0) + elapsed * GLOW_PULSE_SPEED
+    local wave = (math.sin(frame.BSOMouseGlowPhase) + 1) * 0.5
+    local flashWave = math.max(0, math.cos(frame.BSOMouseGlowPhase * 0.5))
+
+    -- Strong breathing glow plus a periodic bright flash.
+    frame.BSOMouseGlow:SetAlpha(0.65 + wave * 0.35)
+    frame.BSOMouseGlowFlash:SetAlpha(0.12 + flashWave * 0.72)
 end
 
 local function EnsureOverlay()
@@ -397,6 +430,9 @@ local function OnUpdate(_, elapsed)
                 UpdateResourcePips()
             end
         end
+    end
+    for index = 1, 2 do
+        UpdateSpellGlow(cooldownFrames[index], elapsed)
     end
 end
 
