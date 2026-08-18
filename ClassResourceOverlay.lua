@@ -19,7 +19,6 @@ local resourceProvider = addon.GetSpecialResourceProvider(
 
 if not resourceProvider then return end
 
--- Fixed dimensions and a neutral bar texture for resource pips.
 local MAX_PIPS = 7
 local PIP_WIDTH = 12
 local PIP_HEIGHT = 6
@@ -36,13 +35,12 @@ local currentBar = nil
 local enabled = true
 local refreshScheduled = false
 
--- Discovery predicates and the bounded compact-frame walk are shared with
--- BlizzardFrames.lua via FrameDiscovery.lua, instead of each module keeping
--- its own copy (and its own full tree walk) of the same lookup logic.
+-- Blizzard owns the compact-frame lifecycle. Both absorb and resource
+-- overlays consume the same five party slots / raid frame pool instead of
+-- independently walking the UI tree.
 local IsForbidden = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
 local IsPlayerUnit = addon.IsPlayerUnit
-local FindPlayerFrame = addon.FindPlayerFrame
 local ForEachCompactFrame = addon.ForEachCompactFrame
 
 local function IsResourceStatusBar(child)
@@ -90,8 +88,6 @@ local function GetResourceBar(frame)
     return nil
 end
 
--- Reused across FindPlayerResourceBar calls so bounding the compact-frame
--- scan doesn't allocate a new closure every retry/locate pass.
 local foundResourceBar
 local function HandlePlayerCompactFrame(frame)
     if foundResourceBar then return end
@@ -101,31 +97,12 @@ local function HandlePlayerCompactFrame(frame)
 end
 
 local function FindPlayerResourceBar()
-    local playerFrame = FindPlayerFrame(CompactPartyFrame)
-    local bar = playerFrame and GetResourceBar(playerFrame)
-    if bar then return bar end
-
-    playerFrame = FindPlayerFrame(CompactRaidFrameContainer)
-    bar = playerFrame and GetResourceBar(playerFrame)
-    if bar then return bar end
-
-    playerFrame = FindPlayerFrame(PartyFrame)
-    bar = playerFrame and GetResourceBar(playerFrame)
-    if bar then return bar end
-
-    -- Bounded by the actual group/raid size instead of always resolving all
-    -- ~200 fixed compact-frame names (shared with BlizzardFrames.lua).
+    -- The frame itself is discovered through Blizzard's authoritative compact
+    -- frame APIs. Only the already-known player's frame may be inspected for
+    -- its child resource bar; we never walk the raid/party container to find it.
     foundResourceBar = nil
     ForEachCompactFrame(HandlePlayerCompactFrame)
     if foundResourceBar then return foundResourceBar end
-
-    local main = PlayerFrame and PlayerFrame.PlayerFrameContent
-    local content = main and main.PlayerFrameContentMain
-    local healthArea = content and content.HealthBarArea
-    if healthArea then
-        bar = GetResourceBar(healthArea)
-        if bar then return bar end
-    end
 
     return nil
 end
@@ -166,7 +143,7 @@ local function AttachTo(bar)
 
     if not bar then
         overlay:Hide()
-        return
+        return true
     end
 
     overlay:SetParent(bar)
@@ -188,8 +165,6 @@ UpdatePips = function()
     end
 
     local state = resourceProvider:GetState()
-    -- Shared with PlayerBar.lua's circle rendering: fills progress/order and
-    -- applies value/color/sort to each pip, returning the clamped maximum.
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     if maximum <= 0 then
         overlay:Hide()
