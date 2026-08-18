@@ -6,7 +6,6 @@ addon.MouseCooldowns = MouseCooldowns
 
 local CreateFrame = CreateFrame
 local GetSpellTexture = _G.GetSpellTexture
-local math_max = math.max
 
 local DEFAULT_COOLDOWN_SIZE = 12
 local CHARGE_FONT_SIZE = 9
@@ -24,6 +23,10 @@ local function GetOptions()
     if not data then return {} end
     local _, playerClass = UnitClass("player")
     return data[playerClass] or {}
+end
+
+function MouseCooldowns:GetOptions()
+    return GetOptions()
 end
 
 local function FindSpellEntry(spellID)
