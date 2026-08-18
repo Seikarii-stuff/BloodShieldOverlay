@@ -9,7 +9,6 @@ local type = type
 local select = select
 local _G = _G
 local IsInRaid = _G.IsInRaid
-local IsInGroup = _G.IsInGroup
 
 function addon.IsForbiddenFrame(frame)
     if not frame then return true end
@@ -45,55 +44,37 @@ function addon.GetUnit(frame)
     return nil
 end
 
--- Blizzard's raid container is the authoritative source for active raid
--- compact frames. Do not fall back to named-frame probing or child walks:
--- BloodShieldOverlay intentionally supports Blizzard's default compact frames,
--- not third-party raid-frame replacements.
 local function ForEachBlizzardRaidFrame(callback)
     local container = _G.CompactRaidFrameContainer
-    if not container or type(container.ApplyToFrames) ~= "function" then
-        return false
-    end
+    if not container or type(container.ApplyToFrames) ~= "function" then return false end
     container:ApplyToFrames("normal", callback)
     return true
 end
 
 addon.ForEachBlizzardRaidFrame = ForEachBlizzardRaidFrame
 
--- CompactPartyFrameMember1..5 are Blizzard's five party slots. Their `unit`
--- field is authoritative and is deliberately used instead of assuming that
--- Member1 means player: in raid/AlwaysInParty Blizzard can reuse these frames
--- for raid units (e.g. raid3, raid2, raid4...).
 local function ForEachBlizzardPartyFrame(callback)
-    if not _G.CompactPartyFrame then
-        return false
+    if not _G.CompactPartyFrame then return false end
+    for index = 1, 5 do
+        local frame = _G["CompactPartyFrameMember" .. index]
+        if frame then callback(frame) end
     end
-
-    local frame
-    frame = _G.CompactPartyFrameMember1
-    if frame then callback(frame) end
-    frame = _G.CompactPartyFrameMember2
-    if frame then callback(frame) end
-    frame = _G.CompactPartyFrameMember3
-    if frame then callback(frame) end
-    frame = _G.CompactPartyFrameMember4
-    if frame then callback(frame) end
-    frame = _G.CompactPartyFrameMember5
-    if frame then callback(frame) end
-
     return true
 end
 
 addon.ForEachBlizzardPartyFrame = ForEachBlizzardPartyFrame
 
 function addon.ForEachCompactFrame(callback)
-    if IsInRaid and IsInRaid() then
-        -- Raid discovery is exclusively Blizzard's authoritative frame pool.
-        return ForEachBlizzardRaidFrame(callback)
+    local raid = IsInRaid and IsInRaid() or false
+    if raid then
+        ForEachBlizzardRaidFrame(callback)
+        -- AlwaysInParty deliberately keeps the Blizzard party pool alive in a
+        -- raid. Those frames are a second legitimate overlay source.
+        if addon.ShouldShowPartyFrames and addon.ShouldShowPartyFrames() then
+            ForEachBlizzardPartyFrame(callback)
+        end
+        return true
     end
-
-    -- Party and AlwaysInParty use Blizzard's five compact party slots. We do
-    -- not infer units from slot numbers; the frame's own `unit` is authoritative.
     return ForEachBlizzardPartyFrame(callback)
 end
 
@@ -106,9 +87,6 @@ local function IsPlayerUnit(frame)
 end
 addon.IsPlayerUnit = IsPlayerUnit
 
--- Player-resource discovery is allowed to inspect the already-known Blizzard
--- frame's children for its resource bar. It is not used to discover raid/party
--- membership; membership always comes from the compact-frame APIs above.
 local FindPlayerFrame
 local function FindPlayerFrameChildren(depth, ...)
     local childCount = select("#", ...)
