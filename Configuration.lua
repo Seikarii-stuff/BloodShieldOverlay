@@ -131,6 +131,7 @@ end
 
 addon.PlayerBarConfig = {
     Initialize = Initialize,
+    Get = function() return config end,
     Reset = Reset,
     GetDefaults = function() return DEFAULTS end,
     GetMinCapPercent = function() return MIN_CAP_PERCENT end,
