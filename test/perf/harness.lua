@@ -37,6 +37,7 @@ local function new_frame(objectType, name, parent)
     if parent and parent.children then parent.children[#parent.children + 1] = frame end
     frame_method(frame, "GetObjectType", function(self) return self.objectType end)
     frame_method(frame, "GetName", function(self) return self.name end)
+    frame_method(frame, "GetParent", function(self) return self.parent end)
     frame_method(frame, "IsForbidden", function() return false end)
     frame_method(frame, "GetChildren", function(self)
         getChildrenCalls = getChildrenCalls + 1
@@ -58,7 +59,14 @@ local function new_frame(objectType, name, parent)
     end)
     frame_method(frame, "SetAllPoints", function(self, target) self.allPoints = target end)
     frame_method(frame, "SetParent", function(self, value) self.parent = value end)
-    frame_method(frame, "SetStatusBarTexture", function(self, texture) self.texture = texture end)
+    frame_method(frame, "SetStatusBarTexture", function(self, texture)
+        self.texture = texture
+        if not self.statusBarTexture then
+            self.statusBarTexture = new_frame("Texture", nil, self)
+        end
+        self.statusBarTexture.texture = texture
+    end)
+    frame_method(frame, "GetStatusBarTexture", function(self) return self.statusBarTexture end)
     frame_method(frame, "SetStatusBarColor", function(self, r, g, b, a) self.color = { r, g, b, a } end)
     frame_method(frame, "SetOrientation", function(self, value) self.orientation = value end)
     frame_method(frame, "SetReverseFill", function(self, value) self.reverse = value end)
@@ -85,8 +93,13 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "StopMovingOrSizing", function(self) self.moving = false end)
     frame_method(frame, "CreateTexture", function(self) return new_frame("Texture", nil, self) end)
     frame_method(frame, "CreateFontString", function(self) return new_frame("FontString", nil, self) end)
+    frame_method(frame, "CreateMaskTexture", function(self) return new_frame("MaskTexture", nil, self) end)
+    frame_method(frame, "AddMaskTexture", function(self, mask)
+        self.maskTextures = self.maskTextures or {}
+        self.maskTextures[#self.maskTextures + 1] = mask
+    end)
     frame_method(frame, "SetColorTexture", function(self, r, g, b, a) self.color = { r, g, b, a } end)
-    frame_method(frame, "SetTexture", function(self, texture) self.texture = texture end)
+    frame_method(frame, "SetTexture", function(self, texture, ...) self.texture = texture self.textureArgs = { ... } end)
     frame_method(frame, "SetTexCoord", function(self, ...) self.texCoord = { ... } end)
     frame_method(frame, "SetVertexColor", function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end)
     frame_method(frame, "SetHeight", function(self, value) self.height = value end)
