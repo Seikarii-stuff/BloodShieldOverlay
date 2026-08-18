@@ -22,7 +22,7 @@ local DEFAULTS = {
     mouseCooldown2Spell = nil,
     mouseCooldownPipSize = 8,
     mouseResourceArcSpacing = 1.0,
-    mouseResourceArcStart = 1.0,
+    mouseResourceArcStart = 0.83,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
