@@ -71,26 +71,25 @@ local function ApplyVisibility()
             end
         end
     end
-
     pendingSync = false
 end
 
-local function QueueVisibilitySync()
+local function QueueVisibilitySync(delay)
     pendingSync = true
     if syncQueued then return end
     syncQueued = true
-    C_Timer.After(0, ApplyVisibility)
+    C_Timer.After(delay or 0, ApplyVisibility)
 end
 
 function addon.RefreshPartyFrames()
-    QueueVisibilitySync()
+    QueueVisibilitySync(0)
 end
 
 function addon.SetAlwaysInPartyEnabled(enabled)
     local config = GetConfig()
     if not config then return false end
     config.alwaysInParty = enabled == true
-    QueueVisibilitySync()
+    QueueVisibilitySync(0)
     if addon.RequestRefresh then addon.RequestRefresh(true) end
     return true
 end
@@ -101,26 +100,54 @@ for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_
 end
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
-        if pendingSync then QueueVisibilitySync() end
+        if pendingSync then QueueVisibilitySync(0) end
     else
-        QueueVisibilitySync()
+        QueueVisibilitySync(0)
     end
 end)
 
-local function ReassertHidden()
-    if IsInRaid and IsInRaid() and not IsEnabled() then
-        QueueVisibilitySync()
+-- Modern Blizzard compact-party frames run their own visibility pass. In a
+-- raid that pass normally hides CompactPartyFrame because the displayed ally
+-- mode is "raid". AlwaysInParty must run after Blizzard's pass or our :Show()
+-- is immediately undone on roster/layout changes.
+local function ReassertPartyVisibility()
+    if InCombatLockdown() then
+        pendingSync = true
+        return
+    end
+    local showParty = addon.ShouldShowPartyFrames()
+    SetShown(_G.CompactPartyFrame, showParty)
+    SetShown(_G.PartyFrame, showParty)
+    SetShown(_G.PartyMemberFrame1, showParty)
+end
+
+local function HookBlizzardVisibility()
+    if not hooksecurefunc then return end
+    if _G.CompactPartyFrame_UpdateVisibility then
+        hooksecurefunc("CompactPartyFrame_UpdateVisibility", ReassertPartyVisibility)
+    end
+    if _G.CompactRaidFrameManager_UpdateContainerVisibility then
+        hooksecurefunc("CompactRaidFrameManager_UpdateContainerVisibility", ReassertPartyVisibility)
+    end
+    if _G.CompactRaidFrameManager_UpdateShown then
+        hooksecurefunc("CompactRaidFrameManager_UpdateShown", ReassertPartyVisibility)
+    end
+    if _G.CompactPartyFrame_Update then
+        hooksecurefunc("CompactPartyFrame_Update", ReassertPartyVisibility)
+    end
+    if _G.PartyFrame_Update then
+        hooksecurefunc("PartyFrame_Update", ReassertPartyVisibility)
+    end
+    if _G.PartyMemberFrame_Update then
+        hooksecurefunc("PartyMemberFrame_Update", ReassertPartyVisibility)
     end
 end
 
-if hooksecurefunc then
-    if _G.CompactPartyFrame_Update then hooksecurefunc("CompactPartyFrame_Update", ReassertHidden) end
-    if _G.PartyFrame_Update then hooksecurefunc("PartyFrame_Update", ReassertHidden) end
-    if _G.PartyMemberFrame_Update then hooksecurefunc("PartyMemberFrame_Update", ReassertHidden) end
-end
+HookBlizzardVisibility()
 
 addon.RegisterInitializer(function()
     if initialized then return end
     initialized = true
-    QueueVisibilitySync()
+    HookBlizzardVisibility()
+    QueueVisibilitySync(0)
 end)
