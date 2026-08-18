@@ -1,4 +1,7 @@
--- AlwaysInParty: in a raid, use the normal party UI instead of the raid UI.
+-- AlwaysInParty means exactly this:
+--   SOLO  -> create/show the native party frame for the player.
+--   PARTY -> Blizzard's normal party frame is used.
+--   RAID  -> Blizzard's raid frames are used; NEVER show party as a second group.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -19,15 +22,17 @@ end
 
 addon.IsAlwaysInPartyEnabled = IsEnabled
 
+-- This answers the only question the discovery code needs:
+-- party UI is valid unless the player is in a real raid.
 function addon.ShouldShowPartyFrames()
-    return not (IsInRaid and IsInRaid()) or IsEnabled()
+    return not (IsInRaid and IsInRaid())
 end
 
 local pending = false
 local queued = false
 
 local function SetShown(frame, shown)
-    if not frame then return end
+    if not frame or (frame.IsForbidden and frame:IsForbidden()) then return end
     if shown then frame:Show() else frame:Hide() end
 end
 
@@ -38,33 +43,45 @@ local function Apply()
         return
     end
 
-    local enabled = IsEnabled()
     local inRaid = IsInRaid and IsInRaid() or false
+    local enabled = IsEnabled()
 
-    -- AlwaysInParty means party UI replaces raid UI. This is the missing half
-    -- of the old behaviour: showing party is not enough if Blizzard's raid
-    -- container is still visible.
-    if inRaid and enabled then
-        SetShown(_G.CompactRaidFrameManager, false)
-        if _G.CompactRaidFrameManagerContainer then
-            SetShown(_G.CompactRaidFrameManagerContainer, false)
-        end
+    if inRaid then
+        -- A raid is NEVER an AlwaysInParty state. Leave the raid UI alone and
+        -- explicitly remove our solo party presentation if it was visible.
+        SetShown(_G.PartyFrame, false)
+        SetShown(_G.CompactPartyFrame, false)
+        SetShown(_G.PartyMemberFrame1, false)
+        SetShown(_G.CompactPartyFrameMemberFrame1, false)
+        pending = false
+        return
     end
 
-    local showParty = not inRaid or enabled
-    SetShown(_G.PartyFrame, showParty)
-    SetShown(_G.CompactPartyFrame, showParty)
-    SetShown(_G.PartyMemberFrame1, showParty)
+    if not enabled then
+        pending = false
+        return
+    end
 
-    if showParty then
-        if _G.PartyFrame and _G.PartyFrame.Update then _G.PartyFrame:Update() end
-        if _G.CompactPartyFrame_Update then _G.CompactPartyFrame_Update() end
-        if _G.PartyMemberFrame1 then
-            _G.PartyMemberFrame1.unit = "player"
-            if _G.PartyMemberFrame_Update then
-                _G.PartyMemberFrame_Update(_G.PartyMemberFrame1, "player")
-            end
+    -- Solo: manufacture the normal player-only party presentation.
+    SetShown(_G.PartyFrame, true)
+    SetShown(_G.CompactPartyFrame, true)
+    SetShown(_G.PartyMemberFrame1, true)
+    SetShown(_G.CompactPartyFrameMemberFrame1, true)
+
+    if _G.PartyFrame and _G.PartyFrame.Update then
+        _G.PartyFrame:Update()
+    end
+    if _G.CompactPartyFrame_Update then
+        _G.CompactPartyFrame_Update()
+    end
+    if _G.PartyMemberFrame1 then
+        _G.PartyMemberFrame1.unit = "player"
+        if _G.PartyMemberFrame_Update then
+            _G.PartyMemberFrame_Update(_G.PartyMemberFrame1, "player")
         end
+    end
+    if _G.CompactPartyFrameMemberFrame1 and _G.CompactPartyFrameMemberFrame1.SetUnit then
+        _G.CompactPartyFrameMemberFrame1:SetUnit("player")
     end
 
     pending = false
@@ -97,6 +114,7 @@ for _, event in ipairs({
 }) do
     eventFrame:RegisterEvent(event)
 end
+
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
         if pending then Queue(0) end
