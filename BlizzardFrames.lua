@@ -39,8 +39,6 @@ for index = 1, 40 do
     RAID_UNITS["raid" .. index] = true
 end
 
--- Shared discovery predicates live in FrameDiscovery.lua. The only compact
--- frames we consume are the Blizzard frames exposed by that module.
 local IsForbiddenFrame = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
 local GetFrameName = addon.GetFrameName
@@ -121,20 +119,17 @@ local function TryEnsurePartyFramesVisible()
         return
     end
 
-    local inRaid = IsInRaid and IsInRaid()
     local inGroup = IsInGroup and IsInGroup()
-
-    if inRaid then
-        if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
-        if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
-        return
-    end
 
     local function EnsureFrameShown(frame)
         if IsForbiddenFrame(frame) then return end
         if frame.Show then frame:Show() end
     end
 
+    -- Do not hide party frames while in a raid. AlwaysInParty may intentionally
+    -- keep Blizzard's CompactPartyFrame visible there, and we must not fight
+    -- Blizzard/that setting. If Blizzard has it hidden, we simply consume no
+    -- party frame until it exists/is shown.
     if PartyFrame then
         EnsureFrameShown(PartyFrame)
         if PartyFrame.Update then PartyFrame:Update() end
@@ -148,7 +143,7 @@ local function TryEnsurePartyFramesVisible()
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         EnsureFrameShown(partyMemberFrame)
-        if not inGroup then
+        if not inGroup and not (IsInRaid and IsInRaid()) then
             partyMemberFrame.unit = "player"
         end
         if _G.PartyMemberFrame_Update and partyMemberFrame.unit then
@@ -159,7 +154,7 @@ local function TryEnsurePartyFramesVisible()
     local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
     if compactPartyMemberFrame then
         EnsureFrameShown(compactPartyMemberFrame)
-        if not inGroup and compactPartyMemberFrame.SetUnit then
+        if not inGroup and not (IsInRaid and IsInRaid()) and compactPartyMemberFrame.SetUnit then
             compactPartyMemberFrame:SetUnit("player")
         end
     end
@@ -207,23 +202,6 @@ end
 -- each frame decides whether it belongs to our supported set.
 local function ScanCompactFrames()
     ForEachCompactFrame(TryAddFrameOverlay)
-
-    if IsInRaid and IsInRaid() then
-        local compactPartyFrame = _G.CompactPartyFrame
-        if compactPartyFrame then
-            local frame
-            frame = _G.CompactPartyFrameMember1
-            if frame then TryAddFrameOverlay(frame) end
-            frame = _G.CompactPartyFrameMember2
-            if frame then TryAddFrameOverlay(frame) end
-            frame = _G.CompactPartyFrameMember3
-            if frame then TryAddFrameOverlay(frame) end
-            frame = _G.CompactPartyFrameMember4
-            if frame then TryAddFrameOverlay(frame) end
-            frame = _G.CompactPartyFrameMember5
-            if frame then TryAddFrameOverlay(frame) end
-        end
-    end
 end
 
 local function DiscoverFrames()
