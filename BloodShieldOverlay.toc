@@ -11,6 +11,7 @@ Core.lua
 FrameDiscovery.lua
 AbsorbIndicator.lua
 Configuration.lua
+AlwaysInParty.lua
 Performance.lua
 ResourceProviders.lua
 PlayerBar.lua
