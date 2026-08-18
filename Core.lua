@@ -23,8 +23,6 @@ local isThrottleScheduled = false
 local eventFrame = CreateFrame("Frame")
 local throttleElapsed = 0
 
-local THROTTLE_INTERVAL = 0.033 -- ~30 FPS micro-throttle for visual updates
-
 local relevantUnits = { player = true, targettarget = true }
 for index = 1, 4 do
     relevantUnits["party" .. index] = true
@@ -47,6 +45,13 @@ end
 
 function addon.RegisterTargetTargetUpdateListener(listener)
     if type(listener) == "function" then table_insert(targetTargetListeners, listener) end
+end
+
+local function GetThrottleInterval()
+    if type(addon.GetGraphicsUpdateInterval) == "function" then
+        return addon.GetGraphicsUpdateInterval()
+    end
+    return 1 / 30
 end
 
 local function FlushUpdates()
@@ -82,7 +87,7 @@ end
 
 local function OnThrottleUpdate(_, elapsed)
     throttleElapsed = throttleElapsed + elapsed
-    if throttleElapsed >= THROTTLE_INTERVAL then FlushUpdates() end
+    if throttleElapsed >= GetThrottleInterval() then FlushUpdates() end
 end
 
 local function EnsureThrottleScheduled()
