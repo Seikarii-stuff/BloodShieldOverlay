@@ -28,7 +28,7 @@ local function GetOptions()
 end
 
 function MouseCooldowns:GetOptions()
-    return GetOptions
+    return GetOptions()
 end
 
 local function FindSpellEntry(spellID)
