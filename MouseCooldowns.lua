@@ -120,13 +120,13 @@ local function CreateCooldownFrame(index)
     local icon = frame:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    -- Use a circular mask so the spell icon itself is circular, not just the cooldown swipe.
-    icon:AddMaskTexture(icon:CreateMaskTexture())
-    local iconMask = icon:GetMaskTexture(1)
-    if iconMask then
-        iconMask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        iconMask:SetAllPoints(icon)
-    end
+
+    -- Create the mask from the frame (CreateMaskTexture is not a Texture method).
+    local iconMask = frame:CreateMaskTexture()
+    iconMask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    iconMask:SetAllPoints(icon)
+    icon:AddMaskTexture(iconMask)
+
     frame.BSOMouseIcon = icon
 
     local chargeText = frame:CreateFontString(nil, "OVERLAY")
