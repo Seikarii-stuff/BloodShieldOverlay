@@ -29,8 +29,11 @@ function addon.SetMouseCooldownPipSize(value)
     return true
 end
 
-local originalRefreshMouseCooldowns = addon.RefreshMouseCooldowns
-if type(originalRefreshMouseCooldowns) == "function" then
+local function WrapMouseCooldownRefresh()
+    if addon.__runtimeMouseCooldownGuardWrapped then return true end
+    local originalRefreshMouseCooldowns = addon.RefreshMouseCooldowns
+    if type(originalRefreshMouseCooldowns) ~= "function" then return false end
+
     addon.RefreshMouseCooldowns = function(...)
         local config = GetConfig()
         if config then
@@ -39,6 +42,8 @@ if type(originalRefreshMouseCooldowns) == "function" then
         end
         return originalRefreshMouseCooldowns(...)
     end
+    addon.__runtimeMouseCooldownGuardWrapped = true
+    return true
 end
 
 local function IsPositiveNumber(value)
@@ -102,7 +107,9 @@ local function WrapTargetTargetAPI()
 end
 
 addon.RegisterInitializer(function()
+    WrapMouseCooldownRefresh()
     WrapTargetTargetAPI()
 end)
 
+WrapMouseCooldownRefresh()
 WrapTargetTargetAPI()
