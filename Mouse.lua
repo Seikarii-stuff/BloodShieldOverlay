@@ -132,7 +132,7 @@ local function FindSpellEntry(spellID)
     for _, entry in ipairs(GetMouseCooldownOptions()) do
         local id = type(entry) == "number" and entry or entry.id
         if id == spellID then return entry end
-        end
+    end
     return nil
 end
 
@@ -149,6 +149,20 @@ local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
 
+    -- The action bar is the authoritative visual source for display counts.
+    -- Its count can be a secret value, so pass it straight to FontString:SetText.
+    if C_ActionBar and C_ActionBar.FindSpellActionButtons and C_ActionBar.GetActionDisplayCount then
+        local actionButtons = C_ActionBar.FindSpellActionButtons(spellID)
+        if actionButtons and actionButtons[1] then
+            local displayCount = C_ActionBar.GetActionDisplayCount(actionButtons[1])
+            if displayCount ~= nil then
+                text:SetText(displayCount)
+                text:Show()
+                return
+            end
+        end
+    end
+
     -- Formal spell charges (e.g. Holy Shock). currentCharges can itself be
     -- a secret value, so it MUST be passed directly to the FontString.
     if C_Spell and C_Spell.GetSpellCharges then
@@ -160,9 +174,7 @@ local function UpdateCharges(frame, spellID)
         end
     end
 
-    -- Display counters cover abilities whose visible count is not represented
-    -- by the formal spell-charge system (e.g. Bone Shield / similar mechanics).
-    -- Keep this value opaque and pass it directly to the FontString.
+    -- Fallback for display counters exposed directly by the spell API.
     if C_Spell and C_Spell.GetSpellDisplayCount then
         local displayCount = C_Spell.GetSpellDisplayCount(spellID)
         if displayCount ~= nil then
@@ -246,7 +258,7 @@ local function UpdateResourcePips()
     local radius = CURSOR_RADIUS
     local spacing = tonumber(config.mouseResourceArcSpacing) or 1.0
     spacing = math_max(0.5, math_min(1.5, spacing))
-    local arcStart = tonumber(config.mouseResourceArcStart) or 1.0
+    local arcStart = tonumber(config.mouseResourceArcStart) or 0.83
     arcStart = math_max(0.5, math_min(1.5, arcStart))
     local baseStep = PI / math_max(1, maximum - 1)
     local step = baseStep * spacing
