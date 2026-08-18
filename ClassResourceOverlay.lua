@@ -41,7 +41,6 @@ local refreshScheduled = false
 -- its own copy (and its own full tree walk) of the same lookup logic.
 local IsForbidden = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
-local GetUnit = addon.GetUnit
 local IsPlayerUnit = addon.IsPlayerUnit
 local FindPlayerFrame = addon.FindPlayerFrame
 local ForEachCompactFrame = addon.ForEachCompactFrame
@@ -274,12 +273,14 @@ function addon.SetClassResourceOverlayPipSize(width, height)
     return true
 end
 
-addon.RegisterLayoutListener(function(event)
-    if event == "PLAYER_REGEN_ENABLED" then
-        if pendingLocate then ScheduleLocate() end
-        return
-    end
+addon.RegisterLayoutListener(function()
     ScheduleLocate()
+end)
+
+addon.RegisterRegenListener(function(event)
+    if event == "PLAYER_REGEN_ENABLED" and pendingLocate then
+        ScheduleLocate()
+    end
 end)
 
 addon.RegisterSpecialResourceListener(function()
