@@ -30,7 +30,6 @@ local function InstallMenuLockFix()
 
     frame.MinimizerBarLockFixInstalled = true
 
-    -- Keep the requested wording regardless of the previous menu state.
     frame.unlockButton:SetText("Unlock bars")
     frame.unlockButton:HookScript("OnClick", function(self)
         local locked = addon.PlayerBarAPI
@@ -58,21 +57,20 @@ local function InstallMenuLockFix()
     return true
 end
 
+-- Menu.lua creates the configuration frame lazily, so keep a tiny one-shot
+-- poll until the frame exists. Once installed, the ticker is cancelled.
 local hookFrame = CreateFrame("Frame")
+local ticker
 hookFrame:RegisterEvent("PLAYER_LOGIN")
-hookFrame:SetScript("OnEvent", function(self)
-    if InstallMenuLockFix() then
-        self:UnregisterEvent("PLAYER_LOGIN")
-        self:SetScript("OnEvent", nil)
-        return
-    end
+hookFrame:SetScript("OnEvent", function()
+    if InstallMenuLockFix() then return end
 
-    -- Menu.lua creates the config frame lazily when /shield opens it, so the
-    -- first login event may happen before the frame exists. Retry briefly.
-    C_Timer.After(0.1, function()
-        if InstallMenuLockFix() then
-            self:UnregisterEvent("PLAYER_LOGIN")
-            self:SetScript("OnEvent", nil)
-        end
-    end)
+    if not ticker then
+        ticker = C_Timer.NewTicker(0.1, function(t)
+            if InstallMenuLockFix() then
+                t:Cancel()
+                ticker = nil
+            end
+        end)
+    end
 end)
