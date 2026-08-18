@@ -360,10 +360,18 @@ if addon.RegisterSpecialResourceListener then addon.RegisterSpecialResourceListe
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:SetScript("OnEvent", function() Refresh() end)
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("UNIT_AURA")
+eventFrame:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_AURA" and unit ~= "player" then return end
+    Refresh()
+end)
 
 addon.RegisterInitializer(function()
     local cfg = addon.PlayerBarConfig.Initialize()
     SetEnabled(cfg.showMouseSpecialResources == true or cfg.showMouseCooldown1 == true or cfg.showMouseCooldown2 == true)
+    if C_Timer and C_Timer.After then C_Timer.After(0, Refresh) end
 end)
