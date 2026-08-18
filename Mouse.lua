@@ -29,6 +29,7 @@ local pips = {}
 local cooldownFrames = {}
 local progress = {}
 local pipOrder = {}
+local actionButtonCache = {}
 local lastElapsed = 0
 
 for index = 1, MAX_PIPS do
@@ -145,15 +146,30 @@ local function GetSpellTexture(spellID)
     return nil
 end
 
-local function GetActionBarSpellIDs(spellID)
-    local ids = { spellID }
-    if C_Spell and C_Spell.GetOverrideSpell then
-        local overrideID = C_Spell.GetOverrideSpell(spellID)
-        if overrideID and overrideID ~= spellID then
-            ids[#ids + 1] = overrideID
+local function ResolveBaseSpellID(spellID)
+    if not spellID then return nil end
+    if C_Spell and C_Spell.GetBaseSpell then
+        local baseID = C_Spell.GetBaseSpell(spellID)
+        if baseID and baseID > 0 then return baseID end
+    end
+    return spellID
+end
+
+local function GetActionDisplayCount(spellID)
+    if not spellID or not C_ActionBar or not C_ActionBar.FindSpellActionButtons or not C_ActionBar.GetActionDisplayCount then return nil end
+
+    local baseID = ResolveBaseSpellID(spellID)
+    local actionID = actionButtonCache[baseID]
+    if not actionID then
+        local actionButtons = C_ActionBar.FindSpellActionButtons(baseID)
+        if actionButtons and actionButtons[1] then
+            actionID = actionButtons[1]
+            actionButtonCache[baseID] = actionID
         end
     end
-    return ids
+
+    if not actionID then return nil end
+    return C_ActionBar.GetActionDisplayCount(actionID)
 end
 
 local function UpdateCharges(frame, spellID)
@@ -161,20 +177,13 @@ local function UpdateCharges(frame, spellID)
     if not text then return end
 
     -- The action bar is the authoritative visual source for display counts.
-    -- Some spells use an override ID in the action bar, while SpellData may
-    -- intentionally keep the base ID. Try both without inspecting the secret.
-    if C_ActionBar and C_ActionBar.FindSpellActionButtons and C_ActionBar.GetActionDisplayCount then
-        for _, actionSpellID in ipairs(GetActionBarSpellIDs(spellID)) do
-            local actionButtons = C_ActionBar.FindSpellActionButtons(actionSpellID)
-            if actionButtons and actionButtons[1] then
-                local displayCount = C_ActionBar.GetActionDisplayCount(actionButtons[1])
-                if displayCount ~= nil then
-                    text:SetText(displayCount)
-                    text:Show()
-                    return
-                end
-            end
-        end
+    -- FindSpellActionButtons expects the base spell ID. The returned count can
+    -- be secret, so pass it straight to FontString:SetText().
+    local displayCount = GetActionDisplayCount(spellID)
+    if displayCount ~= nil then
+        text:SetText(displayCount)
+        text:Show()
+        return
     end
 
     -- Formal spell charges (e.g. Holy Shock). currentCharges can itself be
@@ -362,6 +371,10 @@ local function Refresh()
     UpdateCursorPosition()
 end
 
+local function InvalidateActionButtonCache()
+    for key in pairs(actionButtonCache) do actionButtonCache[key] = nil end
+end
+
 EnsureOverlay()
 overlay:SetScript("OnUpdate", OnUpdate)
 
@@ -381,6 +394,9 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("UNIT_AURA")
 eventFrame:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_AURA" and unit ~= "player" then return end
+    if event == "ACTIONBAR_SLOT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+        InvalidateActionButtonCache()
+    end
     Refresh()
 end)
 
