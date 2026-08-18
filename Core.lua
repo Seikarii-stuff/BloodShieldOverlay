@@ -1,4 +1,4 @@
--- Shared event dispatcher for player, unit absorb and target-of-target updates.
+-- Shared event dispatcher for player, unit absorb, target-of-target and layout updates.
 -- Decouples absorption updates from UI and frame discovery.
 
 local addon = _G.BloodShieldOverlay or {}
@@ -16,6 +16,7 @@ local playerListeners = {}
 local unitListeners = {}
 local regenListeners = {}
 local targetTargetListeners = {}
+local layoutListeners = {}
 local pendingUnits = {}
 local processingUnits = {}
 local targetTargetPending = false
@@ -45,6 +46,10 @@ end
 
 function addon.RegisterTargetTargetUpdateListener(listener)
     if type(listener) == "function" then table_insert(targetTargetListeners, listener) end
+end
+
+function addon.RegisterLayoutListener(listener)
+    if type(listener) == "function" then table_insert(layoutListeners, listener) end
 end
 
 local function GetThrottleInterval()
@@ -116,10 +121,24 @@ eventFrame:RegisterEvent("UNIT_MAXHEALTH")
 eventFrame:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("UI_SCALE_CHANGED")
+eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+eventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 eventFrame:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
         for i = 1, #regenListeners do regenListeners[i](event) end
+    end
+
+    if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"
+        or event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED"
+        or event == "EDIT_MODE_LAYOUTS_UPDATED" then
+        for i = 1, #layoutListeners do layoutListeners[i](event) end
+    end
+
+    if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
         return
     end
     ScheduleUnitUpdate(unit)
