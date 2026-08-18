@@ -24,9 +24,9 @@ local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 local healthBarCache = setmetatable({}, { __mode = "k" })
 local discoveryPending = false
 local pendingRefresh = false
-local fullRefreshPending = false
-local dirtyUnits = {}
-local unitFrames = {}
+local fullRefreshPending = true
+local unitFrames = setmetatable({}, { __mode = "k" })
+local framesByUnit = {}
 local compactMode = nil
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
@@ -89,23 +89,25 @@ local function IsSupportedUnit(unit, mode)
     return PARTY_UNITS[unit] == true
 end
 
-local function RemoveFrame(frame, unit)
-    if not frame then return end
+local function DetachFrame(frame, unit)
     unit = unit or unitFrames[frame]
-    if unit then
-        local entries = overlays[unit]
-        if entries then
-            local healthBar = GetHealthBar(frame)
-            local entry = healthBar and overlaysByHealthBar[healthBar]
-            if entry and entry.unit == unit then
-                entry.overlay:Hide()
-                entry.unit = nil
-                overlaysByHealthBar[healthBar] = nil
-            end
-            if healthBar then entries[healthBar] = nil end
-            if not next(entries) then overlays[unit] = nil end
-        end
+    if not unit then
+        unitFrames[frame] = nil
+        return
     end
+
+    if framesByUnit[unit] == frame then framesByUnit[unit] = nil end
+
+    local healthBar = GetHealthBar(frame)
+    local entry = healthBar and overlaysByHealthBar[healthBar]
+    if entry and entry.unit == unit then
+        entry.overlay:Hide()
+        entry.unit = nil
+        overlaysByHealthBar[healthBar] = nil
+        if overlays[unit] then overlays[unit][healthBar] = nil end
+    end
+
+    if overlays[unit] and not next(overlays[unit]) then overlays[unit] = nil end
     unitFrames[frame] = nil
 end
 
@@ -128,64 +130,47 @@ end
 local function ReconcileFrame(frame, mode)
     if IsForbiddenFrame(frame) then return end
     mode = mode or compactMode or GetCurrentMode()
+
     local previousUnit = unitFrames[frame]
     local unit = GetUnit(frame)
 
     if previousUnit and previousUnit ~= unit then
-        RemoveFrame(frame, previousUnit)
+        DetachFrame(frame, previousUnit)
     end
 
     if not unit or not IsSupportedUnit(unit, mode) then
-        unitFrames[frame] = nil
+        if previousUnit then DetachFrame(frame, previousUnit) end
         return
+    end
+
+    local oldFrame = framesByUnit[unit]
+    if oldFrame and oldFrame ~= frame then
+        DetachFrame(oldFrame, unit)
     end
 
     local healthBar = GetHealthBar(frame)
-    if not healthBar then
-        unitFrames[frame] = unit
-        return
-    end
-
-    AddOverlay(unit, healthBar)
     unitFrames[frame] = unit
+    framesByUnit[unit] = frame
+
+    if not healthBar then return end
+    AddOverlay(unit, healthBar)
 end
 
-local function ReconcileUnit(unit, mode)
-    if not unit then return end
-    mode = mode or compactMode or GetCurrentMode()
-    local frame = unitFrames[unit]
-    if frame then
-        ReconcileFrame(frame, mode)
-        return
-    end
-
-    -- A unit may have just been assigned a new Blizzard frame. Ask Blizzard's
-    -- authoritative frame pool for the current frame, but only once for this
-    -- dirty unit; never perform a full tree scan.
-    ForEachCompactFrame(function(candidate)
-        if GetUnit(candidate) == unit then
-            ReconcileFrame(candidate, mode)
-        end
-    end)
-end
-
-local function MarkUnitDirty(unit)
-    if unit and IsSupportedUnit(unit) then dirtyUnits[unit] = true end
-end
-
-local function DiscoverAllCompactFrames()
+local function ReconcileAllCurrentFrames()
     local mode = GetCurrentMode()
     compactMode = mode
     local seenFrames = {}
+
+    -- This is intentionally the only roster traversal: Blizzard's own compact
+    -- frame pool, not our own tree walk. The callback only compares cached frame
+    -- state and only discovers a health bar the first time a frame is seen.
     ForEachCompactFrame(function(frame)
         seenFrames[frame] = true
         ReconcileFrame(frame, mode)
     end)
 
     for frame, unit in pairs(unitFrames) do
-        if not seenFrames[frame] then
-            RemoveFrame(frame, unit)
-        end
+        if not seenFrames[frame] then DetachFrame(frame, unit) end
     end
 end
 
@@ -242,16 +227,6 @@ local function GetPersonalResourceHealthBar()
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
-local function AddDirtyUnitsToUpdate()
-    local mode = GetCurrentMode()
-    for unit in pairs(dirtyUnits) do
-        if IsSupportedUnit(unit, mode) then
-            ReconcileUnit(unit, mode)
-        end
-        dirtyUnits[unit] = nil
-    end
-end
-
 local function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
     if not entries then return end
@@ -264,7 +239,7 @@ local function UpdateAll()
     for unit in pairs(overlays) do UpdateUnit(unit) end
 end
 
-local function DiscoverFrames()
+local function DiscoverFrames(full)
     if InCombatLockdown() then
         pendingRefresh = true
         return
@@ -273,12 +248,13 @@ local function DiscoverFrames()
     TryEnsurePartyFramesVisible()
 
     local mode = GetCurrentMode()
-    if fullRefreshPending or compactMode ~= mode then
+    if full or fullRefreshPending or compactMode ~= mode then
         fullRefreshPending = false
-        dirtyUnits = {}
-        DiscoverAllCompactFrames()
+        ReconcileAllCurrentFrames()
     else
-        AddDirtyUnitsToUpdate()
+        -- GROUP_ROSTER_UPDATEs are coalesced, then we consume Blizzard's current
+        -- frame pool once. No recursive discovery and no per-slot name probing.
+        ReconcileAllCurrentFrames()
     end
 
     local playerHealthBar = GetPlayerFrameHealthBar()
@@ -288,22 +264,23 @@ local function DiscoverFrames()
     if personalResourceHealthBar then AddOverlay("player", personalResourceHealthBar) end
 end
 
-local function DiscoverAndUpdate()
-    DiscoverFrames()
+local function DiscoverAndUpdate(full)
+    DiscoverFrames(full)
     UpdateAll()
 end
 
 local QueueDiscoverAndUpdate
 local function OnDiscoveryTimer()
     discoveryPending = false
-    DiscoverAndUpdate()
+    DiscoverAndUpdate(fullRefreshPending)
     if pendingRefresh then
         pendingRefresh = false
-        QueueDiscoverAndUpdate()
+        QueueDiscoverAndUpdate(false)
     end
 end
 
-QueueDiscoverAndUpdate = function()
+QueueDiscoverAndUpdate = function(full)
+    if full then fullRefreshPending = true end
     if InCombatLockdown() then pendingRefresh = true; return end
     if discoveryPending then pendingRefresh = true; return end
     discoveryPending = true
@@ -311,9 +288,14 @@ QueueDiscoverAndUpdate = function()
 end
 
 addon.RequestRefresh = QueueDiscoverAndUpdate
-addon.RegisterLayoutListener(function()
-    fullRefreshPending = true
-    QueueDiscoverAndUpdate()
+addon.RegisterLayoutListener(function(event)
+    -- Roster changes only need Blizzard's current compact-frame pool. Expensive
+    -- global reinitialisation is reserved for actual UI/mode changes.
+    if event == "PLAYER_ENTERING_WORLD" or event == "UI_SCALE_CHANGED"
+        or event == "DISPLAY_SIZE_CHANGED" or event == "EDIT_MODE_LAYOUTS_UPDATED" then
+        fullRefreshPending = true
+    end
+    QueueDiscoverAndUpdate(fullRefreshPending)
 end)
 
 addon.RegisterInitializer(function()
@@ -327,7 +309,7 @@ addon.RegisterInitializer(function()
         if event == "PLAYER_REGEN_ENABLED" then
             pendingRefresh = false
             fullRefreshPending = true
-            QueueDiscoverAndUpdate()
+            QueueDiscoverAndUpdate(true)
         end
     end)
 end)
@@ -337,8 +319,8 @@ if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
         local unit = GetUnit(frame)
+        ReconcileFrame(frame)
         if unit and IsSupportedUnit(unit) then
-            ReconcileFrame(frame)
             if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
         end
     end
@@ -354,7 +336,7 @@ local function OnEditModeExit()
     C_Timer.After(0.2, function()
         editModeExitPending = false
         fullRefreshPending = true
-        QueueDiscoverAndUpdate()
+        QueueDiscoverAndUpdate(true)
     end)
 end
 
@@ -369,11 +351,9 @@ manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "NAME_PLATE_UNIT_REMOVED" then
-        if unit and UnitIsUnit(unit, "player") then
-            QueueDiscoverAndUpdate()
-        end
+        if unit and UnitIsUnit(unit, "player") then QueueDiscoverAndUpdate(false) end
         return
     end
     if event == "NAME_PLATE_UNIT_ADDED" and (not unit or not UnitIsUnit(unit, "player")) then return end
-    QueueDiscoverAndUpdate()
+    QueueDiscoverAndUpdate(false)
 end)
