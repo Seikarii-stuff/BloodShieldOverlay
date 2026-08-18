@@ -65,44 +65,35 @@ addon.ForEachBlizzardRaidFrame = ForEachBlizzardRaidFrame
 -- Member1 means player: in raid/AlwaysInParty Blizzard can reuse these frames
 -- for raid units (e.g. raid3, raid2, raid4...).
 local function ForEachBlizzardPartyFrame(callback)
-    local container = _G.CompactPartyFrame
-    if not container or not container.GetChildren then
+    if not _G.CompactPartyFrame then
         return false
     end
 
-    local frames = {
-        _G.CompactPartyFrameMember1,
-        _G.CompactPartyFrameMember2,
-        _G.CompactPartyFrameMember3,
-        _G.CompactPartyFrameMember4,
-        _G.CompactPartyFrameMember5,
-    }
+    local frame
+    frame = _G.CompactPartyFrameMember1
+    if frame then callback(frame) end
+    frame = _G.CompactPartyFrameMember2
+    if frame then callback(frame) end
+    frame = _G.CompactPartyFrameMember3
+    if frame then callback(frame) end
+    frame = _G.CompactPartyFrameMember4
+    if frame then callback(frame) end
+    frame = _G.CompactPartyFrameMember5
+    if frame then callback(frame) end
 
-    for index = 1, 5 do
-        local frame = frames[index]
-        if frame then callback(frame) end
-    end
     return true
 end
 
 addon.ForEachBlizzardPartyFrame = ForEachBlizzardPartyFrame
 
 function addon.ForEachCompactFrame(callback)
-    local inRaid = IsInRaid and IsInRaid()
-    local inGroup = inRaid or (IsInGroup and IsInGroup())
-
-    if inRaid then
+    if IsInRaid and IsInRaid() then
         -- Raid discovery is exclusively Blizzard's authoritative frame pool.
         return ForEachBlizzardRaidFrame(callback)
     end
 
-    if inGroup or container then
-        return ForEachBlizzardPartyFrame(callback)
-    end
-
-    -- AlwaysInParty / solo: CompactPartyFrame can still expose the player
-    -- even when IsInGroup() is false. Never search arbitrary frame trees; if
-    -- Blizzard's compact party frames exist, consume those five slots.
+    -- Party and AlwaysInParty use Blizzard's five compact party slots. We do
+    -- not infer units from slot numbers; the frame's own `unit` is authoritative.
     return ForEachBlizzardPartyFrame(callback)
 end
 
@@ -115,6 +106,9 @@ local function IsPlayerUnit(frame)
 end
 addon.IsPlayerUnit = IsPlayerUnit
 
+-- Player-resource discovery is allowed to inspect the already-known Blizzard
+-- frame's children for its resource bar. It is not used to discover raid/party
+-- membership; membership always comes from the compact-frame APIs above.
 local FindPlayerFrame
 local function FindPlayerFrameChildren(depth, ...)
     local childCount = select("#", ...)
