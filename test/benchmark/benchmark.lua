@@ -13,7 +13,7 @@ local startMemory = collectgarbage("count")
 local start = os.clock()
 for i = 1, iterations do
     wow.fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
-    wow.tick(0.033)
+    wow.tick(0.034)
 end
 local elapsed = os.clock() - start
 local endMemory = collectgarbage("count")
