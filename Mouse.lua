@@ -10,7 +10,6 @@ local UIParent = UIParent
 local GetTime = GetTime
 
 local CURSOR_UPDATE_INTERVAL = 0.006944
-local RESOURCE_UPDATE_INTERVAL = 0.033333
 
 local enabled = false
 local overlay
@@ -26,6 +25,13 @@ local function GetConfig()
         mouseConfig = addon.PlayerBarConfig.Initialize()
     end
     return mouseConfig
+end
+
+local function GetGraphicsInterval()
+    if type(addon.GetGraphicsUpdateInterval) == "function" then
+        return addon.GetGraphicsUpdateInterval()
+    end
+    return 1 / 30
 end
 
 local function UpdateCursorPosition()
@@ -81,14 +87,18 @@ end
 local function OnUpdate(_, elapsed)
     if not enabled then return end
 
+    -- Cursor tracking is deliberately independent of the global graphics rate.
     cursorElapsed = cursorElapsed + elapsed
     if cursorElapsed >= CURSOR_UPDATE_INTERVAL then
         cursorElapsed = 0
         UpdateCursorPosition()
     end
 
+    -- Resource rendering is visual but not cursor-real-time, so it follows the
+    -- shared 30/60 FPS graphics setting.
     resourceElapsed = resourceElapsed + elapsed
-    if resourceElapsed >= RESOURCE_UPDATE_INTERVAL then
+    local graphicsInterval = GetGraphicsInterval()
+    if resourceElapsed >= graphicsInterval then
         resourceElapsed = 0
         addon.MouseResources:RefreshCharging(GetConfig(), GetTime)
     end
