@@ -101,6 +101,17 @@ local function HandlePlayerCompactFrame(frame)
 end
 
 local function FindPlayerResourceBar()
+    -- In raid mode, ask Blizzard's authoritative compact-frame pool first.
+    -- This avoids recursively walking the whole raid container just to find
+    -- the one frame that displays the player.
+    if _G.IsInRaid and _G.IsInRaid() then
+        foundResourceBar = nil
+        ForEachCompactFrame(HandlePlayerCompactFrame)
+        if foundResourceBar then return foundResourceBar end
+    end
+
+    -- Keep direct fallbacks for party frames and clients where the compact
+    -- frame pool is not exposed through ApplyToFrames().
     local playerFrame = FindPlayerFrame(CompactPartyFrame)
     local bar = playerFrame and GetResourceBar(playerFrame)
     if bar then return bar end
@@ -113,8 +124,6 @@ local function FindPlayerResourceBar()
     bar = playerFrame and GetResourceBar(playerFrame)
     if bar then return bar end
 
-    -- Bounded by the actual group/raid size instead of always resolving all
-    -- ~200 fixed compact-frame names (shared with BlizzardFrames.lua).
     foundResourceBar = nil
     ForEachCompactFrame(HandlePlayerCompactFrame)
     if foundResourceBar then return foundResourceBar end
@@ -166,7 +175,7 @@ local function AttachTo(bar)
 
     if not bar then
         overlay:Hide()
-        return
+        return true
     end
 
     overlay:SetParent(bar)
