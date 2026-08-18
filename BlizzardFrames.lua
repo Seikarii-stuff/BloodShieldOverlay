@@ -28,6 +28,9 @@ local fullRefreshPending = true
 local unitFrames = setmetatable({}, { __mode = "k" })
 local framesByUnit = {}
 local compactMode = nil
+local rosterDirty = false
+local dirtyFrames = setmetatable({}, { __mode = "k" })
+local emptyTable = {}
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
@@ -159,19 +162,9 @@ end
 local function ReconcileAllCurrentFrames()
     local mode = GetCurrentMode()
     compactMode = mode
-    local seenFrames = {}
-
-    -- This is intentionally the only roster traversal: Blizzard's own compact
-    -- frame pool, not our own tree walk. The callback only compares cached frame
-    -- state and only discovers a health bar the first time a frame is seen.
     ForEachCompactFrame(function(frame)
-        seenFrames[frame] = true
         ReconcileFrame(frame, mode)
     end)
-
-    for frame, unit in pairs(unitFrames) do
-        if not seenFrames[frame] then DetachFrame(frame, unit) end
-    end
 end
 
 local function TryEnsurePartyFramesVisible()
@@ -248,13 +241,18 @@ local function DiscoverFrames(full)
     TryEnsurePartyFramesVisible()
 
     local mode = GetCurrentMode()
-    if full or fullRefreshPending or compactMode ~= mode then
+    local modeChanged = compactMode ~= mode
+    if full or fullRefreshPending or modeChanged then
         fullRefreshPending = false
+        rosterDirty = false
+        dirtyFrames = setmetatable({}, { __mode = "k" })
         ReconcileAllCurrentFrames()
-    else
-        -- GROUP_ROSTER_UPDATEs are coalesced, then we consume Blizzard's current
-        -- frame pool once. No recursive discovery and no per-slot name probing.
-        ReconcileAllCurrentFrames()
+    elseif rosterDirty then
+        rosterDirty = false
+        for frame in pairs(dirtyFrames) do
+            dirtyFrames[frame] = nil
+            ReconcileFrame(frame, mode)
+        end
     end
 
     local playerHealthBar = GetPlayerFrameHealthBar()
@@ -266,7 +264,6 @@ end
 
 local function DiscoverAndUpdate(full)
     DiscoverFrames(full)
-    UpdateAll()
 end
 
 local QueueDiscoverAndUpdate
@@ -289,11 +286,11 @@ end
 
 addon.RequestRefresh = QueueDiscoverAndUpdate
 addon.RegisterLayoutListener(function(event)
-    -- Roster changes only need Blizzard's current compact-frame pool. Expensive
-    -- global reinitialisation is reserved for actual UI/mode changes.
     if event == "PLAYER_ENTERING_WORLD" or event == "UI_SCALE_CHANGED"
         or event == "DISPLAY_SIZE_CHANGED" or event == "EDIT_MODE_LAYOUTS_UPDATED" then
         fullRefreshPending = true
+    else
+        rosterDirty = true
     end
     QueueDiscoverAndUpdate(fullRefreshPending)
 end)
@@ -319,9 +316,15 @@ if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
         local unit = GetUnit(frame)
-        ReconcileFrame(frame)
         if unit and IsSupportedUnit(unit) then
+            dirtyFrames[frame] = true
+            rosterDirty = true
+            ReconcileFrame(frame)
             if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
+        elseif unitFrames[frame] then
+            dirtyFrames[frame] = true
+            rosterDirty = true
+            ReconcileFrame(frame)
         end
     end
     if _G.CompactUnitFrame_UpdateAll then hooksecurefunc("CompactUnitFrame_UpdateAll", OnCompactUnitFrameUpdated) end
