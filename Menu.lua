@@ -43,6 +43,13 @@ local function SetAllBarsLocked(locked)
     config.targetTargetLocked = locked
 end
 
+local function ResetBarEditState()
+    SetAllBarsLocked(true)
+    if menuFrame and menuFrame.unlockButton then
+        menuFrame.unlockButton:SetText("Unlock bars")
+    end
+end
+
 local function SpellOptions()
     return type(addon.GetMouseCooldownOptions) == "function" and addon.GetMouseCooldownOptions() or {}
 end
@@ -171,7 +178,7 @@ Refresh = function()
     menuFrame.mouseCooldown2Check:SetChecked(config.showMouseCooldown2 == true)
     SetDropdownText(menuFrame.mouseCooldown1Button, config.mouseCooldown1Spell)
     SetDropdownText(menuFrame.mouseCooldown2Button, config.mouseCooldown2Spell)
-    menuFrame.unlockButton:SetText(config.locked == false and "Lock ALL" or "Unlock ALL")
+    menuFrame.unlockButton:SetText("Unlock bars")
 end
 
 local function CreateConfigMenu()
@@ -187,6 +194,7 @@ local function CreateConfigMenu()
     menuFrame:SetBackdrop({bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 }})
     menuFrame:SetScript("OnDragStart", function(self) self:StartMoving() end)
     menuFrame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    menuFrame:SetScript("OnHide", ResetBarEditState)
 
     Label(menuFrame, "BloodShieldOverlay", "GameFontHighlightLarge"):SetPoint("TOP", 0, -18)
     Label(menuFrame, "Width / height / max % fields below are staged until Apply ALL. Checkboxes apply instantly.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
@@ -270,11 +278,11 @@ local function CreateConfigMenu()
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(120, 26)
     unlock:SetPoint("TOPLEFT", 154, actionY)
-    unlock:SetText("Unlock ALL")
+    unlock:SetText("Unlock bars")
     unlock:SetScript("OnClick", function(self)
         local lockedNow = config.locked ~= false
         SetAllBarsLocked(not lockedNow)
-        self:SetText(config.locked == false and "Lock ALL" or "Unlock ALL")
+        self:SetText(config.locked == false and "Lock bars" or "Unlock bars")
     end)
     menuFrame.unlockButton = unlock
 
@@ -288,6 +296,7 @@ end
 function addon.ShowConfigMenu()
     config = addon.PlayerBarConfig.Initialize()
     CreateConfigMenu()
+    ResetBarEditState()
     Refresh()
     menuFrame:Show()
 end
