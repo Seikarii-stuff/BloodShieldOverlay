@@ -1,9 +1,5 @@
 -- Shared Blizzard-frame discovery helpers.
--- BlizzardFrames.lua (absorb overlays) and ClassResourceOverlay.lua (group
--- resource pips) both need to identify unit frames, status bars and compact
--- group frames. Centralizing that logic avoids running two near-
--- identical tree walks per roster/layout event and keeps the two discovery
--- consumers from drifting apart.
+-- Prefer Blizzard's authoritative CompactRaidFrameContainer frame pool in raid.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -12,15 +8,9 @@ local type = type
 local select = select
 local _G = _G
 
--- ---------------------------------------------------------------------
--- Basic frame predicates
--- ---------------------------------------------------------------------
-
 function addon.IsForbiddenFrame(frame)
     if not frame then return true end
-    if frame.IsForbidden and frame:IsForbidden() then
-        return true
-    end
+    if frame.IsForbidden and frame:IsForbidden() then return true end
     return false
 end
 
@@ -32,44 +22,25 @@ function addon.IsStatusBar(frame)
 end
 
 function addon.GetFrameName(frame)
-    if IsForbiddenFrame(frame) or not frame.GetName then
-        return ""
-    end
+    if IsForbiddenFrame(frame) or not frame.GetName then return "" end
     local name = frame:GetName()
-    if type(name) == "string" then
-        return name
-    end
-    return ""
+    return type(name) == "string" and name or ""
 end
 
--- Resolves the unit displayed by a (possibly secure) frame. Shared by the
--- absorb-overlay discovery pass and the class-resource pip discovery pass.
 function addon.GetUnit(frame)
     if IsForbiddenFrame(frame) then return nil end
-
     if type(frame.displayedUnit) == "string" and frame.displayedUnit ~= "" then
         return frame.displayedUnit
     end
-
     if type(frame.unit) == "string" and frame.unit ~= "" then
         return frame.unit
     end
-
     if frame.GetAttribute then
         local unit = frame:GetAttribute("unit")
-        if type(unit) == "string" and unit ~= "" then
-            return unit
-        end
+        if type(unit) == "string" and unit ~= "" then return unit end
     end
-
     return nil
 end
-
--- ---------------------------------------------------------------------
--- Compact/raid frame name caches, split by category so callers can bound
--- their scan to the frames that can plausibly exist for the current group
--- state instead of always walking all ~200 fixed global names.
--- ---------------------------------------------------------------------
 
 local RAID_FRAME_COUNT = 40
 local PARTY_FRAME_COUNT = 4
@@ -91,13 +62,11 @@ for index = 1, PARTY_FRAME_COUNT do
     LEGACY_PARTY_FRAME_NAMES[index] = "PartyMemberFrame" .. index
     COMPACT_PARTY_FRAME_NAMES[index] = "CompactPartyFrame" .. index
 end
-do
-    local slotIndex = 0
-    for group = 1, RAID_GROUP_COUNT do
-        for slot = 1, RAID_GROUP_SLOTS do
-            slotIndex = slotIndex + 1
-            RAID_GROUP_SLOT_NAMES[slotIndex] = "CompactRaidGroup" .. group .. "Slot" .. slot
-        end
+local slotIndex = 0
+for group = 1, RAID_GROUP_COUNT do
+    for slot = 1, RAID_GROUP_SLOTS do
+        slotIndex = slotIndex + 1
+        RAID_GROUP_SLOT_NAMES[slotIndex] = "CompactRaidGroup" .. group .. "Slot" .. slot
     end
 end
 
@@ -111,51 +80,34 @@ local IsInRaid = _G.IsInRaid
 local IsInGroup = _G.IsInGroup
 local GetNumGroupMembers = _G.GetNumGroupMembers
 
--- Retail's CompactRaidFrameContainer owns the authoritative frame pool and
--- exposes ApplyToFrames(). It already knows which unit-frame objects are in
--- use, so raid discovery should ask Blizzard for those frames instead of
--- recursively walking the container and resolving CompactRaidFrame1..40 by
--- global name. This is the same API used by Blizzard's own CUF profile code
--- and by other modern raid-frame addons.
 local function ForEachBlizzardRaidFrame(callback)
     local container = _G.CompactRaidFrameContainer
     if not container or type(container.ApplyToFrames) ~= "function" then
         return false
     end
-
     container:ApplyToFrames("normal", callback)
     return true
 end
 
 addon.ForEachBlizzardRaidFrame = ForEachBlizzardRaidFrame
 
--- Invokes callback(frame) for every compact/raid frame that can plausibly
--- exist given the current group state. In retail raid mode, prefer Blizzard's
--- own authoritative frame-pool iterator. The bounded global-name fallback is
--- retained for older/variant clients where ApplyToFrames is unavailable.
 function addon.ForEachCompactFrame(callback)
     local inRaid = IsInRaid and IsInRaid()
     local inGroup = inRaid or (IsInGroup and IsInGroup())
-
     if not inGroup then return end
 
     if inRaid then
-        if ForEachBlizzardRaidFrame(callback) then
-            return
-        end
+        if ForEachBlizzardRaidFrame(callback) then return end
 
         local memberCount = (GetNumGroupMembers and GetNumGroupMembers()) or RAID_FRAME_COUNT
         if type(memberCount) ~= "number" or memberCount <= 0 or memberCount > RAID_FRAME_COUNT then
             memberCount = RAID_FRAME_COUNT
         end
-
         for index = 1, memberCount do
             local frame = _G[RAID_FRAME_NAMES[index]]
             if frame then callback(frame) end
         end
-
-        local slotCount = memberCount
-        if slotCount > RAID_GROUP_SLOT_COUNT then slotCount = RAID_GROUP_SLOT_COUNT end
+        local slotCount = math.min(memberCount, RAID_GROUP_SLOT_COUNT)
         for index = 1, slotCount do
             local frame = _G[RAID_GROUP_SLOT_NAMES[index]]
             if frame then callback(frame) end
@@ -166,20 +118,14 @@ function addon.ForEachCompactFrame(callback)
     for index = 1, PARTY_FRAME_COUNT do
         local frame = _G[PARTY_MEMBER_FRAME_NAMES[index]]
         if frame then callback(frame) end
-
         frame = _G[LEGACY_PARTY_FRAME_NAMES[index]]
         if frame then callback(frame) end
-
         frame = _G[COMPACT_PARTY_FRAME_NAMES[index]]
         if frame then callback(frame) end
     end
 end
 
--- Depth-limited recursive search for the frame that displays "player" inside
--- a container (CompactPartyFrame, CompactRaidFrameContainer, PartyFrame...).
--- Shared by ClassResourceOverlay's resource-bar lookup.
 local UnitIsUnit = _G.UnitIsUnit
-
 local function IsPlayerUnit(frame)
     local unit = addon.GetUnit(frame)
     if not unit then return false end
@@ -189,7 +135,6 @@ end
 addon.IsPlayerUnit = IsPlayerUnit
 
 local FindPlayerFrame
-
 local function FindPlayerFrameChildren(depth, ...)
     local childCount = select("#", ...)
     for index = 1, childCount do
@@ -203,9 +148,7 @@ FindPlayerFrame = function(frame, depth)
     if IsForbiddenFrame(frame) then return nil end
     if IsPlayerUnit(frame) then return frame end
     if not frame.GetChildren or (depth or 0) >= 2 then return nil end
-
-    local nextDepth = (depth or 0) + 1
-    return FindPlayerFrameChildren(nextDepth, frame:GetChildren())
+    return FindPlayerFrameChildren((depth or 0) + 1, frame:GetChildren())
 end
 
 addon.FindPlayerFrame = FindPlayerFrame
