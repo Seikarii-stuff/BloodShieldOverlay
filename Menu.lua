@@ -248,7 +248,7 @@ local function CreateConfigMenu()
     menuFrame.healthCheck = AddCheck("Show health", function(self) config.showHealth = self:GetChecked(); if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHealthShown) == "function" then addon.PlayerBarAPI.SetHealthShown(config.showHealth) end end)
     menuFrame.specialResCheck = AddCheck("Show special resources", function(self) config.showSpecialResources = self:GetChecked(); if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetSpecialResourcesShown) == "function" then addon.PlayerBarAPI.SetSpecialResourcesShown(config.showSpecialResources) end end)
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self) config.showClassResourceOverlay = self:GetChecked(); if type(addon.SetClassResourceOverlayEnabled) == "function" then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end end)
-    menuFrame.targetTargetCheck = AddCheck("Show target of target frame", function(self) config.showTargetTarget = self:GetChecked(); if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end end)
+    menuFrame.targetTargetCheck = AddCheck("Show target of target frame (target something to see it)", function(self) config.showTargetTarget = self:GetChecked(); if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end end)
     menuFrame.mouseResourceCheck = AddCheck("Show special resources around mouse", function(self) config.showMouseSpecialResources = self:GetChecked() == true; RefreshMouseOverlay() end)
 
     local cd1Y = row(30)

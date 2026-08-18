@@ -15,6 +15,7 @@ Performance.lua
 ResourceProviders.lua
 PlayerBar.lua
 TargetTargetBar.lua
+RuntimeGuards.lua
 data/SpellData.lua
 Mouse.lua
 MouseResources.lua
