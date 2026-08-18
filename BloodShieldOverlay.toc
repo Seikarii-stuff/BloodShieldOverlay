@@ -2,7 +2,7 @@
 ## Title: Shield Overlay
 ## Notes: /shield to open the floating menu, /shield reload to refresh party/group frames. 20%-200% functional shield bar, shows shield overlays in raid/player/party frames. Minimal addon for blizzard original raid/party UI.
 ## Author: Seikarii
-## Version: 2.1
+## Version: 2.2
 ## IconTexture: 237540
 ## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
 
