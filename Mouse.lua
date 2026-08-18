@@ -22,7 +22,7 @@ local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 17
 local CURSOR_UPDATE_INTERVAL = 0.006944
-local RESOURCE_UPDATE_INTERVAL = 0.016667
+local RESOURCE_UPDATE_INTERVAL = 0.033333
 local DEFAULT_COOLDOWN_SIZE = 12
 local CHARGE_FONT_SIZE = 9
 
@@ -162,17 +162,14 @@ end
 
 local function GetActionDisplayCount(spellID)
     if not spellID or not C_ActionBar or not C_ActionBar.FindSpellActionButtons or not C_ActionBar.GetActionDisplayCount then return nil end
-
     local baseID = ResolveBaseSpellID(spellID)
     if not baseID then return nil end
-
     local actionID = actionButtonCache[baseID]
     if actionID == nil then
         local actionButtons = C_ActionBar.FindSpellActionButtons(baseID)
         actionID = actionButtons and actionButtons[1] or false
         actionButtonCache[baseID] = actionID
     end
-
     if not actionID then return nil end
     return C_ActionBar.GetActionDisplayCount(actionID)
 end
@@ -180,14 +177,12 @@ end
 local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
-
     local displayCount = GetActionDisplayCount(spellID)
     if displayCount ~= nil then
         text:SetText(displayCount)
         text:Show()
         return
     end
-
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
@@ -196,7 +191,6 @@ local function UpdateCharges(frame, spellID)
             return
         end
     end
-
     if C_Spell and C_Spell.GetSpellDisplayCount then
         local displayCount = C_Spell.GetSpellDisplayCount(spellID)
         if displayCount ~= nil then
@@ -205,7 +199,6 @@ local function UpdateCharges(frame, spellID)
             return
         end
     end
-
     text:SetText(nil)
     text:Hide()
 end
@@ -221,7 +214,6 @@ local function ApplyCooldown(frame, spellID)
         end
         return false
     end
-
     local iconTexture = GetSpellTextureSafe(spellID)
     if not iconTexture then
         frame.BSOMouseSpellID = nil
@@ -231,11 +223,9 @@ local function ApplyCooldown(frame, spellID)
         frame:Hide()
         return false
     end
-
     frame.BSOMouseSpellID = spellID
     frame.BSOMouseIcon:SetTexture(iconTexture)
     UpdateCharges(frame, spellID)
-
     local cooldown = frame.BSOMouseCooldown
     if cooldown then
         if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
@@ -252,7 +242,6 @@ local function ApplyCooldown(frame, spellID)
             if start and duration then cooldown:SetCooldown(start, duration) end
         end
     end
-
     frame:Show()
     return true
 end
@@ -274,7 +263,6 @@ local function UpdateResourcePips()
         for index = 1, MAX_PIPS do pips[index]:Hide() end
         return 0
     end
-
     local state = resourceProvider:GetState()
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     maximum = math_min(maximum, MAX_PIPS)
@@ -282,7 +270,6 @@ local function UpdateResourcePips()
         for index = 1, MAX_PIPS do pips[index]:Hide() end
         return 0
     end
-
     local radius = CURSOR_RADIUS
     local spacing = tonumber(config.mouseResourceArcSpacing) or 1.0
     spacing = math_max(0.5, math_min(1.5, spacing))
@@ -310,7 +297,6 @@ local function UpdateCooldowns()
     if not config or not overlay then return false end
     local anyVisible = false
     local size = tonumber(config.mouseCooldownPipSize) or DEFAULT_COOLDOWN_SIZE
-
     for index = 1, 2 do
         local frame = cooldownFrames[index]
         frame:SetSize(size, size)
@@ -364,13 +350,11 @@ end
 
 local function OnUpdate(_, elapsed)
     if not enabled then return end
-
     cursorElapsed = cursorElapsed + elapsed
     if cursorElapsed >= CURSOR_UPDATE_INTERVAL then
         cursorElapsed = 0
         UpdateCursorPosition()
     end
-
     resourceElapsed = resourceElapsed + elapsed
     if resourceElapsed >= RESOURCE_UPDATE_INTERVAL then
         resourceElapsed = 0
@@ -412,9 +396,7 @@ eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("UNIT_AURA")
-eventFrame:SetScript("OnEvent", function(_, event, unit)
-    if event == "UNIT_AURA" and unit ~= "player" then return end
+eventFrame:SetScript("OnEvent", function(_, event)
     if event == "ACTIONBAR_SLOT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
         InvalidateActionButtonCache()
     end
