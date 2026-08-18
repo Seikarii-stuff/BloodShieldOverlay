@@ -20,6 +20,7 @@ Mouse.lua
 MouseResources.lua
 MouseCooldowns.lua
 Menu.lua
+MenuLockFix.lua
 ResourceDisplayMenu.lua
 options.lua
 PerformanceMenu.lua
