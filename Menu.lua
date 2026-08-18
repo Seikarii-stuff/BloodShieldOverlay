@@ -214,12 +214,12 @@ local function CreateConfigMenu()
     menuFrame.mouseCooldownPipSizeEdit:SetPoint("TOPLEFT", 235, mousePipY + 2)
 
     local mouseArcY = row(32)
-    Label(menuFrame, "Mouse resource arc spacing (0.5 to 1.5)"):SetPoint("TOPLEFT", 28, mouseArcY)
+    Label(menuFrame, "Mouse resource arc spacing                             (0.5 to 1.5)"):SetPoint("TOPLEFT", 28, mouseArcY)
     menuFrame.mouseResourceArcSpacingEdit = Input(menuFrame, 55)
     menuFrame.mouseResourceArcSpacingEdit:SetPoint("TOPLEFT", 235, mouseArcY + 2)
 
     local mouseStartY = row(32)
-    Label(menuFrame, "Mouse resource arc start (0.5 to 1.5)"):SetPoint("TOPLEFT", 28, mouseStartY)
+    Label(menuFrame, "Mouse resource arc start                                  (0.5 to 1.5)"):SetPoint("TOPLEFT", 28, mouseStartY)
     menuFrame.mouseResourceArcStartEdit = Input(menuFrame, 55)
     menuFrame.mouseResourceArcStartEdit:SetPoint("TOPLEFT", 235, mouseStartY + 2)
 
