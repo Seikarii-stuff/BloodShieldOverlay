@@ -1,6 +1,5 @@
 -- Always In Party support.
--- This module exclusively owns Blizzard party-frame visibility while in raids.
--- Discovery never changes party visibility; it consumes ShouldShowPartyFrames().
+-- This module is the only owner of Blizzard party-frame visibility.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -8,6 +7,8 @@ _G.BloodShieldOverlay = addon
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local InCombatLockdown = InCombatLockdown
+local IsInRaid = IsInRaid
+local IsInGroup = IsInGroup
 local hooksecurefunc = hooksecurefunc
 
 local initialized = false
@@ -30,9 +31,15 @@ end
 
 addon.IsAlwaysInPartyEnabled = IsEnabled
 
+function addon.ShouldShowPartyFrames()
+    return not (IsInRaid and IsInRaid()) or IsEnabled()
+end
+
 local function SetShown(frame, shown)
     if not frame or (frame.IsForbidden and frame:IsForbidden()) then return end
-    if shown then frame:Show() else frame:Hide() end
+    if frame:IsShown() ~= shown then
+        if shown then frame:Show() else frame:Hide() end
+    end
 end
 
 local function ApplyVisibility()
@@ -42,77 +49,78 @@ local function ApplyVisibility()
         return
     end
 
-    local showParty = addon.ShouldShowPartyFrames and addon.ShouldShowPartyFrames() or true
-    pendingSync = false
+    local showParty = addon.ShouldShowPartyFrames()
+    local inGroup = IsInGroup and IsInGroup() or false
 
-    if PartyFrame then
-        SetShown(PartyFrame, showParty)
-        if showParty and PartyFrame.Update then PartyFrame:Update() end
+    if _G.PartyFrame then
+        SetShown(_G.PartyFrame, showParty)
+        if showParty and _G.PartyFrame.Update then _G.PartyFrame:Update() end
     end
-    if CompactPartyFrame then
-        SetShown(CompactPartyFrame, showParty)
+    if _G.CompactPartyFrame then
+        SetShown(_G.CompactPartyFrame, showParty)
         if showParty and _G.CompactPartyFrame_Update then _G.CompactPartyFrame_Update() end
     end
+
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         SetShown(partyMemberFrame, showParty)
-        if showParty and not IsInGroup() then
+        if showParty and not inGroup then
             partyMemberFrame.unit = "player"
             if _G.PartyMemberFrame_Update then
-                _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit)
+                _G.PartyMemberFrame_Update(partyMemberFrame, "player")
             end
         end
     end
 
-    if addon.RequestRefresh then addon.RequestRefresh(true) end
+    pendingSync = false
 end
 
-local function QueueVisibilitySync(delay)
+local function QueueVisibilitySync()
     pendingSync = true
     if syncQueued then return end
     syncQueued = true
-    C_Timer.After(delay or 0, ApplyVisibility)
+    C_Timer.After(0, ApplyVisibility)
 end
 
-addon.RefreshPartyFrames = function()
-    QueueVisibilitySync(0)
+function addon.RefreshPartyFrames()
+    QueueVisibilitySync()
 end
 
 function addon.SetAlwaysInPartyEnabled(enabled)
     local config = GetConfig()
     if not config then return false end
     config.alwaysInParty = enabled == true
-    QueueVisibilitySync(0)
+    QueueVisibilitySync()
+    if addon.RequestRefresh then addon.RequestRefresh(true) end
     return true
 end
 
 local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
+    eventFrame:RegisterEvent(event)
+end
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
-        if pendingSync then QueueVisibilitySync(0) end
-        return
+        if pendingSync then QueueVisibilitySync() end
+    else
+        QueueVisibilitySync()
     end
-    QueueVisibilitySync(0)
 end)
 
-local function OnBlizzardPartyFrameUpdate()
-    if addon.IsInRaidMode and addon.IsInRaidMode() and not IsEnabled() then
-        QueueVisibilitySync(0)
+local function ReassertHidden()
+    if IsInRaid and IsInRaid() and not IsEnabled() then
+        QueueVisibilitySync()
     end
 end
 
 if hooksecurefunc then
-    if _G.CompactPartyFrame_Update then hooksecurefunc("CompactPartyFrame_Update", OnBlizzardPartyFrameUpdate) end
-    if _G.PartyFrame_Update then hooksecurefunc("PartyFrame_Update", OnBlizzardPartyFrameUpdate) end
-    if _G.PartyMemberFrame_Update then hooksecurefunc("PartyMemberFrame_Update", OnBlizzardPartyFrameUpdate) end
+    if _G.CompactPartyFrame_Update then hooksecurefunc("CompactPartyFrame_Update", ReassertHidden) end
+    if _G.PartyFrame_Update then hooksecurefunc("PartyFrame_Update", ReassertHidden) end
+    if _G.PartyMemberFrame_Update then hooksecurefunc("PartyMemberFrame_Update", ReassertHidden) end
 end
 
 addon.RegisterInitializer(function()
     if initialized then return end
     initialized = true
-    QueueVisibilitySync(0)
+    QueueVisibilitySync()
 end)
