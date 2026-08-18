@@ -1,0 +1,20 @@
+name: Branch verification
+
+on:
+  push:
+    branches:
+      - fix/mouse-idle-performance-and-test-suite
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Smoke test
+        run: lua5.1 test/perf/smoke.lua
+      - name: Benchmark baseline/current branch
+        run: lua5.1 test/benchmark/benchmark.lua 100000
+      - name: Show benchmark
+        run: cat test/result/benchmark-latest.txt
