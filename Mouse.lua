@@ -5,6 +5,7 @@ _G.BloodShieldOverlay = addon
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
 local GetCursorPosition = GetCursorPosition
+local GetTime = GetTime
 local UIParent = UIParent
 local Enum = Enum
 local math_min = math.min
@@ -359,10 +360,28 @@ end
 
 local function OnUpdate(_, elapsed)
     if not enabled then return end
+
+    -- The overlay itself is a cursor UI element: keep its position at the
+    -- display frame rate. Do not throttle this path with gameplay updates.
     lastElapsed = lastElapsed + elapsed
-    if lastElapsed < UPDATE_INTERVAL then return end
-    lastElapsed = 0
-    UpdateCursorPosition()
+    if lastElapsed >= UPDATE_INTERVAL then
+        lastElapsed = 0
+        UpdateCursorPosition()
+    end
+
+    -- Rune/essence pips have a continuous charging state. The shared provider
+    -- intentionally updates at a lower event-driven rate for the rest of the
+    -- addon, but the mouse display is gameplay-critical, so refresh only while
+    -- a resource is actually charging.
+    local config = GetConfig()
+    local resourceProvider = config and config.showMouseSpecialResources and GetResourceProvider()
+    if resourceProvider then
+        local state = resourceProvider:GetState()
+        if state and state.charging then
+            resourceProvider:Refresh(GetTime())
+            UpdateResourcePips()
+        end
+    end
 end
 
 local function Refresh()

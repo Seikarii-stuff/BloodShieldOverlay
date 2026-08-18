@@ -14,9 +14,9 @@ end
 
 local function FindCheckButtonByText(parent, wanted)
     if not parent or not parent.GetChildren then return nil end
-    local children = { parent:GetChildren() }
-    for i = 1, #children do
-        local child = children[i]
+    local childCount = select("#", parent:GetChildren())
+    for i = 1, childCount do
+        local child = select(i, parent:GetChildren())
         if child and child.Text and child.Text.GetText and child.Text:GetText() == wanted then
             return child
         end
