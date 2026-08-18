@@ -146,7 +146,6 @@ for _, item in ipairs(checkpoints) do
     heapReport[#heapReport + 1] = string.format(
         "%s: live=%+0.2f KB, retained=%+0.2f KB, transient=%+0.2f KB, objects=%s, total_objects=%d, after_gc_objects=%d",
         item.label, item.heap, item.retained, item.transient, item.objects, item.totalObjects, item.objectsAfterGC)
-    )
 end
 
 local result = string.format(
