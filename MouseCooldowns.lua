@@ -8,6 +8,8 @@ local CreateFrame = CreateFrame
 local GetSpellTexture = _G.GetSpellTexture
 
 local DEFAULT_COOLDOWN_SIZE = 12
+local MIN_COOLDOWN_SIZE = 4
+local MAX_COOLDOWN_SIZE = 24
 local CHARGE_FONT_SIZE = 9
 local GLOW_PULSE_SPEED = 3.2
 local SLOT_ANGLES = { math.pi / 6, math.pi * 1.5 }
@@ -290,6 +292,7 @@ function MouseCooldowns:Update()
 
     local anyVisible = false
     local size = tonumber(config.mouseCooldownPipSize) or DEFAULT_COOLDOWN_SIZE
+    size = math.max(MIN_COOLDOWN_SIZE, math.min(MAX_COOLDOWN_SIZE, size))
 
     for index = 1, 2 do
         local frame = frames[index]
