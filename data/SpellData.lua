@@ -69,6 +69,9 @@ addon.Data.MOUSE_COOLDOWNS = {
         { id = 232893, name = "Felblade" },
         { id = 188499, name = "Blade Dance" },
         { id = 258920, name = "Immolation Aura" },
+        { id = 263642, name = "Fracture" },
+        { id = 228477, name = "Soul Cleave" },
+        { id = 189110, name = "Infernal Strike" },
     },
     EVOKER = {
         { id = 357208, name = "Fire Breath" },
