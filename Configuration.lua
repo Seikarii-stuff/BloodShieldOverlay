@@ -23,6 +23,7 @@ local DEFAULTS = {
     mouseCooldownPipSize = 8,
     mouseResourceArcSpacing = 1.0,
     mouseResourceArcStart = 0.83,
+    graphicsUpdateRate = 30,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
@@ -78,6 +79,7 @@ local FIELD_VALIDATORS = {
     mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
     mouseResourceArcSpacing = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
     mouseResourceArcStart = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
+    graphicsUpdateRate = function(value) return value == 30 or value == 60 end,
 }
 
 local function ApplyDefaults(db)
@@ -112,6 +114,7 @@ local function Initialize()
     config = ApplyDefaults(profiles[key])
     profiles[key] = config
     BloodShieldOverlayProfiles = profiles
+    if addon.InitializeGraphicsSettings then addon.InitializeGraphicsSettings(config) end
     return config
 end
 
@@ -122,6 +125,7 @@ local function Reset()
     config = reset
     profiles[GetProfileKey()] = config
     BloodShieldOverlayProfiles = profiles
+    if addon.InitializeGraphicsSettings then addon.InitializeGraphicsSettings(config) end
     return config
 end
 
