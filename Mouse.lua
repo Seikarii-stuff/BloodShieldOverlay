@@ -13,6 +13,7 @@ local math_max = math.max
 local math_cos = math.cos
 local math_sin = math.sin
 local PI = math.pi
+local GlobalGetSpellTexture = _G.GetSpellTexture
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
@@ -20,7 +21,8 @@ local powerTypes = Enum and Enum.PowerType
 local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 17
-local UPDATE_INTERVAL = 0.006944
+local CURSOR_UPDATE_INTERVAL = 0.006944
+local RESOURCE_UPDATE_INTERVAL = 0.016667
 local DEFAULT_COOLDOWN_SIZE = 12
 local CHARGE_FONT_SIZE = 9
 
@@ -31,7 +33,9 @@ local cooldownFrames = {}
 local progress = {}
 local pipOrder = {}
 local actionButtonCache = {}
-local lastElapsed = 0
+local mouseConfig
+local cursorElapsed = 0
+local resourceElapsed = 0
 
 for index = 1, MAX_PIPS do
     progress[index] = 0
@@ -138,12 +142,12 @@ local function FindSpellEntry(spellID)
     return nil
 end
 
-local function GetSpellTexture(spellID)
+local function GetSpellTextureSafe(spellID)
     if C_Spell and C_Spell.GetSpellTexture then
         local texture = C_Spell.GetSpellTexture(spellID)
         if texture then return texture end
     end
-    if GetSpellTexture then return GetSpellTexture(spellID) end
+    if GlobalGetSpellTexture then return GlobalGetSpellTexture(spellID) end
     return nil
 end
 
@@ -160,13 +164,13 @@ local function GetActionDisplayCount(spellID)
     if not spellID or not C_ActionBar or not C_ActionBar.FindSpellActionButtons or not C_ActionBar.GetActionDisplayCount then return nil end
 
     local baseID = ResolveBaseSpellID(spellID)
+    if not baseID then return nil end
+
     local actionID = actionButtonCache[baseID]
-    if not actionID then
+    if actionID == nil then
         local actionButtons = C_ActionBar.FindSpellActionButtons(baseID)
-        if actionButtons and actionButtons[1] then
-            actionID = actionButtons[1]
-            actionButtonCache[baseID] = actionID
-        end
+        actionID = actionButtons and actionButtons[1] or false
+        actionButtonCache[baseID] = actionID
     end
 
     if not actionID then return nil end
@@ -177,9 +181,6 @@ local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
 
-    -- The action bar is the authoritative visual source for display counts.
-    -- FindSpellActionButtons expects the base spell ID. The returned count can
-    -- be secret, so pass it straight to FontString:SetText().
     local displayCount = GetActionDisplayCount(spellID)
     if displayCount ~= nil then
         text:SetText(displayCount)
@@ -187,8 +188,6 @@ local function UpdateCharges(frame, spellID)
         return
     end
 
-    -- Formal spell charges (e.g. Holy Shock). currentCharges can itself be
-    -- a secret value, so it MUST be passed directly to the FontString.
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
@@ -198,7 +197,6 @@ local function UpdateCharges(frame, spellID)
         end
     end
 
-    -- Fallback for display counters exposed directly by the spell API.
     if C_Spell and C_Spell.GetSpellDisplayCount then
         local displayCount = C_Spell.GetSpellDisplayCount(spellID)
         if displayCount ~= nil then
@@ -224,7 +222,7 @@ local function ApplyCooldown(frame, spellID)
         return false
     end
 
-    local iconTexture = GetSpellTexture(spellID)
+    local iconTexture = GetSpellTextureSafe(spellID)
     if not iconTexture then
         frame.BSOMouseSpellID = nil
         frame.BSOMouseIcon:SetTexture(nil)
@@ -260,7 +258,13 @@ local function ApplyCooldown(frame, spellID)
 end
 
 local function GetConfig()
-    return addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize()
+    if mouseConfig then return mouseConfig end
+    if addon.PlayerBarConfig and addon.PlayerBarConfig.Get then
+        mouseConfig = addon.PlayerBarConfig.Get()
+    elseif addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize then
+        mouseConfig = addon.PlayerBarConfig.Initialize()
+    end
+    return mouseConfig
 end
 
 local function UpdateResourcePips()
@@ -361,25 +365,23 @@ end
 local function OnUpdate(_, elapsed)
     if not enabled then return end
 
-    -- The overlay itself is a cursor UI element: keep its position at the
-    -- display frame rate. Do not throttle this path with gameplay updates.
-    lastElapsed = lastElapsed + elapsed
-    if lastElapsed >= UPDATE_INTERVAL then
-        lastElapsed = 0
+    cursorElapsed = cursorElapsed + elapsed
+    if cursorElapsed >= CURSOR_UPDATE_INTERVAL then
+        cursorElapsed = 0
         UpdateCursorPosition()
     end
 
-    -- Rune/essence pips have a continuous charging state. The shared provider
-    -- intentionally updates at a lower event-driven rate for the rest of the
-    -- addon, but the mouse display is gameplay-critical, so refresh only while
-    -- a resource is actually charging.
-    local config = GetConfig()
-    local resourceProvider = config and config.showMouseSpecialResources and GetResourceProvider()
-    if resourceProvider then
-        local state = resourceProvider:GetState()
-        if state and state.charging then
-            resourceProvider:Refresh(GetTime())
-            UpdateResourcePips()
+    resourceElapsed = resourceElapsed + elapsed
+    if resourceElapsed >= RESOURCE_UPDATE_INTERVAL then
+        resourceElapsed = 0
+        local config = GetConfig()
+        local resourceProvider = config and config.showMouseSpecialResources and GetResourceProvider()
+        if resourceProvider then
+            local state = resourceProvider:GetState()
+            if state and state.charging then
+                resourceProvider:Refresh(GetTime())
+                UpdateResourcePips()
+            end
         end
     end
 end
@@ -420,7 +422,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit)
 end)
 
 addon.RegisterInitializer(function()
-    local cfg = addon.PlayerBarConfig.Initialize()
-    SetEnabled(cfg.showMouseSpecialResources == true or cfg.showMouseCooldown1 == true or cfg.showMouseCooldown2 == true)
+    mouseConfig = addon.PlayerBarConfig.Initialize()
+    SetEnabled(mouseConfig.showMouseSpecialResources == true or mouseConfig.showMouseCooldown1 == true or mouseConfig.showMouseCooldown2 == true)
     if C_Timer and C_Timer.After then C_Timer.After(0, Refresh) end
 end)
