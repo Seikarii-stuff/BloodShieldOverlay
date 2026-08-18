@@ -12,8 +12,6 @@ local math_min, math_max = math.min, math.max
 local math_cos, math_sin = math.cos, math.sin
 local PI = math.pi
 local GlobalGetSpellTexture = _G.GetSpellTexture
-local ActionButton_ShowOverlayGlow = _G.ActionButton_ShowOverlayGlow
-local ActionButton_HideOverlayGlow = _G.ActionButton_HideOverlayGlow
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
@@ -24,6 +22,7 @@ local CURSOR_UPDATE_INTERVAL = 0.006944
 local RESOURCE_UPDATE_INTERVAL = 0.033333
 local DEFAULT_COOLDOWN_SIZE = 12
 local CHARGE_FONT_SIZE = 9
+local GLOW_PULSE_SPEED = 3.2
 
 local enabled = false
 local overlay
@@ -67,9 +66,6 @@ local function CreateCircularPip(parent, index)
 end
 
 local function CreateCooldown(parent, index)
-    -- Use a Button rather than a generic Frame so Blizzard's own
-    -- ActionButton_ShowOverlayGlow/HIDE helpers can render the real
-    -- spell-activation glow on this icon.
     local frame = CreateFrame("Button", "BloodShieldOverlayMouseCooldown" .. index, parent)
     frame:SetSize(DEFAULT_COOLDOWN_SIZE, DEFAULT_COOLDOWN_SIZE)
     frame:SetFrameLevel((parent:GetFrameLevel() or 0) + 6)
@@ -90,6 +86,15 @@ local function CreateCooldown(parent, index)
     chargeText:SetShadowOffset(0, 0)
     chargeText:Hide()
     frame.BSOMouseChargeText = chargeText
+
+    local glow = frame:CreateTexture(nil, "OVERLAY")
+    glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    glow:SetBlendMode("ADD")
+    glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -4, 4)
+    glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 4, -4)
+    glow:SetVertexColor(1.0, 0.72, 0.05, 0.95)
+    glow:Hide()
+    frame.BSOMouseGlow = glow
 
     local cooldown = CreateFrame("Cooldown", "BloodShieldOverlayMouseCooldownTimer" .. index, frame, "CooldownFrameTemplate")
     cooldown:SetAllPoints()
@@ -112,14 +117,11 @@ end
 local function SetSpellGlow(frame, active)
     if not frame then return end
     frame.BSOMouseGlowActive = active == true
-    if frame.BSOMouseGlowActive and frame:IsShown() then
-        if ActionButton_ShowOverlayGlow then
-            ActionButton_ShowOverlayGlow(frame)
-        end
+    if frame.BSOMouseGlowActive then
+        frame.BSOMouseGlow:Show()
     else
-        if ActionButton_HideOverlayGlow then
-            ActionButton_HideOverlayGlow(frame)
-        end
+        frame.BSOMouseGlow:Hide()
+        frame.BSOMouseGlow:SetAlpha(0.95)
     end
 end
 
@@ -202,15 +204,26 @@ local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
     local displayCount = GetActionDisplayCount(spellID)
-    if displayCount ~= nil then text:SetText(displayCount); text:Show(); return end
+    if displayCount ~= nil then
+        text:SetText(displayCount)
+        text:Show()
+        return
+    end
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
-            text:SetText(charges.currentCharges); text:Show(); return end
+            text:SetText(charges.currentCharges)
+            text:Show()
+            return
+        end
     end
     if C_Spell and C_Spell.GetSpellDisplayCount then
         local displayCount = C_Spell.GetSpellDisplayCount(spellID)
-        if displayCount ~= nil then text:SetText(displayCount); text:Show(); return end
+        if displayCount ~= nil then
+            text:SetText(displayCount)
+            text:Show()
+            return
+        end
     end
     text:SetText(nil)
     text:Hide()
@@ -221,9 +234,9 @@ local function ApplyCooldown(frame, spellID)
         if frame then
             frame.BSOMouseSpellID = nil
             SetSpellGlow(frame, false)
-            frame.BSOMouseIcon:SetTexture(nil)
-            frame.BSOMouseChargeText:Hide()
-            frame.BSOMouseCooldown:Clear()
+            if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseChargeText then frame.BSOMouseChargeText:Hide() end
+            if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
         return false
@@ -259,14 +272,16 @@ local function ApplyCooldown(frame, spellID)
         end
     end
     frame:Show()
-    if frame.BSOMouseGlowActive then SetSpellGlow(frame, true) end
     return true
 end
 
 local function GetConfig()
     if mouseConfig then return mouseConfig end
-    if addon.PlayerBarConfig and addon.PlayerBarConfig.Get then mouseConfig = addon.PlayerBarConfig.Get()
-    elseif addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize then mouseConfig = addon.PlayerBarConfig.Initialize() end
+    if addon.PlayerBarConfig and addon.PlayerBarConfig.Get then
+        mouseConfig = addon.PlayerBarConfig.Get()
+    elseif addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize then
+        mouseConfig = addon.PlayerBarConfig.Initialize()
+    end
     return mouseConfig
 end
 
@@ -299,7 +314,9 @@ local function UpdateResourcePips()
             pip:ClearAllPoints()
             pip:SetPoint("CENTER", overlay, "CENTER", math_cos(angle) * radius, math_sin(angle) * radius)
             pip:Show()
-        else pip:Hide() end
+        else
+            pip:Hide()
+        end
     end
     return maximum
 end
@@ -322,9 +339,9 @@ local function UpdateCooldowns()
         else
             frame.BSOMouseSpellID = nil
             SetSpellGlow(frame, false)
-            frame.BSOMouseIcon:SetTexture(nil)
-            frame.BSOMouseChargeText:Hide()
-            frame.BSOMouseCooldown:Clear()
+            if frame.BSOMouseIcon then frame.BSOMouseIcon:SetTexture(nil) end
+            if frame.BSOMouseChargeText then frame.BSOMouseChargeText:Hide() end
+            if frame.BSOMouseCooldown then frame.BSOMouseCooldown:Clear() end
             frame:Hide()
         end
     end
@@ -353,10 +370,7 @@ local function SetEnabled(value)
     if not enabled then
         overlay:Hide()
         for index = 1, MAX_PIPS do pips[index]:Hide() end
-        for index = 1, 2 do
-            SetSpellGlow(cooldownFrames[index], false)
-            cooldownFrames[index]:Hide()
-        end
+        for index = 1, 2 do cooldownFrames[index]:Hide() end
         return true
     end
     UpdateVisuals()
@@ -367,7 +381,10 @@ end
 local function OnUpdate(_, elapsed)
     if not enabled then return end
     cursorElapsed = cursorElapsed + elapsed
-    if cursorElapsed >= CURSOR_UPDATE_INTERVAL then cursorElapsed = 0; UpdateCursorPosition() end
+    if cursorElapsed >= CURSOR_UPDATE_INTERVAL then
+        cursorElapsed = 0
+        UpdateCursorPosition()
+    end
     resourceElapsed = resourceElapsed + elapsed
     if resourceElapsed >= RESOURCE_UPDATE_INTERVAL then
         resourceElapsed = 0
@@ -395,10 +412,13 @@ end
 
 EnsureOverlay()
 overlay:SetScript("OnUpdate", OnUpdate)
+
+actionButtonCache = actionButtonCache
 addon.GetMouseCooldownOptions = GetMouseCooldownOptions
 addon.SetMouseResourceOverlayEnabled = SetEnabled
 addon.UpdateMouseResourceOverlay = Refresh
 addon.RefreshMouseCooldowns = Refresh
+
 if addon.RegisterSpecialResourceListener then addon.RegisterSpecialResourceListener(Refresh) end
 
 local eventFrame = CreateFrame("Frame")
