@@ -45,9 +45,7 @@ end
 
 local function ResetBarEditState()
     SetAllBarsLocked(true)
-    if menuFrame and menuFrame.unlockButton then
-        menuFrame.unlockButton:SetText("Unlock bars")
-    end
+    if menuFrame and menuFrame.unlockButton then menuFrame.unlockButton:SetText("Unlock bars") end
 end
 
 local function SpellOptions()
@@ -172,6 +170,7 @@ Refresh = function()
     menuFrame.healthCheck:SetChecked(config.showHealth ~= false)
     menuFrame.specialResCheck:SetChecked(config.showSpecialResources ~= false)
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay ~= false)
+    menuFrame.alwaysInPartyCheck:SetChecked(config.alwaysInParty ~= false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget == true)
     menuFrame.mouseResourceCheck:SetChecked(config.showMouseSpecialResources == true)
     menuFrame.mouseCooldown1Check:SetChecked(config.showMouseCooldown1 == true)
@@ -184,7 +183,7 @@ end
 local function CreateConfigMenu()
     if menuFrame then return end
     menuFrame = CreateFrame("Frame", "BloodShieldOverlayConfig", UIParent, "BackdropTemplate")
-    menuFrame:SetSize(520, 650)
+    menuFrame:SetSize(520, 680)
     menuFrame:SetPoint("CENTER")
     menuFrame:SetFrameStrata("DIALOG")
     menuFrame:SetMovable(true)
@@ -248,6 +247,15 @@ local function CreateConfigMenu()
     menuFrame.healthCheck = AddCheck("Show health", function(self) config.showHealth = self:GetChecked(); if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHealthShown) == "function" then addon.PlayerBarAPI.SetHealthShown(config.showHealth) end end)
     menuFrame.specialResCheck = AddCheck("Show special resources", function(self) config.showSpecialResources = self:GetChecked(); if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetSpecialResourcesShown) == "function" then addon.PlayerBarAPI.SetSpecialResourcesShown(config.showSpecialResources) end end)
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self) config.showClassResourceOverlay = self:GetChecked(); if type(addon.SetClassResourceOverlayEnabled) == "function" then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end end)
+    menuFrame.alwaysInPartyCheck = AddCheck("AlwaysInParty ON", function(self)
+        local enabled = self:GetChecked() == true
+        config.alwaysInParty = enabled
+        if type(addon.SetAlwaysInPartyEnabled) == "function" then
+            addon.SetAlwaysInPartyEnabled(enabled)
+        elseif type(addon.RefreshPartyFrames) == "function" then
+            addon.RefreshPartyFrames()
+        end
+    end)
     menuFrame.targetTargetCheck = AddCheck("Show target of target frame (target something to see it)", function(self) config.showTargetTarget = self:GetChecked(); if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end end)
     menuFrame.mouseResourceCheck = AddCheck("Show special resources around mouse", function(self) config.showMouseSpecialResources = self:GetChecked() == true; RefreshMouseOverlay() end)
 
@@ -301,7 +309,6 @@ function addon.ShowConfigMenu()
     menuFrame:Show()
 end
 
-addon.MenuAPI = addon.MenuAPI or {}
-addon.MenuAPI.ShowConfigMenu = function() addon.ShowConfigMenu() end
-
-addon.RegisterInitializer(function() config = addon.PlayerBarConfig.Initialize() end)
+addon.RegisterInitializer(function()
+    config = addon.PlayerBarConfig.Initialize()
+end)
