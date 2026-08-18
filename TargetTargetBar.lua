@@ -8,6 +8,8 @@ _G.BloodShieldOverlay = addon
 local UNIT = "targettarget"
 local W, H = 130, 10
 local frame, bar, nameText, config
+local pendingLocked
+local pendingEnable
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local type = type
@@ -54,8 +56,14 @@ local function SavePosition()
 end
 
 local function SetLocked(locked)
-    if not frame or InCombatLockdown() then return false end
-    config.targetTargetLocked = locked and true or false
+    locked = locked and true or false
+    if not frame or InCombatLockdown() then
+        pendingLocked = locked
+        return false
+    end
+
+    pendingLocked = nil
+    config.targetTargetLocked = locked
     frame:SetMovable(not config.targetTargetLocked)
     frame:EnableMouse(true)
     if config.targetTargetLocked then
@@ -122,8 +130,14 @@ local function Create()
 end
 
 local function Enable(show)
-    if InCombatLockdown() then return false end
-    config.showTargetTarget = show and true or false
+    show = show and true or false
+    if InCombatLockdown() then
+        pendingEnable = show
+        return false
+    end
+
+    pendingEnable = nil
+    config.showTargetTarget = show
 
     if not config.showTargetTarget then
         if frame and UnregisterUnitWatch then UnregisterUnitWatch(frame) end
@@ -131,7 +145,10 @@ local function Enable(show)
         return true
     end
 
-    if not Create() then return false end
+    if not Create() then
+        pendingEnable = show
+        return false
+    end
     if RegisterUnitWatch then RegisterUnitWatch(frame) end
     Update()
     return true
@@ -153,8 +170,23 @@ events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("UNIT_TARGET")
 events:RegisterEvent("UNIT_HEALTH")
 events:RegisterEvent("UNIT_MAXHEALTH")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 events:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_REGEN_ENABLED" then
+        if pendingEnable ~= nil then
+            local show = pendingEnable
+            pendingEnable = nil
+            Enable(show)
+        end
+        if pendingLocked ~= nil and frame then
+            local locked = pendingLocked
+            pendingLocked = nil
+            SetLocked(locked)
+        end
+        return
+    end
+
     if event == "PLAYER_TARGET_CHANGED" then
         if addon.ScheduleTargetTargetUpdate then addon.ScheduleTargetTargetUpdate() end
     elseif event == "UNIT_TARGET" then
