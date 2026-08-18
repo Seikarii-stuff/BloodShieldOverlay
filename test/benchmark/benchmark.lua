@@ -34,7 +34,7 @@ for _ = 1, discoveryIterations do
     addon.RequestRefresh()
     wow.flush_timers()
 end
-discoveryElapsed = os.clock() - discoveryStart
+local discoveryElapsed = os.clock() - discoveryStart
 
 -- Repeated-value overlay updates: measures the early-return dedupe path.
 local staticOverlay = addon.CreateAbsorbOverlay(wow.new_frame("StatusBar", "BenchmarkStaticHealthBar"))
