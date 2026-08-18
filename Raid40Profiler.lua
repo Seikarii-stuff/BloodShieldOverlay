@@ -1,6 +1,7 @@
 -- Opt-in profiler for raid roster/layout churn.
--- Disabled by default; when enabled it measures only the discovery/layout
--- paths that can spike during 20-40 player roster changes.
+-- Disabled by default; when enabled it measures the discovery/layout paths
+-- that can spike during 20-40 player roster changes, plus Blizzard's own
+-- compact-frame churn so we can separate our work from the UI's work.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
@@ -13,6 +14,8 @@ local profiler = {
     stack = {},
     sequence = 0,
     rosterChanges = 0,
+    groupSizes = {},
+    hooksInstalled = false,
 }
 
 local function now()
@@ -36,6 +39,7 @@ function profiler:Reset()
     self.stack = {}
     self.sequence = 0
     self.rosterChanges = 0
+    self.groupSizes = {}
 end
 
 function profiler:SetEnabled(value)
@@ -53,6 +57,8 @@ function profiler:Event(name)
     if name == "GROUP_ROSTER_UPDATE" then
         self.rosterChanges = self.rosterChanges + 1
         self.sequence = self.sequence + 1
+        local size = GetNumGroupMembers and GetNumGroupMembers() or 0
+        self.groupSizes[size] = (self.groupSizes[size] or 0) + 1
     end
 end
 
@@ -80,14 +86,10 @@ function profiler:End(token)
     end
 end
 
-function profiler:Measure(name, fn, ...)
-    if not self.enabled then
-        return fn(...)
-    end
-    local token = self:Begin(name)
-    local results = { fn(...) }
-    self:End(token)
-    return unpack(results)
+function profiler:Count(name)
+    if not self.enabled then return end
+    ensure(name)
+    self.calls[name] = self.calls[name] + 1
 end
 
 local function sortedNames(map)
@@ -95,6 +97,31 @@ local function sortedNames(map)
     for name in pairs(map) do names[#names + 1] = name end
     table.sort(names)
     return names
+end
+
+function profiler:InstallBlizzardHooks()
+    if self.hooksInstalled or not hooksecurefunc then return end
+    self.hooksInstalled = true
+
+    local functionsToCount = {
+        "CompactRaidFrameContainer_TryUpdate",
+        "CompactRaidFrameContainer_LayoutFrames",
+        "CompactRaidFrameContainer_ApplyToFrames",
+        "CompactRaidFrameContainer_UpdateDisplayedUnits",
+        "CompactRaidGroup_UpdateUnits",
+        "CompactUnitFrame_SetUnit",
+        "CompactUnitFrame_SetUpFrame",
+        "CompactUnitFrame_UpdateAll",
+        "CompactUnitFrame_UpdateUnit",
+    }
+
+    for _, functionName in ipairs(functionsToCount) do
+        if _G[functionName] then
+            hooksecurefunc(functionName, function()
+                profiler:Count("Blizzard." .. functionName)
+            end)
+        end
+    end
 end
 
 function profiler:Report()
@@ -106,12 +133,21 @@ function profiler:Report()
         print(string.format("event %-34s %d", name, self.events[name]))
     end
 
+    local sizes = {}
+    for size in pairs(self.groupSizes) do sizes[#sizes + 1] = size end
+    table.sort(sizes)
+    for _, size in ipairs(sizes) do
+        print(string.format("roster_size %-29s %d", tostring(size), self.groupSizes[size]))
+    end
+
     local names = sortedNames(self.calls)
     for _, name in ipairs(names) do
         local calls = self.calls[name]
         local total = self.elapsed[name] or 0
         local maximum = self.max[name] or 0
-        print(string.format("section %-30s calls=%-5d total=%8.3fms avg=%7.3fms max=%7.3fms", name, calls, total, total / math.max(calls, 1), maximum))
+        if total > 0 or name:find("^Blizzard\\.") then
+            print(string.format("section %-30s calls=%-5d total=%8.3fms avg=%7.3fms max=%7.3fms", name, calls, total, total / math.max(calls, 1), maximum))
+        end
     end
 
     if #names == 0 then
@@ -127,14 +163,23 @@ function profiler:Snapshot()
         elapsed = {},
         max = {},
         events = {},
+        groupSizes = {},
     }
     for name, value in pairs(self.calls) do snapshot.calls[name] = value end
     for name, value in pairs(self.elapsed) do snapshot.elapsed[name] = value end
     for name, value in pairs(self.max) do snapshot.max[name] = value end
     for name, value in pairs(self.events) do snapshot.events[name] = value end
+    for size, value in pairs(self.groupSizes) do snapshot.groupSizes[size] = value end
     return snapshot
 end
 
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+eventFrame:SetScript("OnEvent", function(_, event)
+    profiler:Event(event)
+end)
+
+profiler:InstallBlizzardHooks()
 addon.Raid40Profiler = profiler
 
 function addon.Raid40ProfilerStart()
