@@ -16,6 +16,8 @@ PlayerBar.lua
 TargetTargetBar.lua
 data/SpellData.lua
 Mouse.lua
+MouseResources.lua
+MouseCooldowns.lua
 Menu.lua
 ResourceDisplayMenu.lua
 options.lua
