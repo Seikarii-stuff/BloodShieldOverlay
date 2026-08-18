@@ -35,7 +35,6 @@ local pipOrder = {}
 local currentBar = nil
 local enabled = true
 local refreshScheduled = false
-local eventFrame
 
 -- Discovery predicates and the bounded compact-frame walk are shared with
 -- BlizzardFrames.lua via FrameDiscovery.lua, instead of each module keeping
@@ -213,7 +212,6 @@ UpdatePips = function()
             pip:Hide()
         end
     end
-
 end
 
 local pendingLocate = false
@@ -276,23 +274,12 @@ function addon.SetClassResourceOverlayPipSize(width, height)
     return true
 end
 
-eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-eventFrame:RegisterEvent("UI_SCALE_CHANGED")
-eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
-eventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
-
-eventFrame:SetScript("OnEvent", function(_, event, _, powerType)
-    if not enabled and event ~= "PLAYER_REGEN_ENABLED" then return end
+addon.RegisterLayoutListener(function(event)
     if event == "PLAYER_REGEN_ENABLED" then
         if pendingLocate then ScheduleLocate() end
-    elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"
-        or event == "UI_SCALE_CHANGED"
-        or event == "DISPLAY_SIZE_CHANGED" or event == "EDIT_MODE_LAYOUTS_UPDATED" then
-        ScheduleLocate()
+        return
     end
+    ScheduleLocate()
 end)
 
 addon.RegisterSpecialResourceListener(function()
