@@ -15,7 +15,6 @@ local hooksecurefunc = hooksecurefunc
 local ipairs = ipairs
 local next = next
 local pairs = pairs
-local select = select
 local type = type
 local table_wipe = table.wipe
 local string_find = string.find
@@ -40,8 +39,8 @@ for index = 1, 40 do
     RAID_UNITS["raid" .. index] = true
 end
 
--- Shared discovery predicates live in FrameDiscovery.lua so this module and
--- ClassResourceOverlay.lua don't each maintain their own copy.
+-- Shared discovery predicates live in FrameDiscovery.lua. The only compact
+-- frames we consume are the Blizzard frames exposed by that module.
 local IsForbiddenFrame = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
 local GetFrameName = addon.GetFrameName
@@ -201,62 +200,30 @@ local function TryAddFrameOverlay(frame)
     end
 end
 
--- Container scanning keeps the WoW child list call deterministic and avoids
--- resolving the same child collection once per index. Varargs stay on the
--- Lua stack, avoiding a temporary table on each discovery pass.
-local function ScanChildren(depth, ...)
-    local childCount = select("#", ...)
-    for index = 1, childCount do
-        local child = select(index, ...)
-        if child and not IsForbiddenFrame(child) then
-            TryAddFrameOverlay(child)
-            if depth < 2 and child.GetChildren then
-                ScanChildren(depth + 1, child:GetChildren())
-            end
-        end
-    end
-end
-
-local function ScanContainerChildren(container)
-    if not container or IsForbiddenFrame(container) then return end
-
-    TryAddFrameOverlay(container)
-
-    if container.memberFrames then
-        for _, member in ipairs(container.memberFrames) do
-            if member and not IsForbiddenFrame(member) then
-                TryAddFrameOverlay(member)
-            end
-        end
-    end
-
-    if container.flowFrames then
-        for _, member in ipairs(container.flowFrames) do
-            if member and not IsForbiddenFrame(member) then
-                TryAddFrameOverlay(member)
-            end
-        end
-    end
-
-    if container.GetChildren then ScanChildren(1, container:GetChildren()) end
-end
-
--- Reused across discovery passes so bounding the compact-frame scan doesn't
--- allocate a new closure every time (see ForEachCompactFrame below).
-local function HandleCompactFrame(frame)
-    if not IsForbiddenFrame(frame) then
-        TryAddFrameOverlay(frame)
-    end
-end
-
+-- Blizzard already owns the compact-frame collections. Do not walk their
+-- children or probe CompactRaidFrame1..40 / CompactRaidGroup... names again.
+-- In raid we also consume the five CompactPartyFrameMember slots because
+-- AlwaysInParty can reuse those Blizzard frames for raid units; the unit on
+-- each frame decides whether it belongs to our supported set.
 local function ScanCompactFrames()
-    ScanContainerChildren(PartyFrame)
-    ScanContainerChildren(CompactPartyFrame)
-    ScanContainerChildren(CompactRaidFrameContainer)
+    ForEachCompactFrame(TryAddFrameOverlay)
 
-    -- Bounded by the actual group/raid size instead of always resolving all
-    -- ~200 fixed compact-frame names (solo play now does zero lookups here).
-    ForEachCompactFrame(HandleCompactFrame)
+    if IsInRaid and IsInRaid() then
+        local compactPartyFrame = _G.CompactPartyFrame
+        if compactPartyFrame then
+            local frame
+            frame = _G.CompactPartyFrameMember1
+            if frame then TryAddFrameOverlay(frame) end
+            frame = _G.CompactPartyFrameMember2
+            if frame then TryAddFrameOverlay(frame) end
+            frame = _G.CompactPartyFrameMember3
+            if frame then TryAddFrameOverlay(frame) end
+            frame = _G.CompactPartyFrameMember4
+            if frame then TryAddFrameOverlay(frame) end
+            frame = _G.CompactPartyFrameMember5
+            if frame then TryAddFrameOverlay(frame) end
+        end
+    end
 end
 
 local function DiscoverFrames()
@@ -267,7 +234,6 @@ local function DiscoverFrames()
 
     TryEnsurePartyFramesVisible()
 
-    -- Reuse table without allocations
     table_wipe(foundHealthBars)
 
     local playerHealthBar = GetPlayerFrameHealthBar()
@@ -306,8 +272,6 @@ local function UpdateUnit(unit, absorb, maxHealth)
 
     absorb = absorb or UnitGetTotalAbsorbs(unit) or 0
     maxHealth = maxHealth or UnitHealthMax(unit) or 1
-    -- `entries` is keyed by health bar. Explicit `next` avoids the `pairs`
-    -- helper on this event-driven hot path while preserving the existing map.
     for _, entry in next, entries do
         addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
     end
@@ -366,14 +330,9 @@ addon.RegisterInitializer(function()
     end)
 end)
 
--- Centralized combat/regen listener callback
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
-            -- Always re-run discovery after combat. GROUP_ROSTER_UPDATE can
-            -- arrive before the client has restored the party layout, and a
-            -- refresh requested during combat may otherwise be consumed while
-            -- the frame still reports its raid state.
             pendingRefresh = false
             QueueDiscoverAndUpdate()
         end
@@ -381,12 +340,6 @@ addon.RegisterInitializer(function()
 end)
 
 if hooksecurefunc then
-    -- Blizzard fires CompactUnitFrame_UpdateAll/SetUpFrame/UpdateUnit very
-    -- frequently in raids (every layout refresh, every join/leave, heavy
-    -- healing). Registering the overlay here is cheap, but the absorb value
-    -- itself must go through Core.lua's 30 FPS throttle like every other
-    -- update path -- calling UpdateUnit() directly from this hook would let
-    -- Blizzard's own event storms bypass the coalescing entirely.
     local ScheduleUnitUpdate = addon.ScheduleUnitUpdate
     local function OnCompactUnitFrameUpdated(frame)
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
@@ -451,7 +404,6 @@ manager:SetScript("OnEvent", function(_, event, unit)
         return
     end
 
-    -- FIX: Explicitly purge dead references when dismantling nameplates.
     if event == "NAME_PLATE_UNIT_REMOVED" then
         if unit then
             local nameplate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
