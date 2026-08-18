@@ -145,20 +145,34 @@ local function GetSpellTexture(spellID)
     return nil
 end
 
+local function GetActionBarSpellIDs(spellID)
+    local ids = { spellID }
+    if C_Spell and C_Spell.GetOverrideSpell then
+        local overrideID = C_Spell.GetOverrideSpell(spellID)
+        if overrideID and overrideID ~= spellID then
+            ids[#ids + 1] = overrideID
+        end
+    end
+    return ids
+end
+
 local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
 
     -- The action bar is the authoritative visual source for display counts.
-    -- Its count can be a secret value, so pass it straight to FontString:SetText.
+    -- Some spells use an override ID in the action bar, while SpellData may
+    -- intentionally keep the base ID. Try both without inspecting the secret.
     if C_ActionBar and C_ActionBar.FindSpellActionButtons and C_ActionBar.GetActionDisplayCount then
-        local actionButtons = C_ActionBar.FindSpellActionButtons(spellID)
-        if actionButtons and actionButtons[1] then
-            local displayCount = C_ActionBar.GetActionDisplayCount(actionButtons[1])
-            if displayCount ~= nil then
-                text:SetText(displayCount)
-                text:Show()
-                return
+        for _, actionSpellID in ipairs(GetActionBarSpellIDs(spellID)) do
+            local actionButtons = C_ActionBar.FindSpellActionButtons(actionSpellID)
+            if actionButtons and actionButtons[1] then
+                local displayCount = C_ActionBar.GetActionDisplayCount(actionButtons[1])
+                if displayCount ~= nil then
+                    text:SetText(displayCount)
+                    text:Show()
+                    return
+                end
             end
         end
     end
