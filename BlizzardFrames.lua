@@ -3,7 +3,6 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
--- Local aliases avoid repeated global-table lookups in frame discovery/update paths.
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local IsInGroup = IsInGroup
@@ -197,9 +196,8 @@ end
 
 -- Blizzard already owns the compact-frame collections. Do not walk their
 -- children or probe CompactRaidFrame1..40 / CompactRaidGroup... names again.
--- In raid we also consume the five CompactPartyFrameMember slots because
--- AlwaysInParty can reuse those Blizzard frames for raid units; the unit on
--- each frame decides whether it belongs to our supported set.
+-- For raid, ForEachCompactFrame consumes Blizzard's raid frame pool and also
+-- the five CompactPartyFrameMember slots when AlwaysInParty is active.
 local function ScanCompactFrames()
     ForEachCompactFrame(TryAddFrameOverlay)
 end
@@ -228,7 +226,6 @@ local function DiscoverFrames()
 
     ScanCompactFrames()
 
-    -- Clean up dead frame references
     for unit, entries in pairs(overlays) do
         for healthBar, entry in pairs(entries) do
             if not foundHealthBars[healthBar] then
@@ -295,10 +292,15 @@ QueueDiscoverAndUpdate = function()
 end
 
 addon.RequestRefresh = function()
-    if QueueDiscoverAndUpdate then
-        QueueDiscoverAndUpdate()
-    end
+    QueueDiscoverAndUpdate()
 end
+
+-- Core.lua is the single owner of layout events. Do not register another
+-- GROUP_ROSTER_UPDATE/scale/edit-mode listener here: that used to cause the
+-- same discovery to be queued by two independent paths.
+addon.RegisterLayoutListener(function()
+    QueueDiscoverAndUpdate()
+end)
 
 addon.RegisterInitializer(function()
     addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
@@ -366,22 +368,13 @@ if EditModeManagerFrame and EditModeManagerFrame.HookScript then
     EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
 end
 
-manager:RegisterEvent("PLAYER_LOGIN")
-manager:RegisterEvent("PLAYER_ENTERING_WORLD")
-manager:RegisterEvent("GROUP_ROSTER_UPDATE")
-manager:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- Nameplate events are not layout events owned by Core, so keep the tiny
+-- dedicated manager for those only. Initial/layout/roster/regen events are
+-- dispatched through Core.lua above.
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-manager:RegisterEvent("UI_SCALE_CHANGED")
-manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
-manager:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
 manager:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_REGEN_ENABLED" then
-        QueueDiscoverAndUpdate()
-        return
-    end
-
     if event == "NAME_PLATE_UNIT_REMOVED" then
         if unit then
             local nameplate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
