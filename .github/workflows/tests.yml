@@ -1,0 +1,51 @@
+name: Lua tests and benchmark
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Benchmark iterations
+        required: false
+        default: "100000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Smoke tests and benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+
+      - name: Lua syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            lua5.1 -e 'assert(loadfile(arg[1]))' "$file"
+          done < <(find . -type f -name '*.lua' -not -path './.git/*' -print0)
+
+      - name: Smoke tests
+        run: lua5.1 test/perf/smoke.lua
+
+      - name: Benchmark
+        env:
+          BENCHMARK_ITERATIONS: ${{ inputs.iterations || '100000' }}
+        run: lua5.1 test/benchmark/benchmark.lua "$BENCHMARK_ITERATIONS" | tee test/result/benchmark-ci.txt
+
+      - name: Upload benchmark result
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-result
+          path: test/result/benchmark-ci.txt
+          if-no-files-found: error
