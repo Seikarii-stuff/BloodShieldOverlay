@@ -7,6 +7,7 @@ if not addon then return end
 
 local originalShowConfigMenu = addon.ShowConfigMenu
 local selector
+local hooked = false
 
 local function GetConfig()
     return addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize and addon.PlayerBarConfig.Initialize()
@@ -14,9 +15,9 @@ end
 
 local function FindCheckButtonByText(parent, wanted)
     if not parent or not parent.GetChildren then return nil end
-    local childCount = select("#", parent:GetChildren())
-    for i = 1, childCount do
-        local child = select(i, parent:GetChildren())
+    local children = { parent:GetChildren() }
+    for i = 1, #children do
+        local child = children[i]
         if child and child.Text and child.Text.GetText and child.Text:GetText() == wanted then
             return child
         end
@@ -31,13 +32,9 @@ local function GetModeText(mode)
 end
 
 local function ApplyMode(mode)
-    local config = GetConfig()
-    if not config then return end
     if mode ~= "left" and mode ~= "right" and mode ~= "none" then
         mode = "left"
     end
-
-    config.resourceDisplay = mode
 
     if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetResourceDisplay) == "function" then
         addon.PlayerBarAPI.SetResourceDisplay(mode)
@@ -100,7 +97,8 @@ local function CreateSelector(frame)
 end
 
 local function HookMenu()
-    if type(originalShowConfigMenu) ~= "function" then return end
+    if hooked or type(originalShowConfigMenu) ~= "function" then return end
+    hooked = true
 
     addon.ShowConfigMenu = function(...)
         originalShowConfigMenu(...)
@@ -115,7 +113,5 @@ end
 HookMenu()
 
 addon.RegisterInitializer(function()
-    if not selector then
-        HookMenu()
-    end
+    HookMenu()
 end)
