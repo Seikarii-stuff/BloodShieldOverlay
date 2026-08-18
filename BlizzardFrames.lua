@@ -30,7 +30,6 @@ local framesByUnit = {}
 local compactMode = nil
 local rosterDirty = false
 local dirtyFrames = setmetatable({}, { __mode = "k" })
-local emptyTable = {}
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
@@ -167,42 +166,6 @@ local function ReconcileAllCurrentFrames()
     end)
 end
 
-local function TryEnsurePartyFramesVisible()
-    if InCombatLockdown() then
-        pendingRefresh = true
-        return
-    end
-
-    local inRaid = InRaidMode()
-    local inGroup = IsInGroup and IsInGroup()
-
-    local function SetShown(frame, shown)
-        if IsForbiddenFrame(frame) then return end
-        if shown then frame:Show() else frame:Hide() end
-    end
-
-    if PartyFrame then
-        SetShown(PartyFrame, not inRaid)
-        if not inRaid and PartyFrame.Update then PartyFrame:Update() end
-    end
-
-    if CompactPartyFrame then
-        SetShown(CompactPartyFrame, not inRaid)
-        if not inRaid and _G.CompactPartyFrame_Update then _G.CompactPartyFrame_Update() end
-    end
-
-    local partyMemberFrame = _G.PartyMemberFrame1
-    if partyMemberFrame then
-        SetShown(partyMemberFrame, not inRaid)
-        if not inRaid and not inGroup then
-            partyMemberFrame.unit = "player"
-            if _G.PartyMemberFrame_Update then _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit) end
-        end
-    end
-end
-
-addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
-
 local function GetPlayerFrameHealthBar()
     local content = PlayerFrame and PlayerFrame.PlayerFrameContent
     local main = content and content.PlayerFrameContentMain
@@ -228,17 +191,11 @@ local function UpdateUnit(unit, absorb, maxHealth)
     for _, entry in next, entries do addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth) end
 end
 
-local function UpdateAll()
-    for unit in pairs(overlays) do UpdateUnit(unit) end
-end
-
 local function DiscoverFrames(full)
     if InCombatLockdown() then
         pendingRefresh = true
         return
     end
-
-    TryEnsurePartyFramesVisible()
 
     local mode = GetCurrentMode()
     local modeChanged = compactMode ~= mode
