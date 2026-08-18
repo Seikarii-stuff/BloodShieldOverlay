@@ -148,6 +148,8 @@ end
 local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
+
+    -- Formal spell charges (e.g. Holy Shock).
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
@@ -156,6 +158,20 @@ local function UpdateCharges(frame, spellID)
             return
         end
     end
+
+    -- Display counters cover abilities whose visible count is not represented
+    -- by the formal spell-charge system (e.g. Bone Shield / similar mechanics).
+    -- Keep this value opaque: secret values must be passed directly to the
+    -- FontString without tonumber(), comparisons, arithmetic, etc.
+    if C_Spell and C_Spell.GetSpellDisplayCount then
+        local displayCount = C_Spell.GetSpellDisplayCount(spellID)
+        if displayCount ~= nil then
+            text:SetText(displayCount)
+            text:Show()
+            return
+        end
+    end
+
     text:SetText(nil)
     text:Hide()
 end
@@ -171,6 +187,7 @@ local function ApplyCooldown(frame, spellID)
         end
         return false
     end
+
     local iconTexture = GetSpellTexture(spellID)
     if not iconTexture then
         frame.BSOMouseSpellID = nil
@@ -180,9 +197,11 @@ local function ApplyCooldown(frame, spellID)
         frame:Hide()
         return false
     end
+
     frame.BSOMouseSpellID = spellID
     frame.BSOMouseIcon:SetTexture(iconTexture)
     UpdateCharges(frame, spellID)
+
     local cooldown = frame.BSOMouseCooldown
     if cooldown then
         if C_Spell and C_Spell.GetSpellCooldownDuration and cooldown.SetCooldownFromDurationObject then
@@ -199,6 +218,7 @@ local function ApplyCooldown(frame, spellID)
             if start and duration then cooldown:SetCooldown(start, duration) end
         end
     end
+
     frame:Show()
     return true
 end
@@ -214,6 +234,7 @@ local function UpdateResourcePips()
         for index = 1, MAX_PIPS do pips[index]:Hide() end
         return 0
     end
+
     local state = resourceProvider:GetState()
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     maximum = math_min(maximum, MAX_PIPS)
@@ -229,9 +250,6 @@ local function UpdateResourcePips()
     arcStart = math_max(0.5, math_min(1.5, arcStart))
     local baseStep = PI / math_max(1, maximum - 1)
     local step = baseStep * spacing
-    -- 1.0 is the current/default geometry. This multiplier moves only the
-    -- anchored first pip by a tiny amount while preserving the radius and
-    -- leaving the cooldown icons completely independent.
     local startAngle = (PI * 0.5) - (baseStep * arcStart)
     for index = 1, MAX_PIPS do
         local pip = pips[pipOrder[index]]
@@ -252,6 +270,7 @@ local function UpdateCooldowns()
     if not config or not overlay then return false end
     local anyVisible = false
     local size = tonumber(config.mouseCooldownPipSize) or DEFAULT_COOLDOWN_SIZE
+
     for index = 1, 2 do
         local frame = cooldownFrames[index]
         frame:SetSize(size, size)
