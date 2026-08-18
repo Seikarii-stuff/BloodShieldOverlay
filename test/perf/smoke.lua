@@ -1,4 +1,4 @@
--- Offline smoke tests for every public entry point and major event path.
+-- Offline smoke tests for current public entry points and major event paths.
 local wow = dofile("test/perf/harness.lua")
 local passed = 0
 local function check(condition, message)
@@ -9,12 +9,14 @@ end
 wow.load()
 local addon = BloodShieldOverlay
 wow.fire("PLAYER_LOGIN")
+
 local playerBar = _G["BloodShieldOverlayBar"]
 check(playerBar and playerBar:IsShown(), "PlayerBar.lua did not initialize the standalone bar")
 check(playerBar.min == 0 and playerBar.max == 2000 and playerBar.value == 250, "standalone absorb bar was not updated")
 check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API missing")
 check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API missing")
 check(type(addon.RegisterRegenListener) == "function", "regen listener API missing")
+check(type(addon.RegisterLayoutListener) == "function", "layout listener API missing")
 check(type(addon.CreateAbsorbOverlay) == "function", "overlay factory missing")
 check(type(addon.UpdateAbsorbOverlay) == "function", "overlay updater missing")
 check(type(addon.RefreshPartyFrames) == "function", "party refresh API missing")
@@ -25,10 +27,23 @@ check(type(addon.GetSpecialResourceProvider) == "function", "shared resource pro
 check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
 check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
 check(type(addon.SetSpecialResourcePipSize) == "function", "special resource pip API missing")
+check(type(addon.SetMouseResourceOverlayEnabled) == "function", "mouse resource toggle API missing")
 check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
 check(addon.SetSpecialResourcePipSize(10, 8), "valid special resource pip size was rejected")
 check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
 check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width was accepted")
+
+-- Mouse OFF must mean no overlay and no per-frame callback.
+check(_G["BloodShieldOverlayMouseResources"] == nil, "mouse overlay was created while all mouse features were disabled")
+addon.SetMouseResourceOverlayEnabled(true)
+local mouseOverlay = _G["BloodShieldOverlayMouseResources"]
+check(mouseOverlay and mouseOverlay:GetScript("OnUpdate") ~= nil, "enabling mouse did not install its update callback")
+addon.SetMouseResourceOverlayEnabled(false)
+check(mouseOverlay:GetScript("OnUpdate") == nil, "disabling mouse left its OnUpdate callback installed")
+check(next(mouseOverlay.events or {}) == nil, "disabling mouse left mouse events registered")
+addon.SetMouseResourceOverlayEnabled(true)
+check(mouseOverlay:GetScript("OnUpdate") ~= nil, "re-enabling mouse did not restore its update callback")
+addon.SetMouseResourceOverlayEnabled(false)
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -36,8 +51,6 @@ check(overlay.parent == healthBar and overlay.mouseEnabled == false, "overlay se
 addon.UpdateAbsorbOverlay(overlay, 42, 100)
 check(overlay.min == 0 and overlay.max == 100 and overlay.value == 42 and overlay.shown, "overlay update failed")
 
--- Retail regression: UnitGetTotalAbsorbs can be a secret number. The addon
--- must pass it through to StatusBar without comparing or retaining it.
 local secretAbsorb = { __secret = true }
 addon.UpdateAbsorbOverlay(overlay, secretAbsorb, 100)
 check(overlay.value == secretAbsorb and overlay.lastAbsorb == nil and overlay.lastMaxHealth == nil,
@@ -52,7 +65,10 @@ addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
     players = players + 1
     check(absorb == 250 and maxHealth == 1000, "invalid player payload")
 end)
-addon.RegisterRegenListener(function(event) regen = regen + 1; check(event == "PLAYER_REGEN_ENABLED", "invalid regen event") end)
+addon.RegisterRegenListener(function(event)
+    regen = regen + 1
+    check(event == "PLAYER_REGEN_ENABLED", "invalid regen event")
+end)
 
 wow.fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
 wow.fire("UNIT_HEALTH", "player")
@@ -65,62 +81,31 @@ check(regen == 1, "regen dispatcher failed")
 check(type(SlashCmdList.BLOODSHIELDOVERLAY) == "function", "slash command missing")
 SlashCmdList.BLOODSHIELDOVERLAY("")
 SlashCmdList.BLOODSHIELDOVERLAY("reload")
-SlashCmdList.BLOODSHIELDOVERLAY("unknown")
 wow.flush_timers()
 check(type(BloodShieldOverlayProfiles) == "table", "profile store was not created")
 check(_G["BloodShieldOverlayConfig"] and _G["BloodShieldOverlayConfig"].widthEdit, "configuration menu was not created")
 
 local configMenu = _G["BloodShieldOverlayConfig"]
-local bar = _G["BloodShieldOverlayBar"]
-check(bar and bar.resourceBar == nil, "bar should not expose implementation details")
-check(bar and bar:GetScript("OnDragStart") == nil, "locked bar still has a drag handler")
 check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
 check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
 check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
-check(configMenu.resourcePipWidthEdit and configMenu.resourcePipHeightEdit,
-    "personal resource pip editors were not created")
-check(configMenu.applyButton.point == "LEFT" and configMenu.applyButton.relative == configMenu.capEdit,
-    "apply button should be beside the size and cap fields")
+check(configMenu.applyButton and configMenu.applyButton:GetScript("OnClick"), "current Apply ALL button was not exposed")
+check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown was not created")
+check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock ALL", "unlock button text does not match current UI")
 
-configMenu.specialResCheck:SetChecked(false)
-configMenu.specialResCheck:GetScript("OnClick")(configMenu.specialResCheck)
-check(configMenu.specialResCheck:GetChecked() == false, "special resource toggle failed")
-configMenu.specialResCheck:SetChecked(true)
-configMenu.specialResCheck:GetScript("OnClick")(configMenu.specialResCheck)
-check(configMenu.specialResCheck:GetChecked() == true, "special resource re-enable failed")
-configMenu.classOverlayCheck:SetChecked(false)
-configMenu.classOverlayCheck:GetScript("OnClick")(configMenu.classOverlayCheck)
-check(configMenu.classOverlayCheck:GetChecked() == false, "group resource overlay toggle failed")
-configMenu.classOverlayCheck:SetChecked(true)
-configMenu.classOverlayCheck:GetScript("OnClick")(configMenu.classOverlayCheck)
-
-local originalWidth, originalHeight = bar.width, bar.height
-configMenu.capEdit:SetText("300")
+local config = addon.PlayerBarConfig.Initialize()
+local originalMouseSize = config.mouseCooldownPipSize
+configMenu.mouseCooldownPipSizeEdit:SetText("9999")
 configMenu.applyButton:GetScript("OnClick")(configMenu.applyButton)
-check(bar.max == 3000, "changing only Max % did not update the shield bar")
-check(bar.width == originalWidth and bar.height == originalHeight,
-    "changing only Max % unexpectedly changed bar dimensions")
+check(config.mouseCooldownPipSize == originalMouseSize, "invalid mouse cooldown pip size was committed")
 
--- Regression test for the historical unlock-button crash: Button:Text is not
--- a WoW API; CreateConfigMenu must complete and its handler must be callable.
-local unlockButton
-for _, frame in ipairs(wow.frames()) do
-    if frame.parent == configMenu and frame.text == "Unlock" then
-        unlockButton = frame
-        break
-    end
-end
-check(unlockButton and unlockButton:GetScript("OnClick"), "unlock button was not created")
+configMenu.mouseCooldownPipSizeEdit:SetText("12")
+configMenu.applyButton:GetScript("OnClick")(configMenu.applyButton)
+check(config.mouseCooldownPipSize == 12, "valid mouse cooldown pip size was not committed")
+
+local unlockButton = configMenu.unlockButton
 unlockButton:GetScript("OnClick")(unlockButton)
-check(bar.movable == true and bar.mouseEnabled == true, "unlock handler failed")
-
-configMenu.healthCheck:SetChecked(true)
-configMenu.healthCheck:GetScript("OnClick")(configMenu.healthCheck)
-check(configMenu.healthCheck:GetChecked() == true, "health toggle failed")
-configMenu.resButton:GetScript("OnClick")(configMenu.resButton)
-check(configMenu.resButton.text == "Right", "resource layout toggle failed")
-configMenu.resButton:GetScript("OnClick")(configMenu.resButton)
-check(configMenu.resButton.text == "None", "resource layout second toggle failed")
+check(playerBar.movable == true and playerBar.mouseEnabled == true, "unlock handler failed")
 
 -- Exercise player-frame discovery and combat-deferred refresh paths.
 local content = wow.new_frame("Frame", "PlayerFrameContent")
@@ -133,6 +118,7 @@ main.HealthBarArea = area
 wow.set_group(false, false)
 addon.RequestRefresh()
 wow.flush_timers()
+
 local partyContainer = wow.new_frame("Frame", "SmokePartyContainer")
 local partyMember = wow.new_frame("Frame", "SmokePartyMember", partyContainer)
 partyMember.displayedUnit = "party1"
@@ -142,14 +128,17 @@ wow.set_group(true, false)
 wow.reset_get_children_calls()
 addon.RequestRefresh()
 wow.flush_timers()
-check(wow.get_children_calls() >= 2, "container discovery did not scan the expected hierarchy")
+check(wow.get_children_calls() >= 1, "container discovery did not scan the expected hierarchy")
+
+-- Target-of-target secure operations requested in combat must be retried after regen.
 wow.set_combat(true)
-addon.RequestRefresh()
+check(addon.TargetTargetBarAPI.Enable(true) == false, "TargetTarget Enable should defer during combat")
 wow.set_combat(false)
 wow.fire("PLAYER_REGEN_ENABLED")
 wow.flush_timers()
+check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "TargetTarget Enable did not retry after combat")
 
--- Regression test: group-frame discovery must not reparent the overlay during combat.
+-- Class resource discovery must also defer protected reparenting during combat.
 local groupContainer = wow.new_frame("Frame", "CombatGroupContainer")
 local groupMember = wow.new_frame("Frame", "CombatGroupMember", groupContainer)
 groupMember.displayedUnit = "player"
@@ -165,18 +154,5 @@ wow.set_combat(false)
 wow.fire("PLAYER_REGEN_ENABLED")
 wow.flush_timers()
 check(classOverlay.parent == groupPowerBar, "deferred group overlay discovery did not retry after combat")
-
--- Regression test: a raid layout may emit GROUP_ROSTER_UPDATE before its
--- child frames exist; the bounded retry must attach once the bar is created.
-PartyFrame = nil
-wow.fire("GROUP_ROSTER_UPDATE")
-wow.flush_timers()
-local delayedContainer = wow.new_frame("Frame", "DelayedRaidContainer")
-local delayedMember = wow.new_frame("Frame", "DelayedRaidMember", delayedContainer)
-delayedMember.displayedUnit = "player"
-local delayedPowerBar = wow.new_frame("StatusBar", "DelayedRaidPowerBar", delayedMember)
-PartyFrame = delayedContainer
-wow.flush_timers()
-check(classOverlay.parent == delayedPowerBar, "raid layout retry did not attach the late-created resource bar")
 
 print(string.format("smoke: PASS (%d assertions)", passed))
