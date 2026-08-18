@@ -28,10 +28,17 @@ check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource 
 check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
 check(type(addon.SetSpecialResourcePipSize) == "function", "special resource pip API missing")
 check(type(addon.SetMouseResourceOverlayEnabled) == "function", "mouse resource toggle API missing")
+check(type(addon.SetMouseCooldownPipSize) == "function", "mouse cooldown pip setter missing")
 check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
 check(addon.SetSpecialResourcePipSize(10, 8), "valid special resource pip size was rejected")
 check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
 check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width was accepted")
+check(not addon.SetMouseCooldownPipSize("bad"), "non-numeric mouse cooldown pip size was accepted")
+check(addon.SetMouseCooldownPipSize(9999), "mouse cooldown pip setter rejected a clampable value")
+check(addon.PlayerBarConfig.Initialize().mouseCooldownPipSize == 24, "mouse cooldown pip setter did not clamp the upper bound")
+check(addon.SetMouseCooldownPipSize(-5), "mouse cooldown pip setter rejected a clampable lower value")
+check(addon.PlayerBarConfig.Initialize().mouseCooldownPipSize == 4, "mouse cooldown pip setter did not clamp the lower bound")
+check(addon.SetMouseCooldownPipSize(8), "mouse cooldown pip setter did not restore a valid value")
 
 -- Mouse OFF must mean no overlay and no per-frame callback.
 check(_G["BloodShieldOverlayMouseResources"] == nil, "mouse overlay was created while all mouse features were disabled")
@@ -89,19 +96,14 @@ local configMenu = _G["BloodShieldOverlayConfig"]
 check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
 check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
 check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
-check(configMenu.applyButton and configMenu.applyButton:GetScript("OnClick"), "current Apply ALL button was not exposed")
 check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown was not created")
-check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock ALL", "unlock button text does not match current UI")
+check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock bars", "unlock button text does not match current UI")
 
 local config = addon.PlayerBarConfig.Initialize()
-local originalMouseSize = config.mouseCooldownPipSize
-configMenu.mouseCooldownPipSizeEdit:SetText("9999")
-configMenu.applyButton:GetScript("OnClick")(configMenu.applyButton)
-check(config.mouseCooldownPipSize == originalMouseSize, "invalid mouse cooldown pip size was committed")
-
-configMenu.mouseCooldownPipSizeEdit:SetText("12")
-configMenu.applyButton:GetScript("OnClick")(configMenu.applyButton)
-check(config.mouseCooldownPipSize == 12, "valid mouse cooldown pip size was not committed")
+config.mouseCooldownPipSize = 9999
+addon.RefreshMouseCooldowns()
+check(config.mouseCooldownPipSize == 24, "runtime mouse cooldown refresh did not normalize an invalid size")
+config.mouseCooldownPipSize = 8
 
 local unlockButton = configMenu.unlockButton
 unlockButton:GetScript("OnClick")(unlockButton)
@@ -133,10 +135,14 @@ check(wow.get_children_calls() >= 1, "container discovery did not scan the expec
 -- Target-of-target secure operations requested in combat must be retried after regen.
 wow.set_combat(true)
 check(addon.TargetTargetBarAPI.Enable(true) == false, "TargetTarget Enable should defer during combat")
+check(addon.TargetTargetBarAPI.ApplySize(160, 12) == false, "TargetTarget ApplySize should defer during combat")
 wow.set_combat(false)
 wow.fire("PLAYER_REGEN_ENABLED")
 wow.flush_timers()
 check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "TargetTarget Enable did not retry after combat")
+local targetConfig = addon.PlayerBarConfig.Initialize()
+check(targetConfig.targetTargetWidth == 160 and targetConfig.targetTargetHeight == 12,
+    "TargetTarget ApplySize did not retry after combat")
 
 -- Class resource discovery must also defer protected reparenting during combat.
 local groupContainer = wow.new_frame("Frame", "CombatGroupContainer")
