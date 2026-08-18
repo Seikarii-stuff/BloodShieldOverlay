@@ -16,7 +16,12 @@ local function ClampMouseCooldownPipSize(value)
 end
 
 local function GetConfig()
-    return addon.PlayerBarConfig and addon.PlayerBarConfig.Initialize and addon.PlayerBarConfig.Initialize()
+    local playerBarConfig = addon.PlayerBarConfig
+    if not playerBarConfig then return nil end
+    if type(playerBarConfig.Get) == "function" then
+        return playerBarConfig.Get()
+    end
+    return nil
 end
 
 function addon.SetMouseCooldownPipSize(value)
