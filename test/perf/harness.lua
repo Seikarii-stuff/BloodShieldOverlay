@@ -16,6 +16,7 @@ _G.issecretvalue = function(value)
 end
 
 local frames = {}
+local objectCounts = {}
 local timers = {}
 local health = { player = 1000, party1 = 500, raid1 = 750 }
 local absorbs = { player = 250, party1 = 100, raid1 = 200 }
@@ -32,8 +33,10 @@ local function frame_method(self, name, fn)
 end
 
 local function new_frame(objectType, name, parent)
-    local frame = { objectType = objectType or "Frame", name = name, parent = parent, children = {}, scripts = {}, shown = true, width = 100, height = 100, events = {} }
+    local frameType = objectType or "Frame"
+    local frame = { objectType = frameType, name = name, parent = parent, children = {}, scripts = {}, shown = true, width = 100, height = 100, events = {} }
     frames[#frames + 1] = frame
+    objectCounts[frameType] = (objectCounts[frameType] or 0) + 1
     if parent and parent.children then parent.children[#parent.children + 1] = frame end
     frame_method(frame, "GetObjectType", function(self) return self.objectType end)
     frame_method(frame, "GetName", function(self) return self.name end)
@@ -224,4 +227,10 @@ end
 function M.reset_get_children_calls() getChildrenCalls = 0 end
 function M.get_children_calls() return getChildrenCalls end
 function M.frames() return frames end
+function M.object_counts()
+    local result = {}
+    for objectType, count in pairs(objectCounts) do result[objectType] = count end
+    result.total = #frames
+    return result
+end
 return M
