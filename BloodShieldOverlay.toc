@@ -7,7 +7,6 @@
 ## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
 
 BloodShieldOverlay.lua
-Raid40Profiler.lua
 Core.lua
 FrameDiscovery.lua
 AbsorbIndicator.lua
