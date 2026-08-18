@@ -125,6 +125,7 @@ local function ApplyPips()
     local spacing = tonumber(menuFrame.mouseResourceArcSpacingEdit:GetText())
     local start = tonumber(menuFrame.mouseResourceArcStartEdit:GetText())
     if not rw or not rh or not gw or not gh or not mw or not spacing or not start then return false end
+    if mw < 4 or mw > 24 then return false end
     if spacing < 0.5 or spacing > 1.5 or start < 0.5 or start > 1.5 then return false end
     local ok = true
     if type(addon.SetSpecialResourcePipSize) == "function" then ok = addon.SetSpecialResourcePipSize(rw, rh) == true and ok end
@@ -264,6 +265,7 @@ local function CreateConfigMenu()
     apply:SetPoint("TOPLEFT", 24, actionY)
     apply:SetText("Apply ALL")
     apply:SetScript("OnClick", ApplyAll)
+    menuFrame.applyButton = apply
 
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(120, 26)
