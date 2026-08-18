@@ -16,6 +16,8 @@ local overlay
 local mouseConfig
 local cursorElapsed, resourceElapsed = 0, 0
 local EnsureOverlay
+local eventFrame
+local OnUpdate
 
 local function GetConfig()
     if mouseConfig then return mouseConfig end
@@ -60,19 +62,38 @@ local function UpdateVisuals()
     end
 end
 
+local function RegisterMouseEvents()
+    if not eventFrame then return end
+    eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+    eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+    eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
+    eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+end
+
+local function UnregisterMouseEvents()
+    if eventFrame then eventFrame:UnregisterAllEvents() end
+end
+
 local function SetEnabled(value)
     enabled = value == true
 
     if not enabled then
         if overlay then
             overlay:Hide()
+            overlay:SetScript("OnUpdate", nil)
             addon.MouseResources:Hide()
             addon.MouseCooldowns:Hide()
         end
+        UnregisterMouseEvents()
         return true
     end
 
     EnsureOverlay()
+    overlay:SetScript("OnUpdate", OnUpdate)
+    RegisterMouseEvents()
     UpdateVisuals()
     UpdateCursorPosition()
     return true
@@ -84,7 +105,7 @@ local function Refresh()
     UpdateCursorPosition()
 end
 
-local function OnUpdate(_, elapsed)
+OnUpdate = function(_, elapsed)
     if not enabled then return end
 
     -- Cursor tracking is deliberately independent of the global graphics rate.
@@ -119,7 +140,6 @@ EnsureOverlay = function()
 
     addon.MouseResources:Initialize(overlay)
     addon.MouseCooldowns:Initialize(overlay)
-    overlay:SetScript("OnUpdate", OnUpdate)
 end
 
 local function OnEvent(_, event, spellID)
@@ -135,14 +155,7 @@ local function OnEvent(_, event, spellID)
     Refresh()
 end
 
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
-eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", OnEvent)
 
 addon.GetMouseCooldownOptions = function()
@@ -158,7 +171,6 @@ end
 
 addon.RegisterInitializer(function()
     mouseConfig = addon.PlayerBarConfig.Initialize()
-    EnsureOverlay()
     SetEnabled(
         mouseConfig.showMouseSpecialResources == true
         or mouseConfig.showMouseCooldown1 == true

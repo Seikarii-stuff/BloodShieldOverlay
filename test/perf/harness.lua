@@ -1,17 +1,16 @@
--- Minimal WoW API simulator for offline smoke tests.
+-- Minimal WoW API simulator for offline smoke tests and synthetic benchmarks.
 local M = {}
 local unpack_values = _G.unpack or table.unpack
 
 _G = _G
 _G.table.wipe = _G.table.wipe or function(t) for k in pairs(t) do t[k] = nil end end
-_G.UIParent = { name = "UIParent" }
+_G.UIParent = { name = "UIParent", scale = 1 }
+_G.UIParent.GetEffectiveScale = function(self) return self.scale end
 _G.BloodShieldOverlayProfiles = nil
 _G.BloodShieldOverlayDB = nil
 _G.SlashCmdList = {}
 _G.print = _G.print or function() end
--- Retail exposes this predicate for protected/secret values. The harness
--- models a secret number with a tagged table so the taint-safe path can be
--- exercised without requiring a live WoW client.
+_G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 _G.issecretvalue = function(value)
     return type(value) == "table" and value.__secret == true
 end
@@ -33,20 +32,24 @@ local function frame_method(self, name, fn)
 end
 
 local function new_frame(objectType, name, parent)
-    local frame = { objectType = objectType or "Frame", name = name, parent = parent, children = {}, scripts = {}, shown = true, width = 100, height = 100 }
+    local frame = { objectType = objectType or "Frame", name = name, parent = parent, children = {}, scripts = {}, shown = true, width = 100, height = 100, events = {} }
     frames[#frames + 1] = frame
     if parent and parent.children then parent.children[#parent.children + 1] = frame end
     frame_method(frame, "GetObjectType", function(self) return self.objectType end)
     frame_method(frame, "GetName", function(self) return self.name end)
+    frame_method(frame, "GetParent", function(self) return self.parent end)
     frame_method(frame, "IsForbidden", function() return false end)
     frame_method(frame, "GetChildren", function(self)
         getChildrenCalls = getChildrenCalls + 1
         return unpack_values(self.children)
     end)
     frame_method(frame, "GetAttribute", function(self, key) return self[key] end)
+    frame_method(frame, "SetAttribute", function(self, key, value) self[key] = value end)
     frame_method(frame, "SetScript", function(self, event, fn) self.scripts[event] = fn end)
     frame_method(frame, "GetScript", function(self, event) return self.scripts[event] end)
-    frame_method(frame, "RegisterEvent", function(self, event) self.events = self.events or {}; self.events[event] = true end)
+    frame_method(frame, "RegisterEvent", function(self, event) self.events[event] = true end)
+    frame_method(frame, "UnregisterEvent", function(self, event) self.events[event] = nil end)
+    frame_method(frame, "UnregisterAllEvents", function(self) self.events = {} end)
     frame_method(frame, "RegisterUnitEvent", function(self, event, ...)
         self.unitEvents = self.unitEvents or {}
         self.unitEvents[event] = self.unitEvents[event] or {}
@@ -56,11 +59,19 @@ local function new_frame(objectType, name, parent)
     end)
     frame_method(frame, "SetAllPoints", function(self, target) self.allPoints = target end)
     frame_method(frame, "SetParent", function(self, value) self.parent = value end)
-    frame_method(frame, "SetStatusBarTexture", function(self, texture) self.texture = texture end)
+    frame_method(frame, "SetStatusBarTexture", function(self, texture)
+        self.texture = texture
+        if not self.statusBarTexture then
+            self.statusBarTexture = new_frame("Texture", nil, self)
+        end
+        self.statusBarTexture.texture = texture
+    end)
+    frame_method(frame, "GetStatusBarTexture", function(self) return self.statusBarTexture end)
     frame_method(frame, "SetStatusBarColor", function(self, r, g, b, a) self.color = { r, g, b, a } end)
     frame_method(frame, "SetOrientation", function(self, value) self.orientation = value end)
     frame_method(frame, "SetReverseFill", function(self, value) self.reverse = value end)
     frame_method(frame, "EnableMouse", function(self, value) self.mouseEnabled = value end)
+    frame_method(frame, "RegisterForClicks", function(self, ...) self.clicks = { ... } end)
     frame_method(frame, "Show", function(self) self.shown = true end)
     frame_method(frame, "Hide", function(self) self.shown = false end)
     frame_method(frame, "IsShown", function(self) return self.shown end)
@@ -82,19 +93,44 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "StopMovingOrSizing", function(self) self.moving = false end)
     frame_method(frame, "CreateTexture", function(self) return new_frame("Texture", nil, self) end)
     frame_method(frame, "CreateFontString", function(self) return new_frame("FontString", nil, self) end)
+    frame_method(frame, "CreateMaskTexture", function(self) return new_frame("MaskTexture", nil, self) end)
+    frame_method(frame, "AddMaskTexture", function(self, mask)
+        self.maskTextures = self.maskTextures or {}
+        self.maskTextures[#self.maskTextures + 1] = mask
+    end)
     frame_method(frame, "SetColorTexture", function(self, r, g, b, a) self.color = { r, g, b, a } end)
-    frame_method(frame, "SetTexture", function(self, texture) self.texture = texture end)
+    frame_method(frame, "SetTexture", function(self, texture, ...) self.texture = texture self.textureArgs = { ... } end)
+    frame_method(frame, "SetTexCoord", function(self, ...) self.texCoord = { ... } end)
     frame_method(frame, "SetVertexColor", function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end)
     frame_method(frame, "SetHeight", function(self, value) self.height = value end)
-    frame_method(frame, "ClearAllPoints", function(self) self.point = nil end)
     frame_method(frame, "SetText", function(self, value) self.text = value end)
     frame_method(frame, "GetText", function(self) return self.text or "" end)
     frame_method(frame, "SetChecked", function(self, value) self.checked = value end)
     frame_method(frame, "GetChecked", function(self) return self.checked end)
     frame_method(frame, "SetAutoFocus", function() end)
     frame_method(frame, "SetJustifyH", function() end)
+    frame_method(frame, "SetJustifyV", function() end)
+    frame_method(frame, "SetFont", function() end)
+    frame_method(frame, "SetTextColor", function() end)
+    frame_method(frame, "SetShadowOffset", function() end)
+    frame_method(frame, "SetWordWrap", function() end)
+    frame_method(frame, "SetMaxLines", function() end)
+    frame_method(frame, "SetAlpha", function(self, value) self.alpha = value end)
+    frame_method(frame, "SetBlendMode", function(self, value) self.blendMode = value end)
+    frame_method(frame, "SetSwipeTexture", function() end)
+    frame_method(frame, "SetDrawEdge", function() end)
+    frame_method(frame, "SetUseCircularEdge", function() end)
+    frame_method(frame, "SetDrawSwipe", function() end)
+    frame_method(frame, "SetDrawBling", function() end)
+    frame_method(frame, "SetReverse", function() end)
+    frame_method(frame, "SetHideCountdownNumbers", function() end)
+    frame_method(frame, "Clear", function(self) self.cooldownCleared = true end)
+    frame_method(frame, "SetCooldown", function(self, start, duration) self.cooldown = { start, duration } end)
+    frame_method(frame, "SetCooldownFromDurationObject", function(self, duration) self.cooldownDuration = duration end)
+    frame_method(frame, "SetCooldownFromExpression", function(self, spellID) self.cooldownExpression = spellID end)
+    frame_method(frame, "SetCooldownTable", function(self, info) self.cooldownInfo = info end)
     frame_method(frame, "SetBackdrop", function(self, value) self.backdrop = value end)
-    frame_method(frame, "SetPoint", function(self, point, relative, relativePoint, x, y) self.point, self.relative, self.relativePoint, self.x, self.y = point, relative, relativePoint, x, y end)
+    frame_method(frame, "SetClampedToScreen", function() end)
     return frame
 end
 
@@ -121,10 +157,22 @@ _G.Enum = { PowerType = { HolyPower = 9, Essence = 19, SoulShards = 7, Chi = 12,
 _G.GetRuneCooldown = function() return 0, 0, true end
 _G.GetPowerRegen = function() return 0.2, 0.2 end
 _G.GetTime = function() return 100 end
+_G.GetCursorPosition = function() return 960, 540 end
 _G.UnitName = function() return "Tester" end
 _G.GetNormalizedRealmName = function() return "Realm" end
+_G.GetSpellTexture = function() return 134400 end
+_G.GetSpellCooldown = function() return 0, 0 end
 _G.C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }
 _G.C_NamePlate = nil
+_G.C_Spell = {}
+_G.C_ActionBar = nil
+_G.C_SpellActivationOverlay = nil
+_G.UIDropDownMenu_SetText = function(frame, text) frame.text = text end
+_G.UIDropDownMenu_SetWidth = function(frame, width) frame.dropdownWidth = width end
+_G.UIDropDownMenu_Initialize = function(frame, initializer) frame.initialize = initializer end
+_G.UIDropDownMenu_CreateInfo = function() return {} end
+_G.UIDropDownMenu_AddButton = function() end
+_G.CloseDropDownMenus = function() end
 
 function M.load()
     dofile("BloodShieldOverlay.lua")
@@ -132,8 +180,18 @@ function M.load()
     dofile("FrameDiscovery.lua")
     dofile("AbsorbIndicator.lua")
     dofile("Configuration.lua")
+    dofile("Performance.lua")
     dofile("ResourceProviders.lua")
     dofile("PlayerBar.lua")
+    dofile("TargetTargetBar.lua")
+    dofile("data/SpellData.lua")
+    dofile("Mouse.lua")
+    dofile("MouseResources.lua")
+    dofile("MouseCooldowns.lua")
+    dofile("Menu.lua")
+    dofile("ResourceDisplayMenu.lua")
+    dofile("options.lua")
+    dofile("PerformanceMenu.lua")
     dofile("Commands.lua")
     dofile("BlizzardFrames.lua")
     dofile("ClassResourceOverlay.lua")
