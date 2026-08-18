@@ -1,7 +1,7 @@
 -- Shared Blizzard-frame discovery helpers.
 -- BlizzardFrames.lua (absorb overlays) and ClassResourceOverlay.lua (group
 -- resource pips) both need to identify unit frames, status bars and compact
--- group frames. Centralizing that logic here avoids running two near-
+-- group frames. Centralizing that logic avoids running two near-
 -- identical tree walks per roster/layout event and keeps the two discovery
 -- consumers from drifting apart.
 
@@ -68,7 +68,7 @@ end
 -- ---------------------------------------------------------------------
 -- Compact/raid frame name caches, split by category so callers can bound
 -- their scan to the frames that can plausibly exist for the current group
--- state instead of always walking all ~200 fixed names.
+-- state instead of always walking all ~200 fixed global names.
 -- ---------------------------------------------------------------------
 
 local RAID_FRAME_COUNT = 40
@@ -111,11 +111,28 @@ local IsInRaid = _G.IsInRaid
 local IsInGroup = _G.IsInGroup
 local GetNumGroupMembers = _G.GetNumGroupMembers
 
+-- Retail's CompactRaidFrameContainer owns the authoritative frame pool and
+-- exposes ApplyToFrames(). It already knows which unit-frame objects are in
+-- use, so raid discovery should ask Blizzard for those frames instead of
+-- recursively walking the container and resolving CompactRaidFrame1..40 by
+-- global name. This is the same API used by Blizzard's own CUF profile code
+-- and by other modern raid-frame addons.
+local function ForEachBlizzardRaidFrame(callback)
+    local container = _G.CompactRaidFrameContainer
+    if not container or type(container.ApplyToFrames) ~= "function" then
+        return false
+    end
+
+    container:ApplyToFrames("normal", callback)
+    return true
+end
+
+addon.ForEachBlizzardRaidFrame = ForEachBlizzardRaidFrame
+
 -- Invokes callback(frame) for every compact/raid frame that can plausibly
--- exist given the current group state, instead of unconditionally resolving
--- all ~200 fixed global names on every discovery pass. Solo play does zero
--- lookups; a 5-player party does ~12; a raid is bounded by its actual roster
--- size rather than the hard-coded maximum of 40.
+-- exist given the current group state. In retail raid mode, prefer Blizzard's
+-- own authoritative frame-pool iterator. The bounded global-name fallback is
+-- retained for older/variant clients where ApplyToFrames is unavailable.
 function addon.ForEachCompactFrame(callback)
     local inRaid = IsInRaid and IsInRaid()
     local inGroup = inRaid or (IsInGroup and IsInGroup())
@@ -123,6 +140,10 @@ function addon.ForEachCompactFrame(callback)
     if not inGroup then return end
 
     if inRaid then
+        if ForEachBlizzardRaidFrame(callback) then
+            return
+        end
+
         local memberCount = (GetNumGroupMembers and GetNumGroupMembers()) or RAID_FRAME_COUNT
         if type(memberCount) ~= "number" or memberCount <= 0 or memberCount > RAID_FRAME_COUNT then
             memberCount = RAID_FRAME_COUNT
