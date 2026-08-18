@@ -27,20 +27,6 @@ local function GetConfig()
     return mouseConfig
 end
 
-local function EnsureOverlay()
-    if overlay then return end
-
-    overlay = CreateFrame("Frame", "BloodShieldOverlayMouseResources", UIParent)
-    overlay:SetSize(48, 30)
-    overlay:SetFrameStrata("HIGH")
-    overlay:EnableMouse(false)
-    overlay:Hide()
-
-    addon.MouseResources:Initialize(overlay)
-    addon.MouseCooldowns:Initialize(overlay)
-    overlay:SetScript("OnUpdate", OnUpdate)
-end
-
 local function UpdateCursorPosition()
     if not enabled or not overlay then return end
 
@@ -69,15 +55,17 @@ end
 
 local function SetEnabled(value)
     enabled = value == true
-    EnsureOverlay()
 
     if not enabled then
-        overlay:Hide()
-        addon.MouseResources:Hide()
-        addon.MouseCooldowns:Hide()
+        if overlay then
+            overlay:Hide()
+            addon.MouseResources:Hide()
+            addon.MouseCooldowns:Hide()
+        end
         return true
     end
 
+    EnsureOverlay()
     UpdateVisuals()
     UpdateCursorPosition()
     return true
@@ -89,7 +77,7 @@ local function Refresh()
     UpdateCursorPosition()
 end
 
-function OnUpdate(_, elapsed)
+local function OnUpdate(_, elapsed)
     if not enabled then return end
 
     cursorElapsed = cursorElapsed + elapsed
@@ -107,6 +95,20 @@ function OnUpdate(_, elapsed)
     -- The proc glow is deliberately visual-only and is the only other piece
     -- of Mouse work allowed to run every frame.
     addon.MouseCooldowns:UpdateGlow(elapsed)
+end
+
+local function EnsureOverlay()
+    if overlay then return end
+
+    overlay = CreateFrame("Frame", "BloodShieldOverlayMouseResources", UIParent)
+    overlay:SetSize(48, 30)
+    overlay:SetFrameStrata("HIGH")
+    overlay:EnableMouse(false)
+    overlay:Hide()
+
+    addon.MouseResources:Initialize(overlay)
+    addon.MouseCooldowns:Initialize(overlay)
+    overlay:SetScript("OnUpdate", OnUpdate)
 end
 
 local function OnEvent(_, event, spellID)
