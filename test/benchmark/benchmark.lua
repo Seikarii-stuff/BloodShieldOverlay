@@ -29,14 +29,21 @@ local function objectDelta(before, after)
 end
 
 local function checkpoint(label, beforeObjects)
-    local objects = wow.object_counts()
+    local objectsBeforeGC = wow.object_counts()
+    local heapBeforeGC = collectgarbage("count") - startMemory
+    collectgarbage("collect")
+    local heapAfterGC = collectgarbage("count") - startMemory
+    local objectsAfterGC = wow.object_counts()
     checkpoints[#checkpoints + 1] = {
         label = label,
-        heap = collectgarbage("count") - startMemory,
-        objects = objectDelta(beforeObjects or startObjects, objects),
-        totalObjects = objects.total,
+        heap = heapBeforeGC,
+        retained = heapAfterGC,
+        transient = heapBeforeGC - heapAfterGC,
+        objects = objectDelta(beforeObjects or startObjects, objectsBeforeGC),
+        totalObjects = objectsBeforeGC.total,
+        objectsAfterGC = objectsAfterGC.total,
     }
-    return objects
+    return objectsAfterGC
 end
 
 local start = os.clock()
@@ -91,15 +98,18 @@ classOverlayMember.displayedUnit = "player"
 local classOverlayPowerBar = wow.new_frame("StatusBar", "BenchmarkClassOverlayPowerBar", classOverlayMember)
 PartyFrame = classOverlayContainer
 wow.set_group(true, false)
+local classEnableStart = os.clock()
 if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(true) end
 wow.flush_timers()
+local classEnableElapsed = os.clock() - classEnableStart
+local objectsAfterClassEnable = checkpoint("classoverlay_enable", objectsAfterPlayerBar)
 local classOverlayIterations = math.max(1000, math.floor(iterations / 10))
 local classOverlayStart = os.clock()
 if addon.SetClassResourceOverlayPipSize then
     for _ = 1, classOverlayIterations do addon.SetClassResourceOverlayPipSize(12, 6) end
 end
 local classOverlayElapsed = os.clock() - classOverlayStart
-local objectsAfterClassOverlay = checkpoint("classoverlay", objectsAfterPlayerBar)
+local objectsAfterClassOverlay = checkpoint("classoverlay_update", objectsAfterClassEnable)
 
 -- Mouse OFF: all mouse features remain disabled, so no overlay or OnUpdate may exist.
 local mouseOverlayOffCreated = _G["BloodShieldOverlayMouseResources"] ~= nil
@@ -109,14 +119,19 @@ for _ = 1, iterations do wow.tick(0.016) end
 local mouseOffElapsed = os.clock() - mouseOffStart
 local objectsAfterMouseOff = checkpoint("mouse_off", objectsAfterClassOverlay)
 
--- Mouse ON: measure the same tick loop after explicitly enabling it.
+-- Mouse ON: separate creation from the repeated tick/update path.
+local mouseEnableStart = os.clock()
 addon.SetMouseResourceOverlayEnabled(true)
 local mouseOverlay = _G["BloodShieldOverlayMouseResources"]
 local mouseOnOnUpdate = mouseOverlay and mouseOverlay:GetScript("OnUpdate") ~= nil
+local mouseEnableElapsed = os.clock() - mouseEnableStart
+local objectsAfterMouseEnable = checkpoint("mouse_enable", objectsAfterMouseOff)
+
 local mouseOnStart = os.clock()
 for _ = 1, iterations do wow.tick(0.016) end
 local mouseOnElapsed = os.clock() - mouseOnStart
-local objectsAfterMouseOn = checkpoint("mouse_on", objectsAfterMouseOff)
+local objectsAfterMouseOn = checkpoint("mouse_update", objectsAfterMouseEnable)
+
 addon.SetMouseResourceOverlayEnabled(false)
 local mouseOffAfterDisableOnUpdate = mouseOverlay and mouseOverlay:GetScript("OnUpdate") ~= nil
 local objectsAfterMouseDisable = checkpoint("mouse_disable", objectsAfterMouseOn)
@@ -128,19 +143,22 @@ local retainedAfterGC = collectgarbage("count") - startMemory
 
 local heapReport = {}
 for _, item in ipairs(checkpoints) do
-    heapReport[#heapReport + 1] = string.format("%s: %+0.2f KB, objects=%s, total_objects=%d", item.label, item.heap, item.objects, item.totalObjects)
+    heapReport[#heapReport + 1] = string.format(
+        "%s: live=%+0.2f KB, retained=%+0.2f KB, transient=%+0.2f KB, objects=%s, total_objects=%d, after_gc_objects=%d",
+        item.label, item.heap, item.retained, item.transient, item.objects, item.totalObjects, item.objectsAfterGC)
+    )
 end
 
 local result = string.format(
-    "iterations=%d\ndispatch_seconds=%.6f\ndispatch_ops_per_second=%.2f\noverlay_seconds=%.6f\noverlay_ops_per_second=%.2f\ndiscovery_iterations=%d\ndiscovery_seconds=%.6f\ndiscovery_ops_per_second=%.2f\nstatic_overlay_iterations=%d\nstatic_overlay_seconds=%.6f\nstatic_overlay_ops_per_second=%.2f\nplayerbar_iterations=%d\nplayerbar_seconds=%.6f\nplayerbar_ops_per_second=%.2f\nclassoverlay_iterations=%d\nclassoverlay_seconds=%.6f\nclassoverlay_ops_per_second=%.2f\nmouse_off_overlay_created=%s\nmouse_off_onupdate_installed=%s\nmouse_off_tick_seconds=%.6f\nmouse_off_tick_ops_per_second=%.2f\nmouse_on_onupdate_installed=%s\nmouse_on_tick_seconds=%.6f\nmouse_on_tick_ops_per_second=%.2f\nmouse_off_after_disable_onupdate=%s\nlistener_updates=%d\nheap_delta_kb=%.2f\nheap_retained_after_gc_kb=%.2f\nheap_diagnostics=%s\n",
+    "iterations=%d\ndispatch_seconds=%.6f\ndispatch_ops_per_second=%.2f\noverlay_seconds=%.6f\noverlay_ops_per_second=%.2f\ndiscovery_iterations=%d\ndiscovery_seconds=%.6f\ndiscovery_ops_per_second=%.2f\nstatic_overlay_iterations=%d\nstatic_overlay_seconds=%.6f\nstatic_overlay_ops_per_second=%.2f\nplayerbar_iterations=%d\nplayerbar_seconds=%.6f\nplayerbar_ops_per_second=%.2f\nclassoverlay_enable_seconds=%.6f\nclassoverlay_iterations=%d\nclassoverlay_seconds=%.6f\nclassoverlay_ops_per_second=%.2f\nmouse_off_overlay_created=%s\nmouse_off_onupdate_installed=%s\nmouse_off_tick_seconds=%.6f\nmouse_off_tick_ops_per_second=%.2f\nmouse_enable_seconds=%.6f\nmouse_on_onupdate_installed=%s\nmouse_on_tick_seconds=%.6f\nmouse_on_tick_ops_per_second=%.2f\nmouse_off_after_disable_onupdate=%s\nlistener_updates=%d\nheap_delta_kb=%.2f\nheap_retained_after_gc_kb=%.2f\nheap_diagnostics=%s\n",
     iterations, elapsed, iterations / math.max(elapsed, 0.000001), updateElapsed,
     iterations / math.max(updateElapsed, 0.000001), discoveryIterations, discoveryElapsed,
     discoveryIterations / math.max(discoveryElapsed, 0.000001), staticIterations, staticElapsed,
     staticIterations / math.max(staticElapsed, 0.000001), playerBarIterations, playerBarElapsed,
-    playerBarIterations / math.max(playerBarElapsed, 0.000001), classOverlayIterations,
+    playerBarIterations / math.max(playerBarElapsed, 0.000001), classEnableElapsed, classOverlayIterations,
     classOverlayElapsed, classOverlayIterations / math.max(classOverlayElapsed, 0.000001),
     tostring(mouseOverlayOffCreated), tostring(mouseOverlayOffOnUpdate), mouseOffElapsed,
-    iterations / math.max(mouseOffElapsed, 0.000001), tostring(mouseOnOnUpdate), mouseOnElapsed,
+    iterations / math.max(mouseOffElapsed, 0.000001), mouseEnableElapsed, tostring(mouseOnOnUpdate), mouseOnElapsed,
     iterations / math.max(mouseOnElapsed, 0.000001), tostring(mouseOffAfterDisableOnUpdate),
     updates, retainedBeforeGC, retainedAfterGC, heapDiagnostics and table.concat(heapReport, "\n") or "run with: lua test/benchmark/benchmark.lua 100000 heap")
 print(result)
