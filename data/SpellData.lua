@@ -21,7 +21,7 @@ addon.Data.MOUSE_COOLDOWNS = {
         { id = 31935, name = "Avenger's Shield" },
     },
     DEATHKNIGHT = {
-        { id = 290541, name = "Marrowrend" },
+        { id = 195182, name = "Marrowrend" },
         { id = 206930, name = "Heart Strike" },
         { id = 49184, name = "Howling Blast" },
         { id = 49143, name = "Frost Strike" },
