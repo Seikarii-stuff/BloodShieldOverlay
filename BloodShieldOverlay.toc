@@ -22,6 +22,7 @@ MouseCooldowns.lua
 Menu.lua
 ResourceDisplayMenu.lua
 options.lua
+PerformanceMenu.lua
 Commands.lua
 BlizzardFrames.lua
 ClassResourceOverlay.lua
