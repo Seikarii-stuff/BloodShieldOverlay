@@ -132,7 +132,7 @@ local function FindSpellEntry(spellID)
     for _, entry in ipairs(GetMouseCooldownOptions()) do
         local id = type(entry) == "number" and entry or entry.id
         if id == spellID then return entry end
-    end
+        end
     return nil
 end
 
@@ -149,11 +149,12 @@ local function UpdateCharges(frame, spellID)
     local text = frame and frame.BSOMouseChargeText
     if not text then return end
 
-    -- Formal spell charges (e.g. Holy Shock).
+    -- Formal spell charges (e.g. Holy Shock). currentCharges can itself be
+    -- a secret value, so it MUST be passed directly to the FontString.
     if C_Spell and C_Spell.GetSpellCharges then
         local charges = C_Spell.GetSpellCharges(spellID)
         if charges and charges.maxCharges and charges.maxCharges > 1 and charges.currentCharges ~= nil then
-            text:SetText(tostring(charges.currentCharges))
+            text:SetText(charges.currentCharges)
             text:Show()
             return
         end
@@ -161,8 +162,7 @@ local function UpdateCharges(frame, spellID)
 
     -- Display counters cover abilities whose visible count is not represented
     -- by the formal spell-charge system (e.g. Bone Shield / similar mechanics).
-    -- Keep this value opaque: secret values must be passed directly to the
-    -- FontString without tonumber(), comparisons, arithmetic, etc.
+    -- Keep this value opaque and pass it directly to the FontString.
     if C_Spell and C_Spell.GetSpellDisplayCount then
         local displayCount = C_Spell.GetSpellDisplayCount(spellID)
         if displayCount ~= nil then
