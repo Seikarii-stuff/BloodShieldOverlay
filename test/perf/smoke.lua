@@ -7,6 +7,7 @@ local function check(condition, message)
 end
 
 wow.load()
+dofile("RuntimeGuards.lua")
 local addon = BloodShieldOverlay
 wow.fire("PLAYER_LOGIN")
 
