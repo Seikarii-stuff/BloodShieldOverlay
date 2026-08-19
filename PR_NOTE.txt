@@ -1,1 +1,0 @@
-This branch extracts the working AlwaysInParty party-frame visibility logic from BlizzardFrames.lua into alwaysisinparty.lua and loads it from the TOC. BlizzardFrames.lua now delegates to the standalone module instead of containing the implementation.
