@@ -24,6 +24,7 @@ local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
 local healthBarCache = setmetatable({}, { __mode = "k" })
 local unitFrames = setmetatable({}, { __mode = "k" })
+local frameHealthBars = setmetatable({}, { __mode = "k" })
 local framesByUnit = {}
 local frameGeneration = setmetatable({}, { __mode = "k" })
 local generation = 0
@@ -52,10 +53,8 @@ local function GetCurrentMode()
     return "solo"
 end
 
-local function GetHealthBar(frame)
+local function FindHealthBar(frame)
     if IsForbiddenFrame(frame) then return nil end
-    local cached = healthBarCache[frame]
-    if cached then return cached end
     local healthBar
     for _, key in ipairs(HEALTH_BAR_KEYS) do
         local bar = frame[key]
@@ -74,7 +73,19 @@ local function GetHealthBar(frame)
         local name = GetFrameName(frame)
         if name == "" or string_find(name, "Health", 1, true) then healthBar = frame end
     end
-    if healthBar then healthBarCache[frame] = healthBar end
+    return healthBar
+end
+
+local function GetHealthBar(frame)
+    if IsForbiddenFrame(frame) then return nil end
+
+    -- CompactUnitFrames can replace their health bar without replacing the
+    -- frame itself. Never let a stale frame->healthBar cache hide that change.
+    local healthBar = FindHealthBar(frame)
+    local cached = healthBarCache[frame]
+    if healthBar ~= cached then
+        healthBarCache[frame] = healthBar
+    end
     return healthBar
 end
 
@@ -93,25 +104,34 @@ local function RemoveFrameFromUnit(unit, frame)
     if not next(bucket) then framesByUnit[unit] = nil end
 end
 
+local function HideFrameHealthBarOverlay(frame, healthBar)
+    if not healthBar then return end
+    local entry = overlaysByHealthBar[healthBar]
+    if not entry then return end
+    if entry.unit then
+        if overlays[entry.unit] then
+            overlays[entry.unit][healthBar] = nil
+            if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
+        end
+        entry.unit = nil
+    end
+    entry.overlay:Hide()
+    entry.overlay.lastAbsorb = nil
+    entry.overlay.lastMaxHealth = nil
+    overlaysByHealthBar[healthBar] = nil
+end
+
 local function DetachFrame(frame, unit)
     unit = unit or unitFrames[frame]
     if not unit then
         unitFrames[frame] = nil
         frameGeneration[frame] = nil
+        frameHealthBars[frame] = nil
         return
     end
     RemoveFrameFromUnit(unit, frame)
-    local healthBar = GetHealthBar(frame)
-    local entry = healthBar and overlaysByHealthBar[healthBar]
-    if entry and entry.unit == unit then
-        entry.overlay:Hide()
-        entry.unit = nil
-        entry.overlay.lastAbsorb = nil
-        entry.overlay.lastMaxHealth = nil
-        overlaysByHealthBar[healthBar] = nil
-        if overlays[unit] then overlays[unit][healthBar] = nil end
-    end
-    if overlays[unit] and not next(overlays[unit]) then overlays[unit] = nil end
+    HideFrameHealthBarOverlay(frame, frameHealthBars[frame] or healthBarCache[frame])
+    frameHealthBars[frame] = nil
     unitFrames[frame] = nil
     frameGeneration[frame] = nil
 end
@@ -131,9 +151,6 @@ local function AddOverlay(unit, healthBar)
             overlays[entry.unit][healthBar] = nil
             if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
         end
-        -- Blizzard reuses compact health bars when a party is replaced.
-        -- Reset the overlay cache so the first update for the new unit can
-        -- never be suppressed by values belonging to the previous unit.
         entry.overlay.lastAbsorb = nil
         entry.overlay.lastMaxHealth = nil
         entry.overlay:Hide()
@@ -142,8 +159,6 @@ local function AddOverlay(unit, healthBar)
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
 
-    -- Always repaint when an existing health bar changes owner.  The overlay
-    -- itself is reusable, but its cached values are unit-specific.
     if isNew or unitChanged then
         local absorb = UnitGetTotalAbsorbs(unit) or 0
         local maxHealth = UnitHealthMax(unit) or 1
@@ -158,7 +173,14 @@ local function AttachFrame(frame, unit)
     framesByUnit[unit][frame] = true
     frameGeneration[frame] = generation
     local healthBar = GetHealthBar(frame)
-    if healthBar then AddOverlay(unit, healthBar) end
+    if healthBar then
+        local previousHealthBar = frameHealthBars[frame]
+        if previousHealthBar and previousHealthBar ~= healthBar then
+            HideFrameHealthBarOverlay(frame, previousHealthBar)
+        end
+        frameHealthBars[frame] = healthBar
+        AddOverlay(unit, healthBar)
+    end
 end
 
 local function ReconcileFrame(frame, mode)
@@ -169,7 +191,14 @@ local function ReconcileFrame(frame, mode)
     if previousUnit == unit and unit and IsSupportedUnit(unit, mode) then
         frameGeneration[frame] = generation
         local healthBar = GetHealthBar(frame)
-        if healthBar then AddOverlay(unit, healthBar) end
+        if healthBar then
+            local previousHealthBar = frameHealthBars[frame]
+            if previousHealthBar and previousHealthBar ~= healthBar then
+                HideFrameHealthBarOverlay(frame, previousHealthBar)
+            end
+            frameHealthBars[frame] = healthBar
+            AddOverlay(unit, healthBar)
+        end
         return false
     end
     if previousUnit and previousUnit ~= unit then DetachFrame(frame, previousUnit) end
@@ -217,7 +246,10 @@ local function GetPersonalResourceHealthBar()
 end
 
 local function DiscoverFrames(full)
-    if InCombatLockdown() then pendingRefresh = true return end
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
     if addon.RefreshPartyFrames then addon.RefreshPartyFrames() end
     local mode = GetCurrentMode()
     local modeChanged = compactMode ~= mode
@@ -243,13 +275,23 @@ local QueueDiscoverAndUpdate
 local function OnDiscoveryTimer()
     discoveryPending = false
     DiscoverFrames(fullRefreshPending)
-    if pendingRefresh then pendingRefresh = false QueueDiscoverAndUpdate(false) end
+    if pendingRefresh and not InCombatLockdown() then
+        pendingRefresh = false
+        QueueDiscoverAndUpdate(false)
+    end
 end
 
 QueueDiscoverAndUpdate = function(full)
     if full then fullRefreshPending = true end
-    if InCombatLockdown() then pendingRefresh = true return end
-    if discoveryPending then pendingRefresh = true return end
+    if InCombatLockdown() then
+        -- A discovery request during combat is deferred, never discarded.
+        pendingRefresh = true
+        return
+    end
+    if discoveryPending then
+        pendingRefresh = true
+        return
+    end
     discoveryPending = true
     C_Timer.After(0.05, OnDiscoveryTimer)
 end
@@ -274,6 +316,7 @@ end)
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
+            -- Anything discovered/changed during combat must be reconciled now.
             pendingRefresh = false
             fullRefreshPending = true
             QueueDiscoverAndUpdate(true)
@@ -284,24 +327,43 @@ end)
 if hooksecurefunc then
     local ScheduleUnitUpdate = addon.ScheduleUnitUpdate
     local function OnCompactUnitFrameUpdated(frame)
-        if InCombatLockdown() or IsForbiddenFrame(frame) then return end
+        if IsForbiddenFrame(frame) then return end
+
         local unit = GetUnit(frame)
-        if unit and IsSupportedUnit(unit) then
-            local healthBar = GetHealthBar(frame)
-            if healthBar then
-                AddOverlay(unit, healthBar)
-                if ScheduleUnitUpdate then
-                    ScheduleUnitUpdate(unit)
-                else
-                    UpdateUnit(unit)
-                end
+        if not unit or not IsSupportedUnit(unit) then
+            if unitFrames[frame] then
+                dirtyFrames[frame] = true
+                rosterDirty = true
+                if InCombatLockdown() then pendingRefresh = true end
             end
-            dirtyFrames[frame] = true
-            rosterDirty = true
-        elseif unitFrames[frame] then
-            dirtyFrames[frame] = true
-            rosterDirty = true
+            return
         end
+
+        -- Existing tracked frames are safe to observe/update in combat. Only
+        -- defer frames that are genuinely new to our ownership while locked.
+        if InCombatLockdown() and not unitFrames[frame] then
+            dirtyFrames[frame] = true
+            rosterDirty = true
+            pendingRefresh = true
+            return
+        end
+
+        local healthBar = GetHealthBar(frame)
+        if healthBar then
+            local previousHealthBar = frameHealthBars[frame]
+            if previousHealthBar and previousHealthBar ~= healthBar then
+                HideFrameHealthBarOverlay(frame, previousHealthBar)
+            end
+            frameHealthBars[frame] = healthBar
+            AddOverlay(unit, healthBar)
+            if ScheduleUnitUpdate then
+                ScheduleUnitUpdate(unit)
+            else
+                UpdateUnit(unit)
+            end
+        end
+        dirtyFrames[frame] = true
+        rosterDirty = true
     end
     if _G.CompactUnitFrame_UpdateAll then hooksecurefunc("CompactUnitFrame_UpdateAll", OnCompactUnitFrameUpdated) end
     if _G.CompactUnitFrame_SetUpFrame then hooksecurefunc("CompactUnitFrame_SetUpFrame", OnCompactUnitFrameUpdated) end
