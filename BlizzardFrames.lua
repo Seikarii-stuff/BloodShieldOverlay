@@ -46,8 +46,6 @@ local GetFrameName = addon.GetFrameName
 local GetUnit = addon.GetUnit
 local ForEachCompactFrame = addon.ForEachCompactFrame
 
--- Keep group-state decisions local to this module. ShowPartyWhenSolo is a
--- separate visibility controller and must never turn solo into party mode.
 local function GetCurrentMode()
     if IsInRaid and IsInRaid() then return "raid" end
     if IsInGroup and IsInGroup() then return "party" end
@@ -124,6 +122,7 @@ local function AddOverlay(unit, healthBar)
     end
     if entry.unit and entry.unit ~= unit and overlays[entry.unit] then
         overlays[entry.unit][healthBar] = nil
+        if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
     end
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
@@ -141,22 +140,23 @@ local function AttachFrame(frame, unit)
 end
 
 local function ReconcileFrame(frame, mode)
-    if IsForbiddenFrame(frame) then return end
+    if IsForbiddenFrame(frame) then return false end
     mode = mode or compactMode or GetCurrentMode()
     local previousUnit = unitFrames[frame]
     local unit = GetUnit(frame)
-    if previousUnit and previousUnit ~= unit then DetachFrame(frame, previousUnit) end
-    if not unit or not IsSupportedUnit(unit, mode) then
-        if previousUnit then DetachFrame(frame, previousUnit) end
-        return
-    end
-    if previousUnit ~= unit then
-        AttachFrame(frame, unit)
-    else
+    if previousUnit == unit and unit and IsSupportedUnit(unit, mode) then
         frameGeneration[frame] = generation
         local healthBar = GetHealthBar(frame)
         if healthBar then AddOverlay(unit, healthBar) end
+        return false
     end
+    if previousUnit and previousUnit ~= unit then DetachFrame(frame, previousUnit) end
+    if not unit or not IsSupportedUnit(unit, mode) then
+        if previousUnit then DetachFrame(frame, previousUnit) end
+        return false
+    end
+    AttachFrame(frame, unit)
+    return true
 end
 
 local function ReconcileAllCurrentFrames()
@@ -266,12 +266,10 @@ if hooksecurefunc then
         if unit and IsSupportedUnit(unit) then
             dirtyFrames[frame] = true
             rosterDirty = true
-            ReconcileFrame(frame)
             if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
         elseif unitFrames[frame] then
             dirtyFrames[frame] = true
             rosterDirty = true
-            ReconcileFrame(frame)
         end
     end
     if _G.CompactUnitFrame_UpdateAll then hooksecurefunc("CompactUnitFrame_UpdateAll", OnCompactUnitFrameUpdated) end
