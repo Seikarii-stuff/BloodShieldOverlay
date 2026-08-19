@@ -55,7 +55,7 @@ end
 local function GetHealthBar(frame)
     if IsForbiddenFrame(frame) then return nil end
     local cached = healthBarCache[frame]
-    if cached ~= nil then return cached or nil end
+    if cached then return cached end
     local healthBar
     for _, key in ipairs(HEALTH_BAR_KEYS) do
         local bar = frame[key]
@@ -74,7 +74,7 @@ local function GetHealthBar(frame)
         local name = GetFrameName(frame)
         if name == "" or string_find(name, "Health", 1, true) then healthBar = frame end
     end
-    healthBarCache[frame] = healthBar or false
+    if healthBar then healthBarCache[frame] = healthBar end
     return healthBar
 end
 
@@ -116,9 +116,11 @@ end
 
 local function AddOverlay(unit, healthBar)
     local entry = overlaysByHealthBar[healthBar]
+    local isNew = false
     if not entry then
         entry = { healthBar = healthBar, overlay = addon.CreateAbsorbOverlay(healthBar) }
         overlaysByHealthBar[healthBar] = entry
+        isNew = true
     end
     if entry.unit and entry.unit ~= unit and overlays[entry.unit] then
         overlays[entry.unit][healthBar] = nil
@@ -127,6 +129,15 @@ local function AddOverlay(unit, healthBar)
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
+
+    -- A newly-created overlay starts hidden. Give it its first real state
+    -- immediately instead of relying on a later unit event or a global
+    -- UpdateAll pass. Existing overlays are never repainted here.
+    if isNew then
+        local absorb = UnitGetTotalAbsorbs(unit) or 0
+        local maxHealth = UnitHealthMax(unit) or 1
+        addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
+    end
     return entry
 end
 
@@ -136,13 +147,7 @@ local function AttachFrame(frame, unit)
     framesByUnit[unit][frame] = true
     frameGeneration[frame] = generation
     local healthBar = GetHealthBar(frame)
-    if healthBar then
-        local entry = overlaysByHealthBar[healthBar]
-        AddOverlay(unit, healthBar)
-        if not entry then
-            UpdateUnit(unit)
-        end
-    end
+    if healthBar then AddOverlay(unit, healthBar) end
 end
 
 local function ReconcileFrame(frame, mode)
@@ -153,13 +158,7 @@ local function ReconcileFrame(frame, mode)
     if previousUnit == unit and unit and IsSupportedUnit(unit, mode) then
         frameGeneration[frame] = generation
         local healthBar = GetHealthBar(frame)
-        if healthBar then
-            local entry = overlaysByHealthBar[healthBar]
-            AddOverlay(unit, healthBar)
-            if not entry then
-                UpdateUnit(unit)
-            end
-        end
+        if healthBar then AddOverlay(unit, healthBar) end
         return false
     end
     if previousUnit and previousUnit ~= unit then DetachFrame(frame, previousUnit) end
@@ -181,7 +180,7 @@ local function ReconcileAllCurrentFrames()
     end
 end
 
-function UpdateUnit(unit, absorb, maxHealth)
+local function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
     if not entries then return end
     absorb = absorb or UnitGetTotalAbsorbs(unit) or 0
@@ -208,6 +207,7 @@ end
 
 local function DiscoverFrames(full)
     if InCombatLockdown() then pendingRefresh = true return end
+    if addon.RefreshPartyFrames then addon.RefreshPartyFrames() end
     local mode = GetCurrentMode()
     local modeChanged = compactMode ~= mode
     if full or fullRefreshPending or modeChanged then
@@ -239,6 +239,7 @@ QueueDiscoverAndUpdate = function(full)
     if full then fullRefreshPending = true end
     if InCombatLockdown() then pendingRefresh = true return end
     if discoveryPending then pendingRefresh = true return end
+    if addon.RefreshPartyFrames then addon.RefreshPartyFrames() end
     discoveryPending = true
     C_Timer.After(0.05, OnDiscoveryTimer)
 end
