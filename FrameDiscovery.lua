@@ -1,9 +1,8 @@
 -- Shared Blizzard-frame discovery helpers.
 -- BlizzardFrames.lua (absorb overlays) and ClassResourceOverlay.lua (group
--- resource pips) both need to identify unit frames, status bars and compact
--- group frames. Centralizing that logic here avoids running two near-
--- identical tree walks per roster/layout event and keeps the two discovery
--- consumers from drifting apart.
+-- resource pips) both consume Blizzard's real compact-frame pools. Discovery
+-- never creates replacement party/raid frames, and solo party discovery is
+-- kept compatible with ShowPartyWhenSolo.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -11,6 +10,8 @@ _G.BloodShieldOverlay = addon
 local type = type
 local select = select
 local _G = _G
+local IsInRaid = _G.IsInRaid
+local IsInGroup = _G.IsInGroup
 
 -- ---------------------------------------------------------------------
 -- Basic frame predicates
@@ -32,18 +33,12 @@ function addon.IsStatusBar(frame)
 end
 
 function addon.GetFrameName(frame)
-    if IsForbiddenFrame(frame) or not frame.GetName then
-        return ""
-    end
+    if IsForbiddenFrame(frame) or not frame.GetName then return "" end
     local name = frame:GetName()
-    if type(name) == "string" then
-        return name
-    end
-    return ""
+    return type(name) == "string" and name or ""
 end
 
--- Resolves the unit displayed by a (possibly secure) frame. Shared by the
--- absorb-overlay discovery pass and the class-resource pip discovery pass.
+-- Resolves the unit displayed by a (possibly secure) Blizzard frame.
 function addon.GetUnit(frame)
     if IsForbiddenFrame(frame) then return nil end
 
@@ -65,98 +60,61 @@ function addon.GetUnit(frame)
     return nil
 end
 
--- ---------------------------------------------------------------------
--- Compact/raid frame name caches, split by category so callers can bound
--- their scan to the frames that can plausibly exist for the current group
--- state instead of always walking all ~200 fixed names.
--- ---------------------------------------------------------------------
-
-local RAID_FRAME_COUNT = 40
-local PARTY_FRAME_COUNT = 4
-local RAID_GROUP_COUNT = 8
-local RAID_GROUP_SLOTS = 5
-local RAID_GROUP_SLOT_COUNT = RAID_GROUP_COUNT * RAID_GROUP_SLOTS
-
-local RAID_FRAME_NAMES = {}
-local PARTY_MEMBER_FRAME_NAMES = {}
-local LEGACY_PARTY_FRAME_NAMES = {}
-local COMPACT_PARTY_FRAME_NAMES = {}
-local RAID_GROUP_SLOT_NAMES = {}
-
-for index = 1, RAID_FRAME_COUNT do
-    RAID_FRAME_NAMES[index] = "CompactRaidFrame" .. index
-end
-for index = 1, PARTY_FRAME_COUNT do
-    PARTY_MEMBER_FRAME_NAMES[index] = "CompactPartyFrameMemberFrame" .. index
-    LEGACY_PARTY_FRAME_NAMES[index] = "PartyMemberFrame" .. index
-    COMPACT_PARTY_FRAME_NAMES[index] = "CompactPartyFrame" .. index
-end
-do
-    local slotIndex = 0
-    for group = 1, RAID_GROUP_COUNT do
-        for slot = 1, RAID_GROUP_SLOTS do
-            slotIndex = slotIndex + 1
-            RAID_GROUP_SLOT_NAMES[slotIndex] = "CompactRaidGroup" .. group .. "Slot" .. slot
-        end
+-- Blizzard owns the raid compact-frame pool. ApplyToFrames("normal") gives us
+-- the frames Blizzard currently considers active, so raid discovery does not
+-- scan fixed global names or guess which frames exist.
+local function ForEachBlizzardRaidFrame(callback)
+    local container = _G.CompactRaidFrameContainer
+    if not container or type(container.ApplyToFrames) ~= "function" then
+        return false
     end
+
+    container:ApplyToFrames("normal", callback)
+    return true
 end
 
-addon.RAID_FRAME_NAMES = RAID_FRAME_NAMES
-addon.PARTY_MEMBER_FRAME_NAMES = PARTY_MEMBER_FRAME_NAMES
-addon.LEGACY_PARTY_FRAME_NAMES = LEGACY_PARTY_FRAME_NAMES
-addon.COMPACT_PARTY_FRAME_NAMES = COMPACT_PARTY_FRAME_NAMES
-addon.RAID_GROUP_SLOT_NAMES = RAID_GROUP_SLOT_NAMES
+addon.ForEachBlizzardRaidFrame = ForEachBlizzardRaidFrame
 
-local IsInRaid = _G.IsInRaid
-local IsInGroup = _G.IsInGroup
-local GetNumGroupMembers = _G.GetNumGroupMembers
+-- Blizzard's actual compact party member frames. We also expose the legacy
+-- party frames because ShowPartyWhenSolo can configure PartyMemberFrame1.
+local function ForEachBlizzardPartyFrame(callback)
+    for index = 1, 4 do
+        local frame = _G["CompactPartyFrameMemberFrame" .. index]
+        if frame then callback(frame) end
 
--- Invokes callback(frame) for every compact/raid frame that can plausibly
--- exist given the current group state, instead of unconditionally resolving
--- all ~200 fixed global names on every discovery pass. Solo play does zero
--- lookups; a 5-player party does ~12; a raid is bounded by its actual roster
--- size rather than the hard-coded maximum of 40.
+        frame = _G["PartyMemberFrame" .. index]
+        if frame then callback(frame) end
+    end
+    return true
+end
+
+addon.ForEachBlizzardPartyFrame = ForEachBlizzardPartyFrame
+
 function addon.ForEachCompactFrame(callback)
-    local inRaid = IsInRaid and IsInRaid()
-    local inGroup = inRaid or (IsInGroup and IsInGroup())
-
-    if not inGroup then return end
-
-    if inRaid then
-        local memberCount = (GetNumGroupMembers and GetNumGroupMembers()) or RAID_FRAME_COUNT
-        if type(memberCount) ~= "number" or memberCount <= 0 or memberCount > RAID_FRAME_COUNT then
-            memberCount = RAID_FRAME_COUNT
-        end
-
-        for index = 1, memberCount do
-            local frame = _G[RAID_FRAME_NAMES[index]]
-            if frame then callback(frame) end
-        end
-
-        local slotCount = memberCount
-        if slotCount > RAID_GROUP_SLOT_COUNT then slotCount = RAID_GROUP_SLOT_COUNT end
-        for index = 1, slotCount do
-            local frame = _G[RAID_GROUP_SLOT_NAMES[index]]
-            if frame then callback(frame) end
-        end
-        return
+    local raid = IsInRaid and IsInRaid() or false
+    if raid then
+        return ForEachBlizzardRaidFrame(callback)
     end
 
-    for index = 1, PARTY_FRAME_COUNT do
-        local frame = _G[PARTY_MEMBER_FRAME_NAMES[index]]
-        if frame then callback(frame) end
-
-        frame = _G[LEGACY_PARTY_FRAME_NAMES[index]]
-        if frame then callback(frame) end
-
-        frame = _G[COMPACT_PARTY_FRAME_NAMES[index]]
-        if frame then callback(frame) end
+    local inParty = IsInGroup and IsInGroup() or false
+    if inParty then
+        return ForEachBlizzardPartyFrame(callback)
     end
+
+    -- SOLO: ShowPartyWhenSolo owns visibility/unit assignment. Discovery only
+    -- consumes those real Blizzard party frames; it never makes them visible
+    -- or changes their unit here.
+    if addon.RefreshPartyFrames then
+        return ForEachBlizzardPartyFrame(callback)
+    end
+
+    return false
 end
 
--- Depth-limited recursive search for the frame that displays "player" inside
--- a container (CompactPartyFrame, CompactRaidFrameContainer, PartyFrame...).
--- Shared by ClassResourceOverlay's resource-bar lookup.
+-- ---------------------------------------------------------------------
+-- Player-frame lookup shared with ClassResourceOverlay.
+-- ---------------------------------------------------------------------
+
 local UnitIsUnit = _G.UnitIsUnit
 
 local function IsPlayerUnit(frame)
@@ -165,6 +123,7 @@ local function IsPlayerUnit(frame)
     if unit == "player" then return true end
     return UnitIsUnit and UnitIsUnit(unit, "player") or false
 end
+
 addon.IsPlayerUnit = IsPlayerUnit
 
 local FindPlayerFrame
