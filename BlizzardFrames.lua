@@ -34,7 +34,6 @@ local fullRefreshPending = true
 local dirtyFrames = setmetatable({}, { __mode = "k" })
 local rosterDirty = false
 local compactMode = nil
-local postCombatRefreshPending = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
@@ -211,6 +210,27 @@ local function ReconcileAllCurrentFrames()
     end
 end
 
+local function ResetAllOverlays()
+    for _, entries in pairs(overlays) do
+        for healthBar, entry in pairs(entries) do
+            entry.overlay:Hide()
+            entry.overlay.lastAbsorb = nil
+            entry.overlay.lastMaxHealth = nil
+            overlaysByHealthBar[healthBar] = nil
+        end
+    end
+    overlays = {}
+    overlaysByHealthBar = setmetatable({}, { __mode = "k" })
+    healthBarCache = setmetatable({}, { __mode = "k" })
+    unitFrames = setmetatable({}, { __mode = "k" })
+    frameHealthBars = setmetatable({}, { __mode = "k" })
+    framesByUnit = {}
+    frameGeneration = setmetatable({}, { __mode = "k" })
+    dirtyFrames = setmetatable({}, { __mode = "k" })
+    rosterDirty = false
+    generation = generation + 1
+end
+
 local function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
     if not entries then return end
@@ -283,32 +303,6 @@ QueueDiscoverAndUpdate = function(full)
     C_Timer.After(0.05, OnDiscoveryTimer)
 end
 
--- Blizzard can settle/rebuild CompactUnitFrames for a short period around
--- combat lockdown transitions. A single scan at PLAYER_REGEN_ENABLED is not
--- enough: if that scan observes a transient frame/health-bar arrangement, the
--- stale association can survive until /reload. Reconcile several times after
--- combat, without ever touching protected frames while locked.
-local function SchedulePostCombatRefresh()
-    if postCombatRefreshPending then return end
-    postCombatRefreshPending = true
-    local delays = { 0.05, 0.15, 0.35, 0.75 }
-    local function RunPass(index)
-        if InCombatLockdown() then
-            postCombatRefreshPending = false
-            pendingRefresh = true
-            return
-        end
-        fullRefreshPending = true
-        QueueDiscoverAndUpdate(true)
-        if index < #delays then
-            C_Timer.After(delays[index + 1] - delays[index], function() RunPass(index + 1) end)
-        else
-            postCombatRefreshPending = false
-        end
-    end
-    C_Timer.After(delays[1], function() RunPass(1) end)
-end
-
 addon.RequestRefresh = QueueDiscoverAndUpdate
 addon.RegisterLayoutListener(function(event)
     if event == "PLAYER_ENTERING_WORLD" or event == "UI_SCALE_CHANGED"
@@ -332,9 +326,6 @@ addon.RegisterInitializer(function()
             pendingRefresh = false
             fullRefreshPending = true
             QueueDiscoverAndUpdate(true)
-            SchedulePostCombatRefresh()
-        elseif event == "PLAYER_REGEN_DISABLED" then
-            pendingRefresh = true
         end
     end)
 end)
@@ -387,9 +378,21 @@ end
 if EventRegistry and EventRegistry.RegisterCallback then EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon) end
 if EditModeManagerFrame and EditModeManagerFrame.HookScript then EditModeManagerFrame:HookScript("OnHide", OnEditModeExit) end
 
+manager:RegisterEvent("PLAYER_ENTERING_WORLD")
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_ENTERING_WORLD" then
+        -- A dungeon/instance transition can rebuild Blizzard's compact party
+        -- frames without a GROUP_ROSTER_UPDATE. Throw away all ownership and
+        -- rediscover the live frames from scratch.
+        ResetAllOverlays()
+        fullRefreshPending = true
+        pendingRefresh = false
+        discoveryPending = false
+        QueueDiscoverAndUpdate(true)
+        return
+    end
     if event == "NAME_PLATE_UNIT_REMOVED" then
         if unit and UnitIsUnit(unit, "player") then QueueDiscoverAndUpdate(false) end
         return
