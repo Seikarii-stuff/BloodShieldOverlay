@@ -56,6 +56,14 @@ local function HideOverlay(overlay)
     overlay.lastMaxHealth = nil
 end
 
+local function ReparentOverlay(overlay, healthBar)
+    if not overlay or not healthBar then return end
+    overlay:SetParent(healthBar)
+    overlay:ClearAllPoints()
+    overlay:SetAllPoints(healthBar)
+    overlay:SetFrameLevel((healthBar:GetFrameLevel() or 0) + 5)
+end
+
 local function UpdateCompactFrame(frame)
     if not frame or IsForbiddenFrame(frame) then return end
 
@@ -76,8 +84,12 @@ local function UpdateCompactFrame(frame)
     end
 
     if state.healthBar ~= healthBar then
-        if state.overlay then HideOverlay(state.overlay) end
-        state.overlay = addon.CreateAbsorbOverlay(healthBar)
+        if state.overlay then
+            HideOverlay(state.overlay)
+            ReparentOverlay(state.overlay, healthBar)
+        else
+            state.overlay = addon.CreateAbsorbOverlay(healthBar)
+        end
         state.healthBar = healthBar
     end
 
