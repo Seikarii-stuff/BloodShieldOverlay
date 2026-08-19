@@ -226,31 +226,18 @@ local function QueueRefresh()
     end)
 end
 
-manager:RegisterEvent("PLAYER_LOGIN")
-manager:RegisterEvent("PLAYER_ENTERING_WORLD")
-manager:RegisterEvent("GROUP_ROSTER_UPDATE")
-manager:RegisterEvent("PLAYER_REGEN_ENABLED")
-manager:RegisterEvent("UI_SCALE_CHANGED")
-manager:RegisterEvent("DISPLAY_SIZE_CHANGED")
-manager:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+-- Core.lua is the single owner of layout/roster event dispatch. Raid roster
+-- changes intentionally do not schedule a discovery pass here: Blizzard's
+-- CompactUnitFrame lifecycle handles new/recycled raid frames directly.
+addon.RegisterLayoutListener(function(event)
+    if event == "GROUP_ROSTER_UPDATE" and InRaid() then
+        return
+    end
+    QueueRefresh()
+end)
 
-manager:SetScript("OnEvent", function(_, event)
+addon.RegisterRegenListener(function(event)
     if event == "PLAYER_REGEN_ENABLED" then
         QueueRefresh()
-        return
     end
-
-    if event == "GROUP_ROSTER_UPDATE" then
-        -- Raid frame creation/recycling is handled by Blizzard's compact-frame
-        -- hooks above. Do not run our bounded roster scan on every 20->21 / 38->39
-        -- transition: that was the exact source of the hitch this addon was
-        -- originally optimized to remove. Party/solo visibility is still allowed
-        -- to refresh here because that is owned by ShowPartyWhenSolo.lua.
-        if not InRaid() then
-            QueueRefresh()
-        end
-        return
-    end
-
-    QueueRefresh()
 end)
