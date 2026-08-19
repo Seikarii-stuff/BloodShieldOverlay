@@ -192,9 +192,10 @@ end
 local function ScanContainerFrames(container, forceHealthBarRefresh)
     if not container or IsForbiddenFrame(container) then return end
 
-    -- These are Blizzard's authoritative active-frame arrays. Unlike
-    -- GetChildren(), they do not walk the entire UI hierarchy and their size
-    -- is bounded by the actual roster/layout.
+    -- Blizzard exposes the currently active compact frames through these
+    -- arrays. This is the important middle ground: it finds frames that are
+    -- not present under the fixed globals, but never recursively walks the
+    -- whole Blizzard UI tree.
     local members = container.memberFrames
     if members then
         for _, frame in ipairs(members) do
@@ -240,7 +241,10 @@ local function GetPersonalResourceHealthBar()
     return GetHealthBar(nameplate.UnitFrame or nameplate.unitFrame)
 end
 
-local function TryEnsurePartyFramesVisible()
+-- The solo-party module owns this policy. Keep a compatibility fallback only
+-- for initialization-order safety when BlizzardFrames happens to initialize
+-- before ShowPartyWhenSolo.lua.
+local function FallbackRefreshPartyFrames()
     if InCombatLockdown() then
         pendingRefresh = true
         return
@@ -273,9 +277,7 @@ local function TryEnsurePartyFramesVisible()
     local partyMemberFrame = _G.PartyMemberFrame1
     if partyMemberFrame then
         EnsureFrameShown(partyMemberFrame)
-        if not inGroup then
-            partyMemberFrame.unit = "player"
-        end
+        if not inGroup then partyMemberFrame.unit = "player" end
         if _G.PartyMemberFrame_Update and partyMemberFrame.unit then
             _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit)
         end
@@ -290,9 +292,7 @@ local function TryEnsurePartyFramesVisible()
     end
 end
 
--- Keep solo ownership in ShowPartyWhenSolo.lua. This fallback only protects
--- initialization order if that module has not installed its implementation yet.
-addon.RefreshPartyFrames = addon.RefreshPartyFrames or TryEnsurePartyFramesVisible
+addon.RefreshPartyFrames = addon.RefreshPartyFrames or FallbackRefreshPartyFrames
 
 local function DiscoverFrames(forceHealthBarRefresh)
     if InCombatLockdown() then
@@ -300,7 +300,8 @@ local function DiscoverFrames(forceHealthBarRefresh)
         return
     end
 
-    TryEnsurePartyFramesVisible()
+    -- Solo visibility is intentionally delegated to ShowPartyWhenSolo.
+    addon.RefreshPartyFrames()
 
     if forceHealthBarRefresh then
         healthBarCache = setmetatable({}, { __mode = "k" })
@@ -413,9 +414,6 @@ if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
         if not frame or InCombatLockdown() or IsForbiddenFrame(frame) then return end
 
-        -- A Blizzard lifecycle hook is a cheap, precise place to invalidate the
-        -- cache for one recycled frame. This avoids a full discovery on every
-        -- health/unit event while still handling frame/healthbar replacement.
         InvalidateHealthBar(frame)
         TryAddFrameOverlay(frame, false)
 
@@ -475,9 +473,9 @@ manager:SetScript("OnEvent", function(_, event, unit)
     end
 
     if event == "GROUP_ROSTER_UPDATE" then
-        -- Do not recursively scan Blizzard's hierarchy here. The container
-        -- member/flow arrays plus the bounded FrameDiscovery pass are enough
-        -- to discover the newly materialized 21st/39th frame.
+        -- Rebind cheap frame/healthbar references after roster changes, but do
+        -- not recurse through Blizzard's hierarchy. This is the hot case we
+        -- are protecting: 20 -> 21 and 38 -> 39.
         if not InCombatLockdown() then
             healthBarCache = setmetatable({}, { __mode = "k" })
         end
