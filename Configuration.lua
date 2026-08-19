@@ -107,6 +107,10 @@ local function Initialize()
     if not profiles[key] then
         if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
             profiles[key] = CopySettings(BloodShieldOverlayDB)
+            -- BloodShieldOverlayDB is the pre-profile-format SavedVariable.
+            -- Once copied into the per-character profile store, remove the
+            -- legacy table so dead settings are not serialized forever.
+            BloodShieldOverlayDB = nil
         else
             profiles[key] = {}
         end
