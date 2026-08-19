@@ -69,6 +69,14 @@ end
 
 addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
 
+-- This is deliberately an initialization action, not a periodic scan.  After
+-- /reload the PLAYER_ENTERING_WORLD/group events can already have happened by
+-- the time the addon registers its layout listener, so SOLO must establish its
+-- Blizzard party frame state explicitly at addon initialization.
+addon.RegisterInitializer(function()
+    TryEnsurePartyFramesVisible()
+end)
+
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" and pendingRefresh then
