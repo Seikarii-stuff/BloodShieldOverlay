@@ -129,10 +129,6 @@ local function AddOverlay(unit, healthBar)
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
-
-    -- A newly-created overlay starts hidden. Give it its first real state
-    -- immediately instead of relying on a later unit event or a global
-    -- UpdateAll pass. Existing overlays are never repainted here.
     if isNew then
         local absorb = UnitGetTotalAbsorbs(unit) or 0
         local maxHealth = UnitHealthMax(unit) or 1
@@ -239,7 +235,6 @@ QueueDiscoverAndUpdate = function(full)
     if full then fullRefreshPending = true end
     if InCombatLockdown() then pendingRefresh = true return end
     if discoveryPending then pendingRefresh = true return end
-    if addon.RefreshPartyFrames then addon.RefreshPartyFrames() end
     discoveryPending = true
     C_Timer.After(0.05, OnDiscoveryTimer)
 end
@@ -277,9 +272,17 @@ if hooksecurefunc then
         if InCombatLockdown() or IsForbiddenFrame(frame) then return end
         local unit = GetUnit(frame)
         if unit and IsSupportedUnit(unit) then
+            local healthBar = GetHealthBar(frame)
+            if healthBar then
+                AddOverlay(unit, healthBar)
+                if ScheduleUnitUpdate then
+                    ScheduleUnitUpdate(unit)
+                else
+                    UpdateUnit(unit)
+                end
+            end
             dirtyFrames[frame] = true
             rosterDirty = true
-            if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
         elseif unitFrames[frame] then
             dirtyFrames[frame] = true
             rosterDirty = true
