@@ -80,7 +80,7 @@ end
 local function GetHealthBar(frame)
     if IsForbiddenFrame(frame) then return nil end
     local healthBar = FindHealthBar(frame)
-    if healthBarCache[frame] ~= healthBar then healthBarCache[frame] = healthBar end
+    healthBarCache[frame] = healthBar
     return healthBar
 end
 
@@ -117,8 +117,10 @@ local function DetachFrame(frame, unit)
     unit = unit or unitFrames[frame]
     local healthBar = frameHealthBars[frame]
     if unit then RemoveFrameFromUnit(unit, frame) end
-    if healthBarFrames[healthBar] == frame then healthBarFrames[healthBar] = nil end
-    if healthBar then HideOverlayForHealthBar(healthBar) end
+    if healthBar and healthBarFrames[healthBar] == frame then
+        healthBarFrames[healthBar] = nil
+        HideOverlayForHealthBar(healthBar)
+    end
     frameHealthBars[frame] = nil
     unitFrames[frame] = nil
     frameGeneration[frame] = nil
@@ -127,11 +129,11 @@ end
 local function AddOverlay(unit, healthBar)
     if not unit or not healthBar then return nil end
     local entry = overlaysByHealthBar[healthBar]
-    local unitChanged = false
     if not entry then
         entry = { healthBar = healthBar, overlay = addon.CreateAbsorbOverlay(healthBar) }
         overlaysByHealthBar[healthBar] = entry
-    elseif entry.unit and entry.unit ~= unit then
+    end
+    if entry.unit and entry.unit ~= unit then
         if overlays[entry.unit] then
             overlays[entry.unit][healthBar] = nil
             if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
@@ -139,14 +141,10 @@ local function AddOverlay(unit, healthBar)
         entry.overlay:Hide()
         entry.overlay.lastAbsorb = nil
         entry.overlay.lastMaxHealth = nil
-        unitChanged = true
     end
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
-    if unitChanged then
-        addon.UpdateAbsorbOverlay(entry.overlay, UnitGetTotalAbsorbs(unit) or 0, UnitHealthMax(unit) or 1)
-    end
     return entry
 end
 
@@ -155,13 +153,28 @@ local function AttachFrame(frame, unit, healthBar)
 
     local previousOwner = healthBarFrames[healthBar]
     if previousOwner and previousOwner ~= frame then
-        DetachFrame(previousOwner)
+        local previousUnit = unitFrames[previousOwner]
+        -- FrameDiscovery deliberately enumerates CompactPartyFrameMemberFrame*
+        -- before the legacy PartyMemberFrame*. If both expose the same healthbar,
+        -- keep the first (real compact) owner instead of allowing the legacy
+        -- duplicate to steal it and destroy the overlay we just attached.
+        if previousUnit and previousUnit ~= unit then
+            return false
+        end
+        if previousUnit == unit then
+            unitFrames[frame] = unit
+            frameHealthBars[frame] = healthBar
+            frameGeneration[frame] = generation
+            return true
+        end
     end
 
     local previousHealthBar = frameHealthBars[frame]
     if previousHealthBar and previousHealthBar ~= healthBar then
-        HideOverlayForHealthBar(previousHealthBar)
-        if healthBarFrames[previousHealthBar] == frame then healthBarFrames[previousHealthBar] = nil end
+        if healthBarFrames[previousHealthBar] == frame then
+            healthBarFrames[previousHealthBar] = nil
+            HideOverlayForHealthBar(previousHealthBar)
+        end
     end
 
     unitFrames[frame] = unit
@@ -177,7 +190,6 @@ end
 local function ReconcileFrame(frame, mode)
     if IsForbiddenFrame(frame) then return nil end
     mode = mode or compactMode or GetCurrentMode()
-
     local previousUnit = unitFrames[frame]
     local unit = GetUnit(frame)
 
@@ -200,7 +212,9 @@ local function ReconcileFrame(frame, mode)
         return nil
     end
 
-    AttachFrame(frame, unit, healthBar)
+    if not AttachFrame(frame, unit, healthBar) then
+        return nil
+    end
     return healthBar
 end
 
@@ -367,31 +381,21 @@ if hooksecurefunc then
     local ScheduleUnitUpdate = addon.ScheduleUnitUpdate
     local function OnCompactUnitFrameUpdated(frame)
         if IsForbiddenFrame(frame) then return end
-
         local unit = GetUnit(frame)
         local mode = compactMode or GetCurrentMode()
-        local previousUnit = unitFrames[frame]
-
-        -- Structural changes are deferred in combat. This is the only place
-        -- where lockdown matters: re-binding/removing an overlay can touch a
-        -- StatusBar parented to a protected Blizzard healthbar. Existing
-        -- frames with the same unit can still receive cheap absorb updates.
-        if InCombatLockdown() then
-            if not previousUnit or previousUnit ~= unit or not unit or not IsSupportedUnit(unit, mode) then
+        if not unit or not IsSupportedUnit(unit, mode) then
+            if unitFrames[frame] then
                 dirtyFrames[frame] = true
                 rosterDirty = true
-                pendingRefresh = true
-                return
+                if InCombatLockdown() then pendingRefresh = true end
             end
+            return
+        end
 
-            local healthBar = GetHealthBar(frame)
-            if healthBar and frameHealthBars[frame] == healthBar and healthBarFrames[healthBar] == frame then
-                if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
-            else
-                dirtyFrames[frame] = true
-                rosterDirty = true
-                pendingRefresh = true
-            end
+        if InCombatLockdown() and not unitFrames[frame] then
+            dirtyFrames[frame] = true
+            rosterDirty = true
+            pendingRefresh = true
             return
         end
 
