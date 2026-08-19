@@ -1,10 +1,8 @@
 -- Absorb overlays for Blizzard's player, personal-resource, party, and raid frames.
 --
--- Discovery is deliberately Blizzard-authoritative but bounded.  We do not
--- recursively walk the compact-frame hierarchy: that was the source of the
--- roster-size hitch this module originally had.  Instead we reconcile the
--- real compact frames exposed by FrameDiscovery and repair Blizzard's frame
--- reuse lifecycle when SetUpFrame/UpdateUnit changes a frame underneath us.
+-- Discovery deliberately avoids recursive child walks. Blizzard's compact
+-- containers already expose the active member/flow frames; use those cheap
+-- references plus the bounded global-name discovery in FrameDiscovery.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -27,17 +25,13 @@ local manager = CreateFrame("Frame")
 
 local overlays = {}
 local overlaysByHealthBar = setmetatable({}, { __mode = "k" })
-
--- Blizzard can reuse a CompactUnitFrame and replace its internal health bar.
--- This cache is intentionally weak, but it must also be explicitly invalidated
--- at lifecycle boundaries; weak keys do not help while Blizzard keeps the frame.
 local healthBarCache = setmetatable({}, { __mode = "k" })
 local frameHealthBar = setmetatable({}, { __mode = "k" })
 local frameUnit = setmetatable({}, { __mode = "k" })
+local foundHealthBars = setmetatable({}, { __mode = "k" })
 
 local discoveryPending = false
 local pendingRefresh = false
-local rosterRefreshPending = false
 local editModeExitPending = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
@@ -192,12 +186,35 @@ local function TryAddFrameOverlay(frame, forceHealthBarRefresh)
     end
 
     BindFrame(frame, unit, healthBar)
+    foundHealthBars[healthBar] = true
+end
+
+local function ScanContainerFrames(container, forceHealthBarRefresh)
+    if not container or IsForbiddenFrame(container) then return end
+
+    -- These are Blizzard's authoritative active-frame arrays. Unlike
+    -- GetChildren(), they do not walk the entire UI hierarchy and their size
+    -- is bounded by the actual roster/layout.
+    local members = container.memberFrames
+    if members then
+        for _, frame in ipairs(members) do
+            TryAddFrameOverlay(frame, forceHealthBarRefresh)
+        end
+    end
+
+    local flow = container.flowFrames
+    if flow then
+        for _, frame in ipairs(flow) do
+            TryAddFrameOverlay(frame, forceHealthBarRefresh)
+        end
+    end
 end
 
 local function ScanCompactFrames(forceHealthBarRefresh)
-    -- This is intentionally bounded by FrameDiscovery's active-frame list.
-    -- For a 40-man raid this is at most the real raid frames, not a recursive
-    -- walk through every child of Blizzard's containers.
+    ScanContainerFrames(PartyFrame, forceHealthBarRefresh)
+    ScanContainerFrames(CompactPartyFrame, forceHealthBarRefresh)
+    ScanContainerFrames(CompactRaidFrameContainer, forceHealthBarRefresh)
+
     ForEachCompactFrame(function(frame)
         TryAddFrameOverlay(frame, forceHealthBarRefresh)
     end)
@@ -273,12 +290,11 @@ local function TryEnsurePartyFramesVisible()
     end
 end
 
--- ShowPartyWhenSolo also owns this entry point.  Keeping the small compatibility
--- hook here means BlizzardFrames remains usable by itself and does not depend on
--- initialization order, while the actual solo policy stays in its own module.
+-- Keep solo ownership in ShowPartyWhenSolo.lua. This fallback only protects
+-- initialization order if that module has not installed its implementation yet.
 addon.RefreshPartyFrames = addon.RefreshPartyFrames or TryEnsurePartyFramesVisible
 
-local function FullReconcile(forceHealthBarRefresh)
+local function DiscoverFrames(forceHealthBarRefresh)
     if InCombatLockdown() then
         pendingRefresh = true
         return
@@ -286,14 +302,13 @@ local function FullReconcile(forceHealthBarRefresh)
 
     TryEnsurePartyFramesVisible()
 
-    -- A full roster/layout reconciliation is the one place where we deliberately
-    -- throw away the frame->healthbar cache.  This catches Blizzard replacing a
-    -- healthbar without making UNIT_* events expensive.
     if forceHealthBarRefresh then
         healthBarCache = setmetatable({}, { __mode = "k" })
     end
 
-    local foundHealthBars = setmetatable({}, { __mode = "k" })
+    for healthBar in pairs(foundHealthBars) do
+        foundHealthBars[healthBar] = nil
+    end
 
     local playerHealthBar = GetPlayerFrameHealthBar()
     if playerHealthBar then
@@ -309,8 +324,6 @@ local function FullReconcile(forceHealthBarRefresh)
 
     ScanCompactFrames(forceHealthBarRefresh)
 
-    -- Snapshot cleanup is bounded by overlays we actually own.  It prevents a
-    -- reused frame from leaving the old unit's absorb overlay behind.
     for unit, entries in pairs(overlays) do
         for healthBar, entry in pairs(entries) do
             if not foundHealthBars[healthBar] then
@@ -345,17 +358,15 @@ local function UpdateAll()
 end
 
 local function DiscoverAndUpdate(forceHealthBarRefresh)
-    FullReconcile(forceHealthBarRefresh)
+    DiscoverFrames(forceHealthBarRefresh)
     UpdateAll()
 end
 
+local QueueDiscoverAndUpdate
+
 local function OnDiscoveryTimer()
     discoveryPending = false
-
-    local forceHealthBarRefresh = rosterRefreshPending
-    rosterRefreshPending = false
-    DiscoverAndUpdate(forceHealthBarRefresh)
-
+    DiscoverAndUpdate(false)
     if pendingRefresh then
         pendingRefresh = false
         QueueDiscoverAndUpdate()
@@ -402,9 +413,9 @@ if hooksecurefunc then
     local function OnCompactUnitFrameUpdated(frame)
         if not frame or InCombatLockdown() or IsForbiddenFrame(frame) then return end
 
-        -- SetUpFrame/UpdateUnit are precisely the lifecycle points where
-        -- Blizzard can retarget a recycled frame or install a new healthbar.
-        -- Resolve it fresh here; never trust a stale negative cache entry.
+        -- A Blizzard lifecycle hook is a cheap, precise place to invalidate the
+        -- cache for one recycled frame. This avoids a full discovery on every
+        -- health/unit event while still handling frame/healthbar replacement.
         InvalidateHealthBar(frame)
         TryAddFrameOverlay(frame, false)
 
@@ -435,7 +446,7 @@ local function OnEditModeExit()
 
     C_Timer.After(0.2, function()
         editModeExitPending = false
-        TryEnsurePartyFramesVisible()
+        addon.RefreshPartyFrames()
         QueueDiscoverAndUpdate()
     end)
 end
@@ -464,11 +475,12 @@ manager:SetScript("OnEvent", function(_, event, unit)
     end
 
     if event == "GROUP_ROSTER_UPDATE" then
-        -- The only roster-specific cost is one bounded pass over the real
-        -- compact frames.  We force cache invalidation here because a newly
-        -- joined 21st/39th player is exactly where Blizzard tends to recycle
-        -- compact frames.  No recursive container scan is performed.
-        rosterRefreshPending = true
+        -- Do not recursively scan Blizzard's hierarchy here. The container
+        -- member/flow arrays plus the bounded FrameDiscovery pass are enough
+        -- to discover the newly materialized 21st/39th frame.
+        if not InCombatLockdown() then
+            healthBarCache = setmetatable({}, { __mode = "k" })
+        end
         QueueDiscoverAndUpdate()
         return
     end
