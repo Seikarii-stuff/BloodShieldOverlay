@@ -181,9 +181,6 @@ local function ReconcileFrame(frame, mode)
     local previousUnit = unitFrames[frame]
     local unit = GetUnit(frame)
 
-    -- Pets, vehicles, empty frames, etc. are deliberately not supported.
-    -- If a known party/raid frame changes to one of them, detach immediately;
-    -- there is no protected-frame operation involved in removing our overlay.
     if not unit or not IsSupportedUnit(unit, mode) then
         if previousUnit then DetachFrame(frame, previousUnit) end
         return nil
@@ -208,8 +205,6 @@ local function ReconcileFrame(frame, mode)
 end
 
 local function ResetOwnership()
-    -- Reuse the overlay objects instead of creating a second StatusBar on the
-    -- same Blizzard healthbar every time we enter an instance.
     for _, entries in pairs(overlays) do
         for _, entry in pairs(entries) do
             entry.overlay:Hide()
@@ -297,7 +292,6 @@ local function DiscoverFrames(full)
         dirtyFrames = setmetatable({}, { __mode = "k" })
 
         local foundHealthBars = ReconcileAllCurrentFrames()
-
         local playerHealthBar = GetPlayerFrameHealthBar()
         if playerHealthBar then
             foundHealthBars[playerHealthBar] = true
@@ -308,7 +302,6 @@ local function DiscoverFrames(full)
             foundHealthBars[personalResourceHealthBar] = true
             AddOverlay("player", personalResourceHealthBar)
         end
-
         CleanupUnseenOverlays(foundHealthBars)
     elseif rosterDirty then
         rosterDirty = false
@@ -377,14 +370,28 @@ if hooksecurefunc then
 
         local unit = GetUnit(frame)
         local mode = compactMode or GetCurrentMode()
+        local previousUnit = unitFrames[frame]
 
-        -- Existing frames can be reconciled during combat because we only
-        -- touch our own overlay state. New frames are deferred until combat
-        -- ends, when Blizzard's protected setup can safely be inspected.
-        if InCombatLockdown() and not unitFrames[frame] then
-            dirtyFrames[frame] = true
-            rosterDirty = true
-            pendingRefresh = true
+        -- Structural changes are deferred in combat. This is the only place
+        -- where lockdown matters: re-binding/removing an overlay can touch a
+        -- StatusBar parented to a protected Blizzard healthbar. Existing
+        -- frames with the same unit can still receive cheap absorb updates.
+        if InCombatLockdown() then
+            if not previousUnit or previousUnit ~= unit or not unit or not IsSupportedUnit(unit, mode) then
+                dirtyFrames[frame] = true
+                rosterDirty = true
+                pendingRefresh = true
+                return
+            end
+
+            local healthBar = GetHealthBar(frame)
+            if healthBar and frameHealthBars[frame] == healthBar and healthBarFrames[healthBar] == frame then
+                if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
+            else
+                dirtyFrames[frame] = true
+                rosterDirty = true
+                pendingRefresh = true
+            end
             return
         end
 
@@ -421,9 +428,6 @@ manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 manager:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_ENTERING_WORLD" then
-        -- A dungeon/instance transition can rebuild Blizzard's compact party
-        -- frames without a roster change. Reset ownership, then take one
-        -- authoritative snapshot of the live frames.
         ResetOwnership()
         fullRefreshPending = true
         pendingRefresh = false
