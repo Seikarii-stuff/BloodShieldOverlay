@@ -15,6 +15,7 @@ end
 function addon.CreateAbsorbOverlay(healthBar)
     local overlay = CreateFrame("StatusBar", nil, healthBar)
     overlay:SetAllPoints(healthBar)
+    overlay:SetFrameLevel((healthBar:GetFrameLevel() or 0) + 5)
     overlay:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     overlay:SetStatusBarColor(1, 1, 1, OVERLAY_ALPHA)
     overlay:SetOrientation("HORIZONTAL")
