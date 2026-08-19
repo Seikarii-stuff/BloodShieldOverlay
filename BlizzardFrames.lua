@@ -9,7 +9,6 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
-local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local InCombatLockdown = InCombatLockdown
 local IsInGroup = IsInGroup
@@ -19,7 +18,6 @@ local UnitHealthMax = UnitHealthMax
 local hooksecurefunc = hooksecurefunc
 local type = type
 
-local manager = CreateFrame("Frame")
 local IsForbiddenFrame = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
 local GetUnit = addon.GetUnit
