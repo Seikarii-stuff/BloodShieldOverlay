@@ -185,7 +185,11 @@ if hooksecurefunc then
     -- frame.unit directly. A new 21st/39th frame is handled by Blizzard itself;
     -- no roster-wide hierarchy scan is needed.
     local function OnCompactUnitFrameUpdated(frame)
-        if InCombatLockdown() then return end
+        -- Do NOT gate this on InCombatLockdown(). Blizzard's own compact-frame
+        -- updates happen during combat too, and this hook only reads frame.unit
+        -- / frame.healthBar and updates an unprotected child overlay. Skipping
+        -- this hook in combat is exactly how a newly recycled raid frame can
+        -- miss its first bind.
         UpdateCompactFrame(frame)
     end
 
@@ -235,5 +239,18 @@ manager:SetScript("OnEvent", function(_, event)
         QueueRefresh()
         return
     end
+
+    if event == "GROUP_ROSTER_UPDATE" then
+        -- Raid frame creation/recycling is handled by Blizzard's compact-frame
+        -- hooks above. Do not run our bounded roster scan on every 20->21 / 38->39
+        -- transition: that was the exact source of the hitch this addon was
+        -- originally optimized to remove. Party/solo visibility is still allowed
+        -- to refresh here because that is owned by ShowPartyWhenSolo.lua.
+        if not InRaid() then
+            QueueRefresh()
+        end
+        return
+    end
+
     QueueRefresh()
 end)
