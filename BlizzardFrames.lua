@@ -34,6 +34,7 @@ local fullRefreshPending = true
 local dirtyFrames = setmetatable({}, { __mode = "k" })
 local rosterDirty = false
 local compactMode = nil
+local postCombatRefreshPending = false
 
 local HEALTH_BAR_KEYS = { "healthBar", "HealthBar", "healthbar", "health", "Health", "HealthBarArea" }
 local PARTY_UNITS = { player = true }
@@ -78,14 +79,9 @@ end
 
 local function GetHealthBar(frame)
     if IsForbiddenFrame(frame) then return nil end
-
-    -- CompactUnitFrames can replace their health bar without replacing the
-    -- frame itself. Never let a stale frame->healthBar cache hide that change.
     local healthBar = FindHealthBar(frame)
     local cached = healthBarCache[frame]
-    if healthBar ~= cached then
-        healthBarCache[frame] = healthBar
-    end
+    if healthBar ~= cached then healthBarCache[frame] = healthBar end
     return healthBar
 end
 
@@ -158,7 +154,6 @@ local function AddOverlay(unit, healthBar)
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
-
     if isNew or unitChanged then
         local absorb = UnitGetTotalAbsorbs(unit) or 0
         local maxHealth = UnitHealthMax(unit) or 1
@@ -175,9 +170,7 @@ local function AttachFrame(frame, unit)
     local healthBar = GetHealthBar(frame)
     if healthBar then
         local previousHealthBar = frameHealthBars[frame]
-        if previousHealthBar and previousHealthBar ~= healthBar then
-            HideFrameHealthBarOverlay(frame, previousHealthBar)
-        end
+        if previousHealthBar and previousHealthBar ~= healthBar then HideFrameHealthBarOverlay(frame, previousHealthBar) end
         frameHealthBars[frame] = healthBar
         AddOverlay(unit, healthBar)
     end
@@ -193,9 +186,7 @@ local function ReconcileFrame(frame, mode)
         local healthBar = GetHealthBar(frame)
         if healthBar then
             local previousHealthBar = frameHealthBars[frame]
-            if previousHealthBar and previousHealthBar ~= healthBar then
-                HideFrameHealthBarOverlay(frame, previousHealthBar)
-            end
+            if previousHealthBar and previousHealthBar ~= healthBar then HideFrameHealthBarOverlay(frame, previousHealthBar) end
             frameHealthBars[frame] = healthBar
             AddOverlay(unit, healthBar)
         end
@@ -246,10 +237,7 @@ local function GetPersonalResourceHealthBar()
 end
 
 local function DiscoverFrames(full)
-    if InCombatLockdown() then
-        pendingRefresh = true
-        return
-    end
+    if InCombatLockdown() then pendingRefresh = true return end
     if addon.RefreshPartyFrames then addon.RefreshPartyFrames() end
     local mode = GetCurrentMode()
     local modeChanged = compactMode ~= mode
@@ -284,7 +272,6 @@ end
 QueueDiscoverAndUpdate = function(full)
     if full then fullRefreshPending = true end
     if InCombatLockdown() then
-        -- A discovery request during combat is deferred, never discarded.
         pendingRefresh = true
         return
     end
@@ -294,6 +281,32 @@ QueueDiscoverAndUpdate = function(full)
     end
     discoveryPending = true
     C_Timer.After(0.05, OnDiscoveryTimer)
+end
+
+-- Blizzard can settle/rebuild CompactUnitFrames for a short period around
+-- combat lockdown transitions. A single scan at PLAYER_REGEN_ENABLED is not
+-- enough: if that scan observes a transient frame/health-bar arrangement, the
+-- stale association can survive until /reload. Reconcile several times after
+-- combat, without ever touching protected frames while locked.
+local function SchedulePostCombatRefresh()
+    if postCombatRefreshPending then return end
+    postCombatRefreshPending = true
+    local delays = { 0.05, 0.15, 0.35, 0.75 }
+    local function RunPass(index)
+        if InCombatLockdown() then
+            postCombatRefreshPending = false
+            pendingRefresh = true
+            return
+        end
+        fullRefreshPending = true
+        QueueDiscoverAndUpdate(true)
+        if index < #delays then
+            C_Timer.After(delays[index + 1] - delays[index], function() RunPass(index + 1) end)
+        else
+            postCombatRefreshPending = false
+        end
+    end
+    C_Timer.After(delays[1], function() RunPass(1) end)
 end
 
 addon.RequestRefresh = QueueDiscoverAndUpdate
@@ -316,10 +329,12 @@ end)
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" then
-            -- Anything discovered/changed during combat must be reconciled now.
             pendingRefresh = false
             fullRefreshPending = true
             QueueDiscoverAndUpdate(true)
+            SchedulePostCombatRefresh()
+        elseif event == "PLAYER_REGEN_DISABLED" then
+            pendingRefresh = true
         end
     end)
 end)
@@ -328,7 +343,6 @@ if hooksecurefunc then
     local ScheduleUnitUpdate = addon.ScheduleUnitUpdate
     local function OnCompactUnitFrameUpdated(frame)
         if IsForbiddenFrame(frame) then return end
-
         local unit = GetUnit(frame)
         if not unit or not IsSupportedUnit(unit) then
             if unitFrames[frame] then
@@ -338,29 +352,19 @@ if hooksecurefunc then
             end
             return
         end
-
-        -- Existing tracked frames are safe to observe/update in combat. Only
-        -- defer frames that are genuinely new to our ownership while locked.
         if InCombatLockdown() and not unitFrames[frame] then
             dirtyFrames[frame] = true
             rosterDirty = true
             pendingRefresh = true
             return
         end
-
         local healthBar = GetHealthBar(frame)
         if healthBar then
             local previousHealthBar = frameHealthBars[frame]
-            if previousHealthBar and previousHealthBar ~= healthBar then
-                HideFrameHealthBarOverlay(frame, previousHealthBar)
-            end
+            if previousHealthBar and previousHealthBar ~= healthBar then HideFrameHealthBarOverlay(frame, previousHealthBar) end
             frameHealthBars[frame] = healthBar
             AddOverlay(unit, healthBar)
-            if ScheduleUnitUpdate then
-                ScheduleUnitUpdate(unit)
-            else
-                UpdateUnit(unit)
-            end
+            if ScheduleUnitUpdate then ScheduleUnitUpdate(unit) else UpdateUnit(unit) end
         end
         dirtyFrames[frame] = true
         rosterDirty = true
@@ -380,12 +384,8 @@ local function OnEditModeExit()
         QueueDiscoverAndUpdate(true)
     end)
 end
-if EventRegistry and EventRegistry.RegisterCallback then
-    EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon)
-end
-if EditModeManagerFrame and EditModeManagerFrame.HookScript then
-    EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
-end
+if EventRegistry and EventRegistry.RegisterCallback then EventRegistry:RegisterCallback("EditMode.Exit", OnEditModeExit, addon) end
+if EditModeManagerFrame and EditModeManagerFrame.HookScript then EditModeManagerFrame:HookScript("OnHide", OnEditModeExit) end
 
 manager:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 manager:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
