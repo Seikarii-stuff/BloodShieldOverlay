@@ -106,6 +106,8 @@ local function DetachFrame(frame, unit)
     if entry and entry.unit == unit then
         entry.overlay:Hide()
         entry.unit = nil
+        entry.overlay.lastAbsorb = nil
+        entry.overlay.lastMaxHealth = nil
         overlaysByHealthBar[healthBar] = nil
         if overlays[unit] then overlays[unit][healthBar] = nil end
     end
@@ -117,19 +119,32 @@ end
 local function AddOverlay(unit, healthBar)
     local entry = overlaysByHealthBar[healthBar]
     local isNew = false
+    local unitChanged = false
     if not entry then
         entry = { healthBar = healthBar, overlay = addon.CreateAbsorbOverlay(healthBar) }
         overlaysByHealthBar[healthBar] = entry
         isNew = true
     end
-    if entry.unit and entry.unit ~= unit and overlays[entry.unit] then
-        overlays[entry.unit][healthBar] = nil
-        if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
+    if entry.unit and entry.unit ~= unit then
+        unitChanged = true
+        if overlays[entry.unit] then
+            overlays[entry.unit][healthBar] = nil
+            if not next(overlays[entry.unit]) then overlays[entry.unit] = nil end
+        end
+        -- Blizzard reuses compact health bars when a party is replaced.
+        -- Reset the overlay cache so the first update for the new unit can
+        -- never be suppressed by values belonging to the previous unit.
+        entry.overlay.lastAbsorb = nil
+        entry.overlay.lastMaxHealth = nil
+        entry.overlay:Hide()
     end
     entry.unit = unit
     overlays[unit] = overlays[unit] or {}
     overlays[unit][healthBar] = entry
-    if isNew then
+
+    -- Always repaint when an existing health bar changes owner.  The overlay
+    -- itself is reusable, but its cached values are unit-specific.
+    if isNew or unitChanged then
         local absorb = UnitGetTotalAbsorbs(unit) or 0
         local maxHealth = UnitHealthMax(unit) or 1
         addon.UpdateAbsorbOverlay(entry.overlay, absorb, maxHealth)
