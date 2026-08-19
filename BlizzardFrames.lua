@@ -6,7 +6,6 @@ _G.BloodShieldOverlay = addon
 -- Local aliases avoid repeated global-table lookups in frame discovery/update paths.
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
-local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
 local UnitHealthMax = UnitHealthMax
@@ -116,58 +115,6 @@ local function AddOverlay(unit, healthBar)
     overlays[unit][healthBar] = entry
 end
 
-local function TryEnsurePartyFramesVisible()
-    if InCombatLockdown() then
-        pendingRefresh = true
-        return
-    end
-
-    local inRaid = IsInRaid and IsInRaid()
-    local inGroup = IsInGroup and IsInGroup()
-
-    if inRaid then
-        if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
-        if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
-        return
-    end
-
-    local function EnsureFrameShown(frame)
-        if IsForbiddenFrame(frame) then return end
-        if frame.Show then frame:Show() end
-    end
-
-    if PartyFrame then
-        EnsureFrameShown(PartyFrame)
-        if PartyFrame.Update then PartyFrame:Update() end
-    end
-
-    if CompactPartyFrame then
-        EnsureFrameShown(CompactPartyFrame)
-        if _G.CompactPartyFrame_Update then _G.CompactPartyFrame_Update() end
-    end
-
-    local partyMemberFrame = _G.PartyMemberFrame1
-    if partyMemberFrame then
-        EnsureFrameShown(partyMemberFrame)
-        if not inGroup then
-            partyMemberFrame.unit = "player"
-        end
-        if _G.PartyMemberFrame_Update and partyMemberFrame.unit then
-            _G.PartyMemberFrame_Update(partyMemberFrame, partyMemberFrame.unit)
-        end
-    end
-
-    local compactPartyMemberFrame = _G.CompactPartyFrameMemberFrame1
-    if compactPartyMemberFrame then
-        EnsureFrameShown(compactPartyMemberFrame)
-        if not inGroup and compactPartyMemberFrame.SetUnit then
-            compactPartyMemberFrame:SetUnit("player")
-        end
-    end
-end
-
-addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
-
 local function GetPlayerFrameHealthBar()
     local content = PlayerFrame and PlayerFrame.PlayerFrameContent
     local main = content and content.PlayerFrameContentMain
@@ -265,7 +212,7 @@ local function DiscoverFrames()
         return
     end
 
-    TryEnsurePartyFramesVisible()
+    addon.RefreshPartyFrames()
 
     -- Reuse table without allocations
     table_wipe(foundHealthBars)
@@ -341,7 +288,7 @@ QueueDiscoverAndUpdate = function()
         return
     end
 
-    TryEnsurePartyFramesVisible()
+    addon.RefreshPartyFrames()
 
     if discoveryPending then
         pendingRefresh = true
@@ -422,7 +369,7 @@ local function OnEditModeExit()
     editModeExitPending = true
     C_Timer.After(0.2, function()
         editModeExitPending = false
-        TryEnsurePartyFramesVisible()
+        addon.RefreshPartyFrames()
         QueueDiscoverAndUpdate()
     end)
 end
