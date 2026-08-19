@@ -25,5 +25,6 @@ ResourceDisplayMenu.lua
 options.lua
 PerformanceMenu.lua
 Commands.lua
+alwaysisinparty.lua
 BlizzardFrames.lua
 ClassResourceOverlay.lua
