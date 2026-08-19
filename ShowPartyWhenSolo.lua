@@ -1,5 +1,7 @@
 -- ShowPartyWhenSolo: keep Blizzard's party-style frames visible while solo.
 -- PARTY uses Blizzard's normal party frames; RAID uses raid frames.
+-- This module owns solo visibility directly; it does not depend on
+-- BlizzardFrames.lua to forward roster/layout events.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
@@ -7,8 +9,10 @@ _G.BloodShieldOverlay = addon
 local InCombatLockdown = InCombatLockdown
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
+local C_Timer = C_Timer
 
 local pendingRefresh = false
+local refreshScheduled = false
 
 local function IsForbiddenFrame(frame)
     return frame and addon.IsForbiddenFrame and addon.IsForbiddenFrame(frame)
@@ -69,18 +73,34 @@ end
 
 addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
 
--- This is deliberately an initialization action, not a periodic scan.  After
--- /reload the PLAYER_ENTERING_WORLD/group events can already have happened by
--- the time the addon registers its layout listener, so SOLO must establish its
--- Blizzard party frame state explicitly at addon initialization.
-addon.RegisterInitializer(function()
+-- The shared Core event bus owns GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD and
+-- layout events. Solo visibility subscribes directly instead of depending on
+-- BlizzardFrames.lua's old private event frame.
+addon.RegisterLayoutListener(function()
     TryEnsurePartyFramesVisible()
+end)
+
+-- Blizzard's party frames may not exist yet at the exact instant the addon
+-- initializer runs. The old BlizzardFrames event path effectively gave them a
+-- short post-login/layout delay; preserve that behavior without restoring a
+-- second event frame.
+local function ScheduleInitialRefresh()
+    if refreshScheduled then return end
+    refreshScheduled = true
+    C_Timer.After(0.05, function()
+        refreshScheduled = false
+        TryEnsurePartyFramesVisible()
+    end)
+end
+
+addon.RegisterInitializer(function()
+    ScheduleInitialRefresh()
 end)
 
 addon.RegisterInitializer(function()
     addon.RegisterRegenListener(function(event)
         if event == "PLAYER_REGEN_ENABLED" and pendingRefresh then
-            TryEnsurePartyFramesVisible()
+            ScheduleInitialRefresh()
         end
     end)
 end)

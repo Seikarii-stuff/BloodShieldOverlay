@@ -10,6 +10,7 @@ local C_Timer = C_Timer
 local Enum = Enum
 local type = type
 local InCombatLockdown = InCombatLockdown
+local IsInRaid = IsInRaid
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
@@ -19,7 +20,6 @@ local resourceProvider = addon.GetSpecialResourceProvider(
 
 if not resourceProvider then return end
 
--- Fixed dimensions and a neutral bar texture for resource pips.
 local MAX_PIPS = 7
 local PIP_WIDTH = 12
 local PIP_HEIGHT = 6
@@ -36,9 +36,6 @@ local currentBar = nil
 local enabled = true
 local refreshScheduled = false
 
--- Discovery predicates and the bounded compact-frame walk are shared with
--- BlizzardFrames.lua via FrameDiscovery.lua, instead of each module keeping
--- its own copy (and its own full tree walk) of the same lookup logic.
 local IsForbidden = addon.IsForbiddenFrame
 local IsStatusBar = addon.IsStatusBar
 local IsPlayerUnit = addon.IsPlayerUnit
@@ -90,8 +87,6 @@ local function GetResourceBar(frame)
     return nil
 end
 
--- Reused across FindPlayerResourceBar calls so bounding the compact-frame
--- scan doesn't allocate a new closure every retry/locate pass.
 local foundResourceBar
 local function HandlePlayerCompactFrame(frame)
     if foundResourceBar then return end
@@ -113,8 +108,6 @@ local function FindPlayerResourceBar()
     bar = playerFrame and GetResourceBar(playerFrame)
     if bar then return bar end
 
-    -- Bounded by the actual group/raid size instead of always resolving all
-    -- ~200 fixed compact-frame names (shared with BlizzardFrames.lua).
     foundResourceBar = nil
     ForEachCompactFrame(HandlePlayerCompactFrame)
     if foundResourceBar then return foundResourceBar end
@@ -183,13 +176,9 @@ UpdatePips = function()
         if overlay then overlay:Hide() end
         return
     end
-    if not overlay or not currentBar then
-        return
-    end
+    if not overlay or not currentBar then return end
 
     local state = resourceProvider:GetState()
-    -- Shared with PlayerBar.lua's circle rendering: fills progress/order and
-    -- applies value/color/sort to each pip, returning the clamped maximum.
     local maximum = addon.RenderResourcePips(state, pips, progress, pipOrder, MAX_PIPS)
     if maximum <= 0 then
         overlay:Hide()
@@ -273,7 +262,13 @@ function addon.SetClassResourceOverlayPipSize(width, height)
     return true
 end
 
-addon.RegisterLayoutListener(function()
+addon.RegisterLayoutListener(function(event)
+    -- The player's resource bar does not change merely because another
+    -- player joins/leaves a raid. Avoid a discovery pass on every roster
+    -- transition; real layout/entering-world changes still locate normally.
+    if event == "GROUP_ROSTER_UPDATE" and IsInRaid() then
+        return
+    end
     ScheduleLocate()
 end)
 
