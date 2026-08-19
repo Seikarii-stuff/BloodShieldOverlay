@@ -136,7 +136,13 @@ local function AttachFrame(frame, unit)
     framesByUnit[unit][frame] = true
     frameGeneration[frame] = generation
     local healthBar = GetHealthBar(frame)
-    if healthBar then AddOverlay(unit, healthBar) end
+    if healthBar then
+        local entry = overlaysByHealthBar[healthBar]
+        AddOverlay(unit, healthBar)
+        if not entry then
+            UpdateUnit(unit)
+        end
+    end
 end
 
 local function ReconcileFrame(frame, mode)
@@ -147,7 +153,13 @@ local function ReconcileFrame(frame, mode)
     if previousUnit == unit and unit and IsSupportedUnit(unit, mode) then
         frameGeneration[frame] = generation
         local healthBar = GetHealthBar(frame)
-        if healthBar then AddOverlay(unit, healthBar) end
+        if healthBar then
+            local entry = overlaysByHealthBar[healthBar]
+            AddOverlay(unit, healthBar)
+            if not entry then
+                UpdateUnit(unit)
+            end
+        end
         return false
     end
     if previousUnit and previousUnit ~= unit then DetachFrame(frame, previousUnit) end
@@ -169,7 +181,7 @@ local function ReconcileAllCurrentFrames()
     end
 end
 
-local function UpdateUnit(unit, absorb, maxHealth)
+function UpdateUnit(unit, absorb, maxHealth)
     local entries = overlays[unit]
     if not entries then return end
     absorb = absorb or UnitGetTotalAbsorbs(unit) or 0
