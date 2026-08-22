@@ -30,6 +30,7 @@ end
 
 local function RefreshMouseOverlay()
     local enabled = config.showMouseSpecialResources == true
+        or config.showMouseResourceBar == true
         or config.showMouseCooldown1 == true
         or config.showMouseCooldown2 == true
     if type(addon.SetMouseResourceOverlayEnabled) == "function" then addon.SetMouseResourceOverlayEnabled(enabled) end
@@ -174,6 +175,7 @@ Refresh = function()
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay ~= false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget == true)
     menuFrame.mouseResourceCheck:SetChecked(config.showMouseSpecialResources == true)
+    menuFrame.mouseResourceBarCheck:SetChecked(config.showMouseResourceBar == true)
     menuFrame.mouseCooldown1Check:SetChecked(config.showMouseCooldown1 == true)
     menuFrame.mouseCooldown2Check:SetChecked(config.showMouseCooldown2 == true)
     SetDropdownText(menuFrame.mouseCooldown1Button, config.mouseCooldown1Spell)
@@ -250,6 +252,7 @@ local function CreateConfigMenu()
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self) config.showClassResourceOverlay = self:GetChecked(); if type(addon.SetClassResourceOverlayEnabled) == "function" then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end end)
     menuFrame.targetTargetCheck = AddCheck("Show target of target frame (target something to see it)", function(self) config.showTargetTarget = self:GetChecked(); if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end end)
     menuFrame.mouseResourceCheck = AddCheck("Show special resources around mouse", function(self) config.showMouseSpecialResources = self:GetChecked() == true; RefreshMouseOverlay() end)
+    menuFrame.mouseResourceBarCheck = AddCheck("Show resource bar around mouse", function(self) config.showMouseResourceBar = self:GetChecked() == true; RefreshMouseOverlay() end)
 
     local cd1Y = row(30)
     menuFrame.mouseCooldown1Check = Check(menuFrame, "Show mouse cooldown 1")
