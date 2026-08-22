@@ -51,7 +51,8 @@ local function UpdateVisuals()
     if not enabled or not overlay then return end
 
     local config = GetConfig()
-    local resourceVisible = addon.MouseResources:Update(config) > 0
+    local specialPipCount, resourceBarVisible = addon.MouseResources:Update(config)
+    local resourceVisible = specialPipCount > 0 or resourceBarVisible
     addon.MouseCooldowns:Configure(config)
     local cooldownVisible = addon.MouseCooldowns:Update()
 
@@ -108,15 +109,12 @@ end
 OnUpdate = function(_, elapsed)
     if not enabled then return end
 
-    -- Cursor tracking is deliberately independent of the global graphics rate.
     cursorElapsed = cursorElapsed + elapsed
     if cursorElapsed >= CURSOR_UPDATE_INTERVAL then
         cursorElapsed = 0
         UpdateCursorPosition()
     end
 
-    -- Resource rendering is visual but not cursor-real-time, so it follows the
-    -- shared 30/60 FPS graphics setting.
     resourceElapsed = resourceElapsed + elapsed
     local graphicsInterval = GetGraphicsInterval()
     if resourceElapsed >= graphicsInterval then
@@ -124,8 +122,6 @@ OnUpdate = function(_, elapsed)
         addon.MouseResources:RefreshCharging(GetConfig(), GetTime)
     end
 
-    -- The proc glow is deliberately visual-only and is the only other piece
-    -- of Mouse work allowed to run every frame.
     addon.MouseCooldowns:UpdateGlow(elapsed)
 end
 
@@ -175,6 +171,7 @@ addon.RegisterInitializer(function()
         mouseConfig.showMouseSpecialResources == true
         or mouseConfig.showMouseCooldown1 == true
         or mouseConfig.showMouseCooldown2 == true
+        or mouseConfig.showMouseResourceBar == true
     )
     if C_Timer and C_Timer.After then
         C_Timer.After(0, Refresh)
