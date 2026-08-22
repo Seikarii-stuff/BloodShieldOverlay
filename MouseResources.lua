@@ -18,13 +18,15 @@ local MAX_PIPS = 7
 local PIP_SIZE = 5
 local CURSOR_RADIUS = 17
 
-local RESOURCE_BAR_WIDTH = 6
-local RESOURCE_BAR_HEIGHT = CURSOR_RADIUS * 2
+local RESOURCE_BAR_RADIUS = CURSOR_RADIUS
+local RESOURCE_BAR_THICKNESS = 6
+local RESOURCE_BAR_SEGMENTS = 48
 local RESOURCE_BAR_THRESHOLDS = { 0.28, 0.56 }
 
 local pips = {}
 local progress, pipOrder = {}, {}
 local resourceBar
+local resourceBarSegments = {}
 local resourceBarThresholdLines = {}
 
 for index = 1, MAX_PIPS do
@@ -67,31 +69,54 @@ local function CreateCircularPip(parent, index)
 end
 
 local function CreateMouseResourceBar(parent)
-    local bar = CreateFrame("StatusBar", nil, parent)
-    bar:SetSize(RESOURCE_BAR_WIDTH, RESOURCE_BAR_HEIGHT)
-    bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-    bar:SetStatusBarColor(0, 0.5, 1, 0.9)
-    bar:SetOrientation("VERTICAL")
-    bar:SetReverseFill(false)
-    bar:EnableMouse(false)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetSize((RESOURCE_BAR_RADIUS + RESOURCE_BAR_THICKNESS) * 2, (RESOURCE_BAR_RADIUS + RESOURCE_BAR_THICKNESS) * 2)
+    bar:SetPoint("CENTER", parent, "CENTER", 0, 0)
     bar:SetFrameLevel((parent:GetFrameLevel() or 0) + 1)
+    bar:EnableMouse(false)
 
-    local background = bar:CreateTexture(nil, "BACKGROUND")
-    background:SetAllPoints(bar)
-    background:SetColorTexture(0, 0, 0, 0.5)
+    for index = 1, RESOURCE_BAR_SEGMENTS do
+        local segment = CreateFrame("Frame", nil, bar)
+        segment:SetSize(RESOURCE_BAR_THICKNESS, RESOURCE_BAR_THICKNESS)
+        segment:SetFrameLevel(bar:GetFrameLevel())
+        segment:EnableMouse(false)
 
-    for _, threshold in ipairs(RESOURCE_BAR_THRESHOLDS) do
+        local background = segment:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints(segment)
+        background:SetColorTexture(0, 0, 0, 0.5)
+
+        local fill = segment:CreateTexture(nil, "ARTWORK")
+        fill:SetAllPoints(segment)
+        fill:SetColorTexture(0, 0.5, 1, 0.9)
+        fill:Hide()
+
+        segment.BSOFill = fill
+        resourceBarSegments[index] = segment
+    end
+
+    for index, threshold in ipairs(RESOURCE_BAR_THRESHOLDS) do
         local line = bar:CreateTexture(nil, "OVERLAY")
         line:SetColorTexture(1, 1, 1, 0.85)
-        line:SetHeight(1)
-        line:ClearAllPoints()
-        line:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, RESOURCE_BAR_HEIGHT * threshold - 1)
-        line:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, RESOURCE_BAR_HEIGHT * threshold - 1)
-        resourceBarThresholdLines[threshold] = line
+        line:SetSize(2, RESOURCE_BAR_THICKNESS + 2)
+        line:SetPoint("CENTER", bar, "CENTER", math_cos(threshold * PI) * RESOURCE_BAR_RADIUS, math_sin(threshold * PI) * RESOURCE_BAR_RADIUS)
+        line:SetRotation(threshold * PI + PI * 0.5)
+        resourceBarThresholdLines[index] = line
     end
 
     bar:Hide()
     return bar
+end
+
+local function PositionResourceBarSegments()
+    if not resourceBar then return end
+
+    local step = PI / RESOURCE_BAR_SEGMENTS
+    for index = 1, RESOURCE_BAR_SEGMENTS do
+        local segment = resourceBarSegments[index]
+        local angle = (index - 0.5) * step
+        segment:ClearAllPoints()
+        segment:SetPoint("CENTER", resourceBar, "CENTER", math_cos(angle) * RESOURCE_BAR_RADIUS, math_sin(angle) * RESOURCE_BAR_RADIUS)
+    end
 end
 
 function MouseResources:Initialize(parent)
@@ -99,8 +124,7 @@ function MouseResources:Initialize(parent)
 
     self.overlay = parent
     resourceBar = CreateMouseResourceBar(parent)
-    resourceBar:ClearAllPoints()
-    resourceBar:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    PositionResourceBarSegments()
 
     for index = 1, MAX_PIPS do
         pips[index] = CreateCircularPip(parent, index)
@@ -140,8 +164,18 @@ function MouseResources:UpdateResourceBar(config)
     end
 
     local curPower = UnitPower("player") or 0
-    resourceBar:SetMinMaxValues(0, maxPower)
-    resourceBar:SetValue(curPower)
+    local fraction = math_max(0, math_min(1, curPower / maxPower))
+    local filledSegments = fraction * RESOURCE_BAR_SEGMENTS
+
+    for index = 1, RESOURCE_BAR_SEGMENTS do
+        local segment = resourceBarSegments[index]
+        if index <= filledSegments then
+            segment.BSOFill:Show()
+        else
+            segment.BSOFill:Hide()
+        end
+    end
+
     resourceBar:Show()
     return true
 end
