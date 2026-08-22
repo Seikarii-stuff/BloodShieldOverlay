@@ -16,6 +16,7 @@ local DEFAULTS = {
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
     showMouseSpecialResources = false,
+    showMouseResourceBar = false,
     showMouseCooldown1 = false,
     showMouseCooldown2 = false,
     mouseCooldown1Spell = nil,
@@ -72,6 +73,7 @@ local FIELD_VALIDATORS = {
     targetTargetXOffset = function(value) return type(value) == "number" end,
     targetTargetYOffset = function(value) return type(value) == "number" end,
     showMouseSpecialResources = IsBoolean,
+    showMouseResourceBar = IsBoolean,
     showMouseCooldown1 = IsBoolean,
     showMouseCooldown2 = IsBoolean,
     mouseCooldown1Spell = IsOptionalSpellID,
@@ -107,9 +109,6 @@ local function Initialize()
     if not profiles[key] then
         if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
             profiles[key] = CopySettings(BloodShieldOverlayDB)
-            -- BloodShieldOverlayDB is the pre-profile-format SavedVariable.
-            -- Once copied into the per-character profile store, remove the
-            -- legacy table so dead settings are not serialized forever.
             BloodShieldOverlayDB = nil
         else
             profiles[key] = {}
