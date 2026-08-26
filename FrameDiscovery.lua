@@ -121,12 +121,10 @@ function addon.ForEachCompactFrame(callback)
     end
 end
 
-local UnitIsUnit = _G.UnitIsUnit
 local function IsPlayerUnit(frame)
     local unit = addon.GetUnit(frame)
     if not unit then return false end
-    if unit == "player" then return true end
-    return UnitIsUnit and UnitIsUnit(unit, "player") or false
+    return unit == "player"
 end
 addon.IsPlayerUnit = IsPlayerUnit
 
