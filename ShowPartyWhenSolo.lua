@@ -10,9 +10,11 @@ local InCombatLockdown = InCombatLockdown
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local C_Timer = C_Timer
+local hooksecurefunc = hooksecurefunc
 
 local pendingRefresh = false
 local refreshScheduled = false
+local editModeHooked = false
 
 local function IsForbiddenFrame(frame)
     return frame and addon.IsForbiddenFrame and addon.IsForbiddenFrame(frame)
@@ -73,9 +75,7 @@ end
 
 addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
 
--- RequestRefresh is the public refresh entry point used by /shield reload.
--- Keep it here so the command does not depend on the implementation details
--- of the visibility module.
+-- Public refresh entry point used by /shield reload.
 addon.RequestRefresh = function()
     if InCombatLockdown() then
         pendingRefresh = true
@@ -84,9 +84,6 @@ addon.RequestRefresh = function()
 
     TryEnsurePartyFramesVisible()
 
-    -- Edit Mode can rebuild/reconfigure Blizzard's party frames immediately
-    -- after EDIT_MODE_LAYOUTS_UPDATED. Retry after Blizzard has settled so a
-    -- frame hidden during that transition cannot remain hidden in the city.
     if not refreshScheduled then
         refreshScheduled = true
         C_Timer.After(0.2, function()
@@ -96,6 +93,37 @@ addon.RequestRefresh = function()
     end
 end
 
+-- EDIT_MODE_LAYOUTS_UPDATED is emitted while Edit Mode is applying layout
+-- changes. The actual exit lifecycle happens in EditModeManagerFrame:ExitEditMode,
+-- so hook that method as well and refresh after Blizzard has completed it.
+local function ScheduleEditModeExitRefresh()
+    if refreshScheduled then return end
+    refreshScheduled = true
+
+    C_Timer.After(0.05, function()
+        TryEnsurePartyFramesVisible()
+    end)
+
+    C_Timer.After(0.20, function()
+        TryEnsurePartyFramesVisible()
+    end)
+
+    C_Timer.After(0.50, function()
+        refreshScheduled = false
+        TryEnsurePartyFramesVisible()
+    end)
+end
+
+local function HookEditModeExit()
+    if editModeHooked or not hooksecurefunc then return end
+    if not EditModeManagerFrame or not EditModeManagerFrame.ExitEditMode then return end
+
+    hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function()
+        ScheduleEditModeExitRefresh()
+    end)
+    editModeHooked = true
+end
+
 -- The shared Core event bus owns GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD and
 -- layout events. Solo visibility subscribes directly instead of depending on
 -- BlizzardFrames.lua's old private event frame.
@@ -103,24 +131,21 @@ addon.RegisterLayoutListener(function(event)
     TryEnsurePartyFramesVisible()
 
     if event == "EDIT_MODE_LAYOUTS_UPDATED" then
-        addon.RequestRefresh()
+        ScheduleEditModeExitRefresh()
     end
 end)
 
--- Blizzard's party frames may not exist yet at the exact instant the addon
--- initializer runs. The old BlizzardFrames event path effectively gave them a
--- short post-login/layout delay; preserve that behavior without restoring a
--- second event frame.
 local function ScheduleInitialRefresh()
     if refreshScheduled then return end
     refreshScheduled = true
-    C_Timer.After(0.2, function()
+    C_Timer.After(0.05, function()
         refreshScheduled = false
         TryEnsurePartyFramesVisible()
     end)
 end
 
 addon.RegisterInitializer(function()
+    HookEditModeExit()
     ScheduleInitialRefresh()
 end)
 
