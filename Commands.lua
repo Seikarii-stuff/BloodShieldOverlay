@@ -17,6 +17,9 @@ addon.HandleSlashCommand = function(msg)
     elseif msg == "reload" then
         if addon.RequestRefresh then
             addon.RequestRefresh()
+            print("BloodShieldOverlay: group frames reload requested.")
+        elseif addon.RefreshPartyFrames then
+            addon.RefreshPartyFrames()
             print("BloodShieldOverlay: group frames reloaded.")
         else
             print("BloodShieldOverlay: group reload unavailable.")
