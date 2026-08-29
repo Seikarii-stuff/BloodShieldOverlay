@@ -238,7 +238,7 @@ ScheduleLocate = function(isRetry)
     if not isRetry then locateAttempts = 0 end
     if not enabled or refreshScheduled then return end
     refreshScheduled = true
-    C_Timer.After(0.05, OnLocateTimer)
+    C_Timer.After(0.2, OnLocateTimer)
 end
 
 function addon.SetClassResourceOverlayEnabled(value)
