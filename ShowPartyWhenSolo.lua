@@ -73,11 +73,38 @@ end
 
 addon.RefreshPartyFrames = TryEnsurePartyFramesVisible
 
+-- RequestRefresh is the public refresh entry point used by /shield reload.
+-- Keep it here so the command does not depend on the implementation details
+-- of the visibility module.
+addon.RequestRefresh = function()
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
+
+    TryEnsurePartyFramesVisible()
+
+    -- Edit Mode can rebuild/reconfigure Blizzard's party frames immediately
+    -- after EDIT_MODE_LAYOUTS_UPDATED. Retry after Blizzard has settled so a
+    -- frame hidden during that transition cannot remain hidden in the city.
+    if not refreshScheduled then
+        refreshScheduled = true
+        C_Timer.After(0.05, function()
+            refreshScheduled = false
+            TryEnsurePartyFramesVisible()
+        end)
+    end
+end
+
 -- The shared Core event bus owns GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD and
 -- layout events. Solo visibility subscribes directly instead of depending on
 -- BlizzardFrames.lua's old private event frame.
-addon.RegisterLayoutListener(function()
+addon.RegisterLayoutListener(function(event)
     TryEnsurePartyFramesVisible()
+
+    if event == "EDIT_MODE_LAYOUTS_UPDATED" then
+        addon.RequestRefresh()
+    end
 end)
 
 -- Blizzard's party frames may not exist yet at the exact instant the addon
