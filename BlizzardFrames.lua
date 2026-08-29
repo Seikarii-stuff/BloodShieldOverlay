@@ -230,7 +230,7 @@ local refreshPending = false
 local function QueueRefresh()
     if refreshPending or InCombatLockdown() then return end
     refreshPending = true
-    C_Timer.After(0.05, function()
+    C_Timer.After(0.2, function()
         refreshPending = false
         RefreshAll()
     end)

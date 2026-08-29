@@ -89,7 +89,7 @@ addon.RequestRefresh = function()
     -- frame hidden during that transition cannot remain hidden in the city.
     if not refreshScheduled then
         refreshScheduled = true
-        C_Timer.After(0.05, function()
+        C_Timer.After(0.2, function()
             refreshScheduled = false
             TryEnsurePartyFramesVisible()
         end)
@@ -114,7 +114,7 @@ end)
 local function ScheduleInitialRefresh()
     if refreshScheduled then return end
     refreshScheduled = true
-    C_Timer.After(0.05, function()
+    C_Timer.After(0.2, function()
         refreshScheduled = false
         TryEnsurePartyFramesVisible()
     end)
