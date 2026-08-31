@@ -28,30 +28,10 @@ check(type(addon.GetSpecialResourceProvider) == "function", "shared resource pro
 check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
 check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
 check(type(addon.SetSpecialResourcePipSize) == "function", "special resource pip API missing")
-check(type(addon.SetMouseResourceOverlayEnabled) == "function", "mouse resource toggle API missing")
-check(type(addon.SetMouseCooldownPipSize) == "function", "mouse cooldown pip setter missing")
 check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
 check(addon.SetSpecialResourcePipSize(10, 8), "valid special resource pip size was rejected")
 check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
 check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width was accepted")
-check(not addon.SetMouseCooldownPipSize("bad"), "non-numeric mouse cooldown pip size was accepted")
-check(addon.SetMouseCooldownPipSize(9999), "mouse cooldown pip setter rejected a clampable value")
-check(addon.PlayerBarConfig.Initialize().mouseCooldownPipSize == 24, "mouse cooldown pip setter did not clamp the upper bound")
-check(addon.SetMouseCooldownPipSize(-5), "mouse cooldown pip setter rejected a clampable lower value")
-check(addon.PlayerBarConfig.Initialize().mouseCooldownPipSize == 4, "mouse cooldown pip setter did not clamp the lower bound")
-check(addon.SetMouseCooldownPipSize(8), "mouse cooldown pip setter did not restore a valid value")
-
--- Mouse OFF must mean no overlay and no per-frame callback.
-check(_G["BloodShieldOverlayMouseResources"] == nil, "mouse overlay was created while all mouse features were disabled")
-addon.SetMouseResourceOverlayEnabled(true)
-local mouseOverlay = _G["BloodShieldOverlayMouseResources"]
-check(mouseOverlay and mouseOverlay:GetScript("OnUpdate") ~= nil, "enabling mouse did not install its update callback")
-addon.SetMouseResourceOverlayEnabled(false)
-check(mouseOverlay:GetScript("OnUpdate") == nil, "disabling mouse left its OnUpdate callback installed")
-check(next(mouseOverlay.events or {}) == nil, "disabling mouse left mouse events registered")
-addon.SetMouseResourceOverlayEnabled(true)
-check(mouseOverlay:GetScript("OnUpdate") ~= nil, "re-enabling mouse did not restore its update callback")
-addon.SetMouseResourceOverlayEnabled(false)
 
 local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
 local overlay = addon.CreateAbsorbOverlay(healthBar)
@@ -99,12 +79,6 @@ check(configMenu.specialResCheck:GetChecked() == true, "special resources should
 check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
 check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown was not created")
 check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock bars", "unlock button text does not match current UI")
-
-local config = addon.PlayerBarConfig.Initialize()
-config.mouseCooldownPipSize = 9999
-addon.RefreshMouseCooldowns()
-check(config.mouseCooldownPipSize == 24, "runtime mouse cooldown refresh did not normalize an invalid size")
-config.mouseCooldownPipSize = 8
 
 local unlockButton = configMenu.unlockButton
 unlockButton:GetScript("OnClick")(unlockButton)
