@@ -141,7 +141,7 @@ section("Target of target", function()
     wow.fire("PLAYER_REGEN_ENABLED")
     wow.flush_timers()
     check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "Enable retries after combat")
-    local targetConfig = addon.PlayerBarConfig.Initialize()
+    local targetConfig = addon.PlayerBarConfig.Get()
     local targetBar = _G["BloodShieldOverlayTargetTargetBar"]
     check(targetConfig.targetTargetLocked == false and targetBar.movable == true,
         "SetLocked retries after combat")
@@ -193,8 +193,10 @@ section("Frame discovery", function()
     content.PlayerFrameContentMain = main
     main.HealthBarArea = area
     wow.set_group(false, false)
+    wow.reset_get_children_calls()
     addon.RequestRefresh()
     wow.flush_timers()
+    check(wow.get_children_calls() >= 1, "player frame hierarchy is inspected")
 end)
 
 section("Legacy Mouse removal regression", function()
