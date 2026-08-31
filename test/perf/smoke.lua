@@ -1,9 +1,48 @@
 -- Offline smoke tests for current public entry points and major event paths.
 local wow = dofile("test/perf/harness.lua")
+local assertions = 0
 local passed = 0
-local function check(condition, message)
-    assert(condition, message)
-    passed = passed + 1
+local failed = 0
+local errors = 0
+local currentArea = ""
+
+local function value_text(value)
+    if type(value) == "string" then return string.format("%q", value) end
+    if value == nil then return "nil" end
+    return tostring(value)
+end
+
+local function check(condition, message, expected, actual)
+    assertions = assertions + 1
+    if condition then
+        passed = passed + 1
+        return true
+    end
+
+    failed = failed + 1
+    io.write(string.format("[FAIL] %s > %s\n", currentArea, message))
+    if expected ~= nil or actual ~= nil then
+        io.write(string.format("  expected: %s\n", value_text(expected)))
+        io.write(string.format("  actual:   %s\n", value_text(actual)))
+    end
+    return false
+end
+
+local function section(name, fn)
+    currentArea = name
+    print(string.format("  %-28s RUN", name))
+    local beforeFailed, beforeErrors = failed, errors
+    local ok, err = xpcall(fn, debug.traceback)
+    if not ok then
+        errors = errors + 1
+        failed = failed + 1
+        io.write(string.format("[ERROR] %s\n%s\n", name, err))
+    end
+    if failed == beforeFailed and errors == beforeErrors and ok then
+        print(string.format("  %-28s PASS", name))
+    else
+        print(string.format("  %-28s FAIL", name))
+    end
 end
 
 wow.load()
@@ -11,129 +50,176 @@ dofile("RuntimeGuards.lua")
 local addon = BloodShieldOverlay
 wow.fire("PLAYER_LOGIN")
 
-local playerBar = _G["BloodShieldOverlayBar"]
-check(playerBar and playerBar:IsShown(), "PlayerBar.lua did not initialize the standalone bar")
-check(playerBar.min == 0 and playerBar.max == 2000 and playerBar.value == 250, "standalone absorb bar was not updated")
-check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API missing")
-check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API missing")
-check(type(addon.RegisterRegenListener) == "function", "regen listener API missing")
-check(type(addon.RegisterLayoutListener) == "function", "layout listener API missing")
-check(type(addon.CreateAbsorbOverlay) == "function", "overlay factory missing")
-check(type(addon.UpdateAbsorbOverlay) == "function", "overlay updater missing")
-check(type(addon.RefreshPartyFrames) == "function", "party refresh API missing")
-check(type(addon.RequestRefresh) == "function", "refresh API missing")
-check(type(addon.UpdateSpecialResourcesLayout) == "function", "special resource layout API missing")
-check(type(addon.UpdateSpecialResources) == "function", "special resource update API missing")
-check(type(addon.GetSpecialResourceProvider) == "function", "shared resource provider API missing")
-check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API missing")
-check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API missing")
-check(type(addon.SetSpecialResourcePipSize) == "function", "special resource pip API missing")
-check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size was rejected")
-check(addon.SetSpecialResourcePipSize(10, 8), "valid special resource pip size was rejected")
-check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width was accepted")
-check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width was accepted")
+print("BloodShieldOverlay smoke tests")
+print("------------------------------")
 
-local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
-local overlay = addon.CreateAbsorbOverlay(healthBar)
-check(overlay.parent == healthBar and overlay.mouseEnabled == false, "overlay setup failed")
-addon.UpdateAbsorbOverlay(overlay, 42, 100)
-check(overlay.min == 0 and overlay.max == 100 and overlay.value == 42 and overlay.shown, "overlay update failed")
-
-local secretAbsorb = { __secret = true }
-addon.UpdateAbsorbOverlay(overlay, secretAbsorb, 100)
-check(overlay.value == secretAbsorb and overlay.lastAbsorb == nil and overlay.lastMaxHealth == nil,
-    "secret absorb value was inspected or retained")
-
-local units, players, regen = 0, 0, 0
-addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
-    units = units + 1
-    check(absorb >= 0 and maxHealth > 0, "invalid unit payload")
-end)
-addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
-    players = players + 1
-    check(absorb == 250 and maxHealth == 1000, "invalid player payload")
-end)
-addon.RegisterRegenListener(function(event)
-    regen = regen + 1
-    check(event == "PLAYER_REGEN_ENABLED", "invalid regen event")
+section("Configuration", function()
+    local playerBar = _G["BloodShieldOverlayBar"]
+    check(playerBar and playerBar:IsShown(), "PlayerBar initialization", true, playerBar and playerBar:IsShown())
+    check(playerBar.min == 0 and playerBar.max == 2000 and playerBar.value == 250,
+        "standalone absorb bar update")
+    check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API", "function", type(addon.RegisterPlayerUpdateListener))
+    check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API", "function", type(addon.RegisterUnitUpdateListener))
+    check(type(addon.RegisterRegenListener) == "function", "regen listener API", "function", type(addon.RegisterRegenListener))
+    check(type(addon.RegisterLayoutListener) == "function", "layout listener API", "function", type(addon.RegisterLayoutListener))
+    check(type(addon.CreateAbsorbOverlay) == "function", "overlay factory", "function", type(addon.CreateAbsorbOverlay))
+    check(type(addon.UpdateAbsorbOverlay) == "function", "overlay updater", "function", type(addon.UpdateAbsorbOverlay))
+    check(type(addon.RefreshPartyFrames) == "function", "party refresh API", "function", type(addon.RefreshPartyFrames))
+    check(type(addon.RequestRefresh) == "function", "refresh API", "function", type(addon.RequestRefresh))
 end)
 
-wow.fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
-wow.fire("UNIT_HEALTH", "player")
-wow.fire("UNIT_POWER_FREQUENT", "player")
-wow.tick(0.034)
-check(units == 1 and players == 1, "throttle did not coalesce player events")
-wow.fire("PLAYER_REGEN_ENABLED")
-check(regen == 1, "regen dispatcher failed")
+section("Event bus", function()
+    local units, players, regen = 0, 0, 0
+    addon.RegisterUnitUpdateListener(function(unit, absorb, maxHealth)
+        units = units + 1
+        check(absorb >= 0 and maxHealth > 0, "unit payload")
+    end)
+    addon.RegisterPlayerUpdateListener(function(absorb, maxHealth)
+        players = players + 1
+        check(absorb == 250 and maxHealth == 1000, "player payload")
+    end)
+    addon.RegisterRegenListener(function(event)
+        regen = regen + 1
+        check(event == "PLAYER_REGEN_ENABLED", "regen payload")
+    end)
 
-check(type(SlashCmdList.BLOODSHIELDOVERLAY) == "function", "slash command missing")
-SlashCmdList.BLOODSHIELDOVERLAY("")
-SlashCmdList.BLOODSHIELDOVERLAY("reload")
-wow.flush_timers()
-check(type(BloodShieldOverlayProfiles) == "table", "profile store was not created")
-check(_G["BloodShieldOverlayConfig"] and _G["BloodShieldOverlayConfig"].widthEdit, "configuration menu was not created")
+    wow.fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+    wow.fire("UNIT_HEALTH", "player")
+    wow.fire("UNIT_POWER_FREQUENT", "player")
+    wow.tick(0.034)
+    check(units == 1 and players == 1, "throttle coalesces player events", "1/1", string.format("%d/%d", units, players))
+    wow.fire("PLAYER_REGEN_ENABLED")
+    check(regen == 1, "regen dispatcher", 1, regen)
+end)
 
-local configMenu = _G["BloodShieldOverlayConfig"]
-check(configMenu.healthCheck:GetChecked() == true, "show health bar should be enabled by default")
-check(configMenu.specialResCheck:GetChecked() == true, "special resources should be enabled by default")
-check(configMenu.classOverlayCheck:GetChecked() == true, "group resource overlay should be enabled by default")
-check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown was not created")
-check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock bars", "unlock button text does not match current UI")
+section("PlayerBar", function()
+    local healthBar = wow.new_frame("StatusBar", "TestHealthBar")
+    local overlay = addon.CreateAbsorbOverlay(healthBar)
+    check(overlay.parent == healthBar and overlay.mouseEnabled == false, "overlay setup")
+    addon.UpdateAbsorbOverlay(overlay, 42, 100)
+    check(overlay.min == 0 and overlay.max == 100 and overlay.value == 42 and overlay.shown, "overlay update")
 
-local unlockButton = configMenu.unlockButton
-unlockButton:GetScript("OnClick")(unlockButton)
-check(playerBar.movable == true and playerBar.mouseEnabled == true, "unlock handler failed")
+    local secretAbsorb = { __secret = true }
+    addon.UpdateAbsorbOverlay(overlay, secretAbsorb, 100)
+    check(overlay.value == secretAbsorb and overlay.lastAbsorb == nil and overlay.lastMaxHealth == nil,
+        "secret absorb value is passed through without inspection")
+end)
 
--- Exercise player-frame discovery and combat-deferred refresh paths.
-local content = wow.new_frame("Frame", "PlayerFrameContent")
-local main = wow.new_frame("Frame", "PlayerFrameContentMain", content)
-local area = wow.new_frame("Frame", "HealthBarArea", main)
-area.HealthBar = wow.new_frame("StatusBar", "PlayerHealthBar", area)
-PlayerFrame = { PlayerFrameContent = content }
-content.PlayerFrameContentMain = main
-main.HealthBarArea = area
-wow.set_group(false, false)
-addon.RequestRefresh()
-wow.flush_timers()
+section("Class resources", function()
+    check(type(addon.UpdateSpecialResourcesLayout) == "function", "special resource layout API", "function", type(addon.UpdateSpecialResourcesLayout))
+    check(type(addon.UpdateSpecialResources) == "function", "special resource update API", "function", type(addon.UpdateSpecialResources))
+    check(type(addon.GetSpecialResourceProvider) == "function", "shared resource provider API", "function", type(addon.GetSpecialResourceProvider))
+    check(type(addon.SetClassResourceOverlayEnabled) == "function", "group resource toggle API", "function", type(addon.SetClassResourceOverlayEnabled))
+    check(type(addon.SetClassResourceOverlayPipSize) == "function", "group pip size API", "function", type(addon.SetClassResourceOverlayPipSize))
+    check(type(addon.SetSpecialResourcePipSize) == "function", "special pip size API", "function", type(addon.SetSpecialResourcePipSize))
+    check(addon.SetClassResourceOverlayPipSize(16, 8), "valid group pip size")
+    check(addon.SetSpecialResourcePipSize(10, 8), "valid special pip size")
+    check(not addon.SetClassResourceOverlayPipSize(3, 8), "invalid group pip width rejected")
+    check(not addon.SetSpecialResourcePipSize(1, 8), "invalid special pip width rejected")
+end)
 
-local partyContainer = wow.new_frame("Frame", "SmokePartyContainer")
-local partyMember = wow.new_frame("Frame", "SmokePartyMember", partyContainer)
-partyMember.displayedUnit = "party1"
-partyMember.healthBar = wow.new_frame("StatusBar", "SmokePartyHealthBar", partyMember)
-PartyFrame = partyContainer
-wow.set_group(true, false)
-wow.reset_get_children_calls()
-addon.RequestRefresh()
-wow.flush_timers()
-check(wow.get_children_calls() >= 1, "container discovery did not scan the expected hierarchy")
+section("Group/Party", function()
+    local partyContainer = wow.new_frame("Frame", "SmokePartyContainer")
+    local partyMember = wow.new_frame("Frame", "SmokePartyMember", partyContainer)
+    partyMember.displayedUnit = "party1"
+    partyMember.healthBar = wow.new_frame("StatusBar", "SmokePartyHealthBar", partyMember)
+    PartyFrame = partyContainer
+    wow.set_group(true, false)
+    wow.reset_get_children_calls()
+    addon.RequestRefresh()
+    wow.flush_timers()
+    check(wow.get_children_calls() >= 1, "container discovery scans expected hierarchy")
+end)
 
--- Target-of-target secure operations requested in combat must be retried after regen.
-wow.set_combat(true)
-check(addon.TargetTargetBarAPI.Enable(true) == false, "TargetTarget Enable should defer during combat")
-check(addon.TargetTargetBarAPI.ApplySize(160, 12) == false, "TargetTarget ApplySize should defer during combat")
-wow.set_combat(false)
-wow.fire("PLAYER_REGEN_ENABLED")
-wow.flush_timers()
-check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "TargetTarget Enable did not retry after combat")
-local targetConfig = addon.PlayerBarConfig.Initialize()
-check(targetConfig.targetTargetWidth == 160 and targetConfig.targetTargetHeight == 12,
-    "TargetTarget ApplySize did not retry after combat")
+section("Target of target", function()
+    wow.set_combat(true)
+    check(addon.TargetTargetBarAPI.Enable(true) == false, "Enable defers during combat", false, addon.TargetTargetBarAPI.Enable(false))
+    check(addon.TargetTargetBarAPI.ApplySize(160, 12) == false, "ApplySize defers during combat", false, addon.TargetTargetBarAPI.ApplySize(160, 12))
+    wow.set_combat(false)
+    wow.fire("PLAYER_REGEN_ENABLED")
+    wow.flush_timers()
+    check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "Enable retries after combat")
+    local targetConfig = addon.PlayerBarConfig.Initialize()
+    check(targetConfig.targetTargetWidth == 160 and targetConfig.targetTargetHeight == 12,
+        "ApplySize retries after combat")
+end)
 
--- Class resource discovery must also defer protected reparenting during combat.
-local groupContainer = wow.new_frame("Frame", "CombatGroupContainer")
-local groupMember = wow.new_frame("Frame", "CombatGroupMember", groupContainer)
-groupMember.displayedUnit = "player"
-local groupPowerBar = wow.new_frame("StatusBar", "CombatGroupPowerBar", groupMember)
-PartyFrame = groupContainer
-addon.SetClassResourceOverlayEnabled(true)
-wow.set_combat(true)
-wow.fire("GROUP_ROSTER_UPDATE")
-wow.flush_timers()
-local classOverlay = _G["BSO_ClassResourceOverlay"]
-check(classOverlay.parent ~= groupPowerBar, "group overlay mutated a protected frame during combat")
-wow.set_combat(false)
-wow.fire("PLAYER_REGEN_ENABLED")
-wow.flush_timers()
-check(classOverlay.parent == groupPowerBar, "deferred group overlay discovery did not retry after combat")
+section("Combat Lockdown", function()
+    local groupContainer = wow.new_frame("Frame", "CombatGroupContainer")
+    local groupMember = wow.new_frame("Frame", "CombatGroupMember", groupContainer)
+    groupMember.displayedUnit = "player"
+    local groupPowerBar = wow.new_frame("StatusBar", "CombatGroupPowerBar", groupMember)
+    PartyFrame = groupContainer
+    addon.SetClassResourceOverlayEnabled(true)
+    wow.set_combat(true)
+    wow.fire("GROUP_ROSTER_UPDATE")
+    wow.flush_timers()
+    local classOverlay = _G["BSO_ClassResourceOverlay"]
+    check(classOverlay.parent ~= groupPowerBar, "protected frame is not mutated during combat")
+    wow.set_combat(false)
+    wow.fire("PLAYER_REGEN_ENABLED")
+    wow.flush_timers()
+    check(classOverlay.parent == groupPowerBar, "deferred reparenting retries after combat")
+end)
 
-print(string.format("smoke: PASS (%d assertions)", passed))
+section("Menu", function()
+    check(type(SlashCmdList.BLOODSHIELDOVERLAY) == "function", "slash command", "function", type(SlashCmdList.BLOODSHIELDOVERLAY))
+    SlashCmdList.BLOODSHIELDOVERLAY("")
+    SlashCmdList.BLOODSHIELDOVERLAY("reload")
+    wow.flush_timers()
+    check(type(BloodShieldOverlayProfiles) == "table", "profile store")
+    check(_G["BloodShieldOverlayConfig"] and _G["BloodShieldOverlayConfig"].widthEdit, "configuration menu")
+
+    local configMenu = _G["BloodShieldOverlayConfig"]
+    check(configMenu.healthCheck:GetChecked() == true, "show health default")
+    check(configMenu.specialResCheck:GetChecked() == true, "special resources default")
+    check(configMenu.classOverlayCheck:GetChecked() == true, "group overlay default")
+    check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown")
+    check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock bars", "unlock button label")
+    local unlockButton = configMenu.unlockButton
+    unlockButton:GetScript("OnClick")(unlockButton)
+    check(_G["BloodShieldOverlayBar"].movable == true and _G["BloodShieldOverlayBar"].mouseEnabled == true, "unlock handler")
+end)
+
+section("Frame discovery", function()
+    local content = wow.new_frame("Frame", "PlayerFrameContent")
+    local main = wow.new_frame("Frame", "PlayerFrameContentMain", content)
+    local area = wow.new_frame("Frame", "HealthBarArea", main)
+    area.HealthBar = wow.new_frame("StatusBar", "PlayerHealthBar", area)
+    PlayerFrame = { PlayerFrameContent = content }
+    content.PlayerFrameContentMain = main
+    main.HealthBarArea = area
+    wow.set_group(false, false)
+    addon.RequestRefresh()
+    wow.flush_timers()
+end)
+
+section("Legacy Mouse removal regression", function()
+    local legacyApis = {
+        "SetMouseResourceOverlayEnabled",
+        "UpdateMouseResourceOverlay",
+        "RefreshMouseCooldowns",
+        "GetMouseCooldownOptions",
+    }
+    local found = {}
+    for _, name in ipairs(legacyApis) do
+        if addon[name] ~= nil then found[#found + 1] = name end
+    end
+    local config = addon.PlayerBarConfig.Get()
+    for key in pairs(config) do
+        local lower = string.lower(tostring(key))
+        if lower:match("^showmouse") or lower:match("^mousecooldown")
+            or lower:match("^mouseresourcearc") or lower == "mouse_cooldowns" then
+            found[#found + 1] = tostring(key)
+        end
+    end
+    check(#found == 0, "legacy Mouse APIs/configuration remain", "none", table.concat(found, ", "))
+end)
+
+print(string.format("\nAssertions: %d\nPassed:     %d\nFailed:     %d\nErrors:     %d", assertions, passed, failed, errors))
+if failed == 0 and errors == 0 then
+    print("\nsmoke: PASS")
+    os.exit(0)
+end
+print("\nsmoke: FAIL")
+os.exit(1)
