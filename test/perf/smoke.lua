@@ -133,15 +133,18 @@ end)
 
 section("Target of target", function()
     wow.set_combat(true)
-    check(addon.TargetTargetBarAPI.Enable(true) == false, "Enable defers during combat", false, addon.TargetTargetBarAPI.Enable(false))
-    check(addon.TargetTargetBarAPI.ApplySize(160, 12) == false, "ApplySize defers during combat", false, addon.TargetTargetBarAPI.ApplySize(160, 12))
+    local enableResult = addon.TargetTargetBarAPI.Enable(true)
+    local lockResult = addon.TargetTargetBarAPI.SetLocked(false)
+    check(enableResult == false, "Enable defers during combat", false, enableResult)
+    check(lockResult == false, "SetLocked defers during combat", false, lockResult)
     wow.set_combat(false)
     wow.fire("PLAYER_REGEN_ENABLED")
     wow.flush_timers()
     check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "Enable retries after combat")
     local targetConfig = addon.PlayerBarConfig.Initialize()
-    check(targetConfig.targetTargetWidth == 160 and targetConfig.targetTargetHeight == 12,
-        "ApplySize retries after combat")
+    local targetBar = _G["BloodShieldOverlayTargetTargetBar"]
+    check(targetConfig.targetTargetLocked == false and targetBar.movable == true,
+        "SetLocked retries after combat")
 end)
 
 section("Combat Lockdown", function()
