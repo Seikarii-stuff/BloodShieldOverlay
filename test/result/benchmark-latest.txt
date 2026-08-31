@@ -1,41 +1,22 @@
 iterations=100000
-dispatch_seconds=3.392000
-dispatch_ops_per_second=29481.13
+dispatch_seconds=3.301000
+dispatch_ops_per_second=30293.85
 overlay_seconds=0.081000
 overlay_ops_per_second=1234567.90
 discovery_iterations=1000
-discovery_seconds=0.012000
-discovery_ops_per_second=83333.33
+discovery_seconds=0.009000
+discovery_ops_per_second=111111.11
 static_overlay_iterations=100000
-static_overlay_seconds=0.27000
-static_overlay_ops_per_second=1754385.96
+static_overlay_seconds=0.059000
+static_overlay_ops_per_second=1694915.25
 playerbar_iterations=10000
-playerbar_seconds=0.117000
-playerbar_ops_per_second=85470.09
+playerbar_seconds=0.111000
+playerbar_ops_per_second=90090.09
 classoverlay_enable_seconds=0.000000
 classoverlay_iterations=10000
-classoverlay_seconds=0.106000
-classoverlay_ops_per_second=94339.62
-mouse_off_overlay_created=false
-mouse_off_onupdate_installed=false
-mouse_off_tick_seconds=0.778000
-mouse_off_tick_ops_per_second=128534.70
-mouse_enable_seconds=0.002000
-mouse_on_onupdate_installed=true
-mouse_on_tick_seconds=1.431000
-mouse_on_tick_ops_per_second=69881.20
-mouse_off_after_disable_onupdate=false
+classoverlay_seconds=0.104000
+classoverlay_ops_per_second=96153.85
 listener_updates=100000
-heap_delta_kb=349.09
-heap_retained_after_gc_kb=348.49
-heap_diagnostics=dispatch: live=+174.06 KB, retained=-9.31 KB, transient=+183.38 KB, objects=none, total_objects=66, after_gc_objects=66
-overlay: live=-8.52 KB, retained=-8.86 KB, transient=+0.34 KB, objects=none, total_objects=66, after_gc_objects=66
-discovery: live=+138.08 KB, retained=+20.40 KB, transient=+117.67 KB, objects=Frame:2,StatusBar:2,Texture:1, total_objects=71, after_gc_objects=71
-static_overlay: live=+38.58 KB, retained=+38.06 KB, transient=+0.52 KB, objects=StatusBar:2,Texture:1, total_objects=74, after_gc_objects=74
-playerbar: live=+645.10 KB, retained=+38.53 KB, transient=+606.56 KB, objects=none, total_objects=74, after_gc_objects=74
-classoverlay_enable: live=+57.18 KB, retained=+56.53 KB, transient=+0.65 KB, objects=Frame:2,StatusBar:1, total_objects=77, after_gc_objects=77
-classoverlay_update: live=+506.63 KB, retained=+57.01 KB, transient=+449.63 KB, objects=none, total_objects=77, after_gc_objects=77
-mouse_off: live=+57.79 KB, retained=+57.44 KB, transient=+0.34 KB, objects=none, total_objects=77, after_gc_objects=77
-mouse_enable: live=+347.50 KB, retained=+347.12 KB, transient=+0.38 KB, objects=Button:2,Cooldown:2,FontString:2,Frame:1,MaskTexture:16,StatusBar:7,Texture:20, total_objects=127, after_gc_objects=127
-mouse_update: live=+348.89 KB, retained=+347.90 KB, transient=+1.00 KB, objects=none, total_objects=127, after_gc_objects=127
-mouse_disable: live=+349.15 KB, retained=+348.21 KB, transient=+0.94 KB, objects=none, total_objects=127, after_gc_objects=127
+heap_delta_kb=48.67
+heap_retained_after_gc_kb=48.17
+heap_diagnostics=run with: lua test/benchmark/benchmark.lua 100000 heap

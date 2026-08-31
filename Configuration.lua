@@ -5,7 +5,7 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 6, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 7, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
@@ -15,14 +15,6 @@ local DEFAULTS = {
     targetTargetWidth = 130, targetTargetHeight = 10, targetTargetLocked = true,
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
-    showMouseSpecialResources = false,
-    showMouseCooldown1 = false,
-    showMouseCooldown2 = false,
-    mouseCooldown1Spell = nil,
-    mouseCooldown2Spell = nil,
-    mouseCooldownPipSize = 8,
-    mouseResourceArcSpacing = 1.0,
-    mouseResourceArcStart = 0.83,
     graphicsUpdateRate = 30,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
@@ -48,7 +40,6 @@ end
 local function IsPositiveNumber(value) return type(value) == "number" and value > 0 end
 local function IsBoolean(value) return type(value) == "boolean" end
 local function IsPoint(value) return type(value) == "string" and value ~= "" end
-local function IsOptionalSpellID(value) return value == nil or (type(value) == "number" and value > 0) end
 
 local FIELD_VALIDATORS = {
     width = IsPositiveNumber,
@@ -71,25 +62,24 @@ local FIELD_VALIDATORS = {
     targetTargetRelativePoint = IsPoint,
     targetTargetXOffset = function(value) return type(value) == "number" end,
     targetTargetYOffset = function(value) return type(value) == "number" end,
-    showMouseSpecialResources = IsBoolean,
-    showMouseCooldown1 = IsBoolean,
-    showMouseCooldown2 = IsBoolean,
-    mouseCooldown1Spell = IsOptionalSpellID,
-    mouseCooldown2Spell = IsOptionalSpellID,
-    mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
-    mouseResourceArcSpacing = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
-    mouseResourceArcStart = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
     graphicsUpdateRate = function(value) return value == 30 or value == 60 end,
 }
 
 local function ApplyDefaults(db)
     db = db or {}
     local isLegacyProfile = db.configVersion == nil and db.showHealth == false
+    local needsCleanup = db.configVersion ~= DEFAULTS.configVersion
     for key, value in pairs(DEFAULTS) do if db[key] == nil then db[key] = value end end
     if isLegacyProfile then db.showHealth = true end
 
     for key, validator in pairs(FIELD_VALIDATORS) do
         if not validator(db[key]) then db[key] = DEFAULTS[key] end
+    end
+
+    if needsCleanup then
+        local clean = {}
+        for key in pairs(DEFAULTS) do clean[key] = db[key] end
+        db = clean
     end
 
     return db

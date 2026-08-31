@@ -52,6 +52,10 @@ function addon.RegisterLayoutListener(listener)
     if type(listener) == "function" then table_insert(layoutListeners, listener) end
 end
 
+function addon.RequestRefresh()
+    for i = 1, #layoutListeners do layoutListeners[i]("MANUAL_REFRESH") end
+end
+
 local function GetThrottleInterval()
     if type(addon.GetGraphicsUpdateInterval) == "function" then
         return addon.GetGraphicsUpdateInterval()
