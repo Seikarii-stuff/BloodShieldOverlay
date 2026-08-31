@@ -15,6 +15,50 @@ local function OpenConfigMenu()
     print("BloodShieldOverlay: configuration panel is not ready yet.")
 end
 
+local function SetGraphicsRate(config, rate)
+    rate = tonumber(rate)
+    if rate ~= 30 and rate ~= 60 then return end
+    config.graphicsUpdateRate = rate
+    if addon.SetGraphicsUpdateRate then addon.SetGraphicsUpdateRate(rate) end
+end
+
+local function CreatePerformanceControls(panel)
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 16, -132)
+    title:SetText("Graphics update rate")
+
+    local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    description:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    description:SetText("Non-realtime addon visuals only. Mouse cursor tracking and proc glow stay realtime.")
+
+    local config = addon.PlayerBarConfig.Initialize()
+    local rate30 = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    rate30:SetPoint("TOPLEFT", 16, -178)
+    rate30.Text:SetText("30 FPS")
+
+    local rate60 = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    rate60:SetPoint("TOPLEFT", 100, -178)
+    rate60.Text:SetText("60 FPS")
+
+    local function Refresh()
+        local current = addon.GetGraphicsUpdateRate and addon.GetGraphicsUpdateRate() or config.graphicsUpdateRate or 30
+        rate30:SetChecked(current == 30)
+        rate60:SetChecked(current == 60)
+    end
+
+    rate30:SetScript("OnClick", function()
+        SetGraphicsRate(config, 30)
+        Refresh()
+    end)
+    rate60:SetScript("OnClick", function()
+        SetGraphicsRate(config, 60)
+        Refresh()
+    end)
+
+    panel.BloodShieldOverlayGraphicsRateRefresh = Refresh
+    Refresh()
+end
+
 local function CreateInterfaceOptionsPanel()
     -- Modern Settings API (Dragonflight 10.0+, still current in Midnight 12.1).
     -- InterfaceOptions_AddCategory was removed, so the old codepath silently
@@ -47,6 +91,8 @@ local function CreateInterfaceOptionsPanel()
     slashHint:SetPoint("RIGHT", -16, 0)
     slashHint:SetJustifyH("LEFT")
     slashHint:SetText("Chat shortcut: /shield    Reload shortcut: /shield reload")
+
+    CreatePerformanceControls(panel)
 
     local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
     -- Keep the category's ID so other code (e.g. a future slash command) can
