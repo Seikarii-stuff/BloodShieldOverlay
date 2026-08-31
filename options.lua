@@ -29,7 +29,7 @@ local function CreatePerformanceControls(panel)
 
     local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
-    description:SetText("Non-realtime addon visuals only. Mouse cursor tracking and proc glow stay realtime.")
+    description:SetText("Non-realtime addon visuals only; proc glow stays realtime.")
 
     local config = addon.PlayerBarConfig.Initialize()
     local rate30 = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
