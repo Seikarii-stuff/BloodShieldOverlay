@@ -15,14 +15,6 @@ local DEFAULTS = {
     targetTargetWidth = 130, targetTargetHeight = 10, targetTargetLocked = true,
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
-    showMouseSpecialResources = false,
-    showMouseCooldown1 = false,
-    showMouseCooldown2 = false,
-    mouseCooldown1Spell = nil,
-    mouseCooldown2Spell = nil,
-    mouseCooldownPipSize = 8,
-    mouseResourceArcSpacing = 1.0,
-    mouseResourceArcStart = 0.83,
     graphicsUpdateRate = 30,
 }
 local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
@@ -48,7 +40,6 @@ end
 local function IsPositiveNumber(value) return type(value) == "number" and value > 0 end
 local function IsBoolean(value) return type(value) == "boolean" end
 local function IsPoint(value) return type(value) == "string" and value ~= "" end
-local function IsOptionalSpellID(value) return value == nil or (type(value) == "number" and value > 0) end
 
 local FIELD_VALIDATORS = {
     width = IsPositiveNumber,
@@ -71,14 +62,6 @@ local FIELD_VALIDATORS = {
     targetTargetRelativePoint = IsPoint,
     targetTargetXOffset = function(value) return type(value) == "number" end,
     targetTargetYOffset = function(value) return type(value) == "number" end,
-    showMouseSpecialResources = IsBoolean,
-    showMouseCooldown1 = IsBoolean,
-    showMouseCooldown2 = IsBoolean,
-    mouseCooldown1Spell = IsOptionalSpellID,
-    mouseCooldown2Spell = IsOptionalSpellID,
-    mouseCooldownPipSize = function(value) return type(value) == "number" and value >= 4 and value <= 24 end,
-    mouseResourceArcSpacing = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
-    mouseResourceArcStart = function(value) return type(value) == "number" and value >= 0.5 and value <= 1.5 end,
     graphicsUpdateRate = function(value) return value == 30 or value == 60 end,
 }
 
