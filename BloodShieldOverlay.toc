@@ -23,7 +23,6 @@ MouseCooldowns.lua
 Menu.lua
 ResourceDisplayMenu.lua
 options.lua
-PerformanceMenu.lua
 Commands.lua
 ShowPartyWhenSolo.lua
 BlizzardFrames.lua
