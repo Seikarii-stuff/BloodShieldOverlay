@@ -28,4 +28,3 @@ Commands.lua
 ShowPartyWhenSolo.lua
 BlizzardFrames.lua
 ClassResourceOverlay.lua
-cinematicskip.lua
