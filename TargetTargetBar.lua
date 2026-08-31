@@ -22,9 +22,7 @@ local C_ClassColor = C_ClassColor
 
 local function UpdateVisuals()
     if not frame or not bar or not nameText or not config or not config.showTargetTarget then return end
-
     nameText:SetText(UnitName(UNIT))
-
     local _, classFilename = UnitClass(UNIT)
     if classFilename ~= nil and C_ClassColor then
         local classColor = C_ClassColor.GetClassColor(classFilename)
@@ -124,7 +122,11 @@ local function Create()
     nameText:SetTextColor(1, 1, 1, 1)
 
     if RegisterUnitWatch then RegisterUnitWatch(frame) end
+    local deferredLocked = pendingLocked
     SetLocked(config.targetTargetLocked)
+    if deferredLocked ~= nil then
+        pendingLocked = deferredLocked
+    end
     Update()
     return true
 end

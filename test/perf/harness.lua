@@ -11,9 +11,7 @@ _G.BloodShieldOverlayDB = nil
 _G.SlashCmdList = {}
 _G.print = _G.print or function() end
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
-_G.issecretvalue = function(value)
-    return type(value) == "table" and value.__secret == true
-end
+_G.issecretvalue = function(value) return type(value) == "table" and value.__secret == true end
 
 local frames = {}
 local objectCounts = {}
@@ -28,9 +26,7 @@ local inGroup = false
 local groupMemberCount = 0
 local getChildrenCalls = 0
 
-local function frame_method(self, name, fn)
-    self[name] = fn
-end
+local function frame_method(self, name, fn) self[name] = fn end
 
 local function new_frame(objectType, name, parent)
     local frameType = objectType or "Frame"
@@ -42,10 +38,7 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "GetName", function(self) return self.name end)
     frame_method(frame, "GetParent", function(self) return self.parent end)
     frame_method(frame, "IsForbidden", function() return false end)
-    frame_method(frame, "GetChildren", function(self)
-        getChildrenCalls = getChildrenCalls + 1
-        return unpack_values(self.children)
-    end)
+    frame_method(frame, "GetChildren", function(self) getChildrenCalls = getChildrenCalls + 1 return unpack_values(self.children) end)
     frame_method(frame, "GetAttribute", function(self, key) return self[key] end)
     frame_method(frame, "SetAttribute", function(self, key, value) self[key] = value end)
     frame_method(frame, "SetScript", function(self, event, fn) self.scripts[event] = fn end)
@@ -53,22 +46,10 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "RegisterEvent", function(self, event) self.events[event] = true end)
     frame_method(frame, "UnregisterEvent", function(self, event) self.events[event] = nil end)
     frame_method(frame, "UnregisterAllEvents", function(self) self.events = {} end)
-    frame_method(frame, "RegisterUnitEvent", function(self, event, ...)
-        self.unitEvents = self.unitEvents or {}
-        self.unitEvents[event] = self.unitEvents[event] or {}
-        for index = 1, select("#", ...) do
-            self.unitEvents[event][select(index, ...)] = true
-        end
-    end)
+    frame_method(frame, "RegisterUnitEvent", function(self, event, ...) self.unitEvents = self.unitEvents or {} self.unitEvents[event] = self.unitEvents[event] or {} for index = 1, select("#", ...) do self.unitEvents[event][select(index, ...)] = true end end)
     frame_method(frame, "SetAllPoints", function(self, target) self.allPoints = target end)
     frame_method(frame, "SetParent", function(self, value) self.parent = value end)
-    frame_method(frame, "SetStatusBarTexture", function(self, texture)
-        self.texture = texture
-        if not self.statusBarTexture then
-            self.statusBarTexture = new_frame("Texture", nil, self)
-        end
-        self.statusBarTexture.texture = texture
-    end)
+    frame_method(frame, "SetStatusBarTexture", function(self, texture) self.texture = texture if not self.statusBarTexture then self.statusBarTexture = new_frame("Texture", nil, self) end self.statusBarTexture.texture = texture end)
     frame_method(frame, "GetStatusBarTexture", function(self) return self.statusBarTexture end)
     frame_method(frame, "SetStatusBarColor", function(self, r, g, b, a) self.color = { r, g, b, a } end)
     frame_method(frame, "SetOrientation", function(self, value) self.orientation = value end)
@@ -97,10 +78,7 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "CreateTexture", function(self) return new_frame("Texture", nil, self) end)
     frame_method(frame, "CreateFontString", function(self) return new_frame("FontString", nil, self) end)
     frame_method(frame, "CreateMaskTexture", function(self) return new_frame("MaskTexture", nil, self) end)
-    frame_method(frame, "AddMaskTexture", function(self, mask)
-        self.maskTextures = self.maskTextures or {}
-        self.maskTextures[#self.maskTextures + 1] = mask
-    end)
+    frame_method(frame, "AddMaskTexture", function(self, mask) self.maskTextures = self.maskTextures or {} self.maskTextures[#self.maskTextures + 1] = mask end)
     frame_method(frame, "SetColorTexture", function(self, r, g, b, a) self.color = { r, g, b, a } end)
     frame_method(frame, "SetTexture", function(self, texture, ...) self.texture = texture self.textureArgs = { ... } end)
     frame_method(frame, "SetTexCoord", function(self, ...) self.texCoord = { ... } end)
@@ -139,9 +117,7 @@ end
 
 _G.CreateFrame = function(objectType, name, parent)
     local frame = new_frame(objectType, name, parent)
-    if objectType == "CheckButton" then
-        frame.Text = new_frame("FontString", nil, frame)
-    end
+    if objectType == "CheckButton" then frame.Text = new_frame("FontString", nil, frame) end
     if name then _G[name] = frame end
     return frame
 end
@@ -171,6 +147,39 @@ _G.UIDropDownMenu_CreateInfo = function() return {} end
 _G.UIDropDownMenu_AddButton = function() end
 _G.CloseDropDownMenus = function() end
 
+-- Snapshot the mock baseline so each unit case can restore a clean WoW-like
+-- environment without starting a second Lua process.
+local baseline_globals = {}
+for key, value in pairs(_G) do baseline_globals[key] = value end
+
+local function restore_table(target, source)
+    for key in pairs(target) do target[key] = nil end
+    for key, value in pairs(source) do target[key] = value end
+end
+
+function M.reset()
+    frames = {}
+    objectCounts = {}
+    timers = {}
+    health = { player = 1000, party1 = 500, raid1 = 750 }
+    absorbs = { player = 250, party1 = 100, raid1 = 200 }
+    power = { player = 40 }
+    maxPower = { player = 100 }
+    inCombat = false
+    inRaid = false
+    inGroup = false
+    groupMemberCount = 0
+    getChildrenCalls = 0
+
+    for key in pairs(_G) do
+        if baseline_globals[key] == nil then _G[key] = nil end
+    end
+    for key, value in pairs(baseline_globals) do _G[key] = value end
+    restore_table(_G.SlashCmdList, baseline_globals.SlashCmdList)
+    _G.BloodShieldOverlayProfiles = nil
+    _G.BloodShieldOverlayDB = nil
+end
+
 function M.load()
     dofile("BloodShieldOverlay.lua")
     dofile("Core.lua")
@@ -189,6 +198,15 @@ function M.load()
     dofile("ClassResourceOverlay.lua")
 end
 
+function M.reset_and_load()
+    M.reset()
+    M.load()
+    dofile("RuntimeGuards.lua")
+    local addon = _G.BloodShieldOverlay
+    M.fire("PLAYER_LOGIN")
+    return addon
+end
+
 function M.new_frame(...) return new_frame(...) end
 function M.set_combat(value) inCombat = value end
 function M.set_group(group, raid, memberCount)
@@ -201,9 +219,7 @@ function M.fire(event, unit)
     for _, frame in ipairs(frames) do
         local registered = frame.events and frame.events[event]
         local unitRegistered = frame.unitEvents and frame.unitEvents[event]
-        if (registered or (unitRegistered and unitRegistered[unit])) and frame.scripts.OnEvent then
-            frame.scripts.OnEvent(frame, event, unit)
-        end
+        if (registered or (unitRegistered and unitRegistered[unit])) and frame.scripts.OnEvent then frame.scripts.OnEvent(frame, event, unit) end
     end
 end
 function M.tick(elapsed)
