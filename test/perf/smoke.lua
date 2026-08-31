@@ -193,10 +193,9 @@ section("Frame discovery", function()
     content.PlayerFrameContentMain = main
     main.HealthBarArea = area
     wow.set_group(false, false)
-    wow.reset_get_children_calls()
     addon.RequestRefresh()
     wow.flush_timers()
-    check(wow.get_children_calls() >= 1, "player frame hierarchy is inspected")
+    check(#area.HealthBar.children >= 1, "player frame health bar receives absorb overlay")
 end)
 
 section("Legacy Mouse removal regression", function()
@@ -218,6 +217,7 @@ section("Legacy Mouse removal regression", function()
             found[#found + 1] = tostring(key)
         end
     end
+    if _G.MOUSE_COOLDOWNS ~= nil then found[#found + 1] = "MOUSE_COOLDOWNS" end
     check(#found == 0, "legacy Mouse APIs/configuration remain", "none", table.concat(found, ", "))
 end)
 
