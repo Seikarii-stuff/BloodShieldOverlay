@@ -121,7 +121,7 @@ case("Frame Discovery > unit and compact-frame lookup", function()
     check(addon.GetUnit(displayed) == "party1", "Frame Discovery > displayedUnit is preferred", "party1", addon.GetUnit(displayed))
 
     local attribute = wow.new_frame("Frame", "DiscoveryAttribute")
-    attribute.SetAttribute(attribute, "unit", "raid2")
+    attribute:SetAttribute("unit", "raid2")
     check(addon.GetUnit(attribute) == "raid2", "Frame Discovery > unit attribute is discovered", "raid2", addon.GetUnit(attribute))
 
     local status = wow.new_frame("StatusBar", "DiscoveryStatus")
@@ -149,15 +149,18 @@ end)
 case("TargetTarget > combat deferral", function()
     addon.PlayerBarConfig.Reset()
     wow.set_combat(true)
-    check(addon.TargetTargetBarAPI.Enable(true) == false, "TargetTarget > enable is deferred during combat", false, addon.TargetTargetBarAPI.Enable(true))
-    check(addon.TargetTargetBarAPI.ApplySize(160, 12) == false, "TargetTarget > resize is rejected during combat", false, addon.TargetTargetBarAPI.ApplySize(160, 12))
+    local enableResult = addon.TargetTargetBarAPI.Enable(true)
+    local lockResult = addon.TargetTargetBarAPI.SetLocked(false)
+    check(enableResult == false, "TargetTarget > enable is deferred during combat", false, enableResult)
+    check(lockResult == false, "TargetTarget > lock change is deferred during combat", false, lockResult)
 
     wow.set_combat(false)
     wow.fire("PLAYER_REGEN_ENABLED")
     wow.flush_timers()
     local config = addon.PlayerBarConfig.Initialize()
+    local targetBar = _G["BloodShieldOverlayTargetTargetBar"]
     check(config.showTargetTarget == true, "TargetTarget > enable retries after combat", true, config.showTargetTarget)
-    check(_G["BloodShieldOverlayTargetTargetBar"] ~= nil, "TargetTarget > secure frame is created after combat")
+    check(targetBar ~= nil and targetBar.movable == true, "TargetTarget > deferred lock change retries after combat")
     check(addon.TargetTargetBarAPI.ApplySize(160, 12) == true, "TargetTarget > resize applies out of combat", true, addon.TargetTargetBarAPI.ApplySize(160, 12))
     check(config.targetTargetWidth == 160 and config.targetTargetHeight == 12, "TargetTarget > resized dimensions persist")
 end)
@@ -169,17 +172,22 @@ case("Mouse overlay removal > legacy API regression", function()
         "RefreshMouseCooldowns",
         "GetMouseCooldownOptions",
     }
+    local missingApis = {}
     for _, name in ipairs(legacyApis) do
-        check(addon[name] == nil, "legacy Mouse overlay removal > " .. name .. " is absent", nil, addon[name])
+        if addon[name] ~= nil then missingApis[#missingApis + 1] = name end
     end
+    check(#missingApis == 0, "legacy Mouse overlay removal > removed APIs are absent", "none", table.concat(missingApis, ", "))
 
     local config = addon.PlayerBarConfig.Get()
+    local legacyConfig = {}
     for key in pairs(config) do
         local lower = string.lower(tostring(key))
-        check(not lower:match("^showmouse") and not lower:match("^mousecooldown")
-            and not lower:match("^mouseresourcearc") and lower ~= "mouse_cooldowns",
-            "legacy Mouse overlay removal > no Mouse configuration remains: " .. tostring(key))
+        if lower:match("^showmouse") or lower:match("^mousecooldown")
+            or lower:match("^mouseresourcearc") or lower == "mouse_cooldowns" then
+            legacyConfig[#legacyConfig + 1] = tostring(key)
+        end
     end
+    check(#legacyConfig == 0, "legacy Mouse overlay removal > removed configuration is absent", "none", table.concat(legacyConfig, ", "))
 end)
 
 print(string.format("\nAssertions: %d\nPassed:     %d\nFailed:     %d\nErrors:     %d", assertions, passed, failed, errors))
