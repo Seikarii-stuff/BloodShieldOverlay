@@ -161,7 +161,8 @@ case("TargetTarget > combat deferral", function()
     local targetBar = _G["BloodShieldOverlayTargetTargetBar"]
     check(config.showTargetTarget == true, "TargetTarget > enable retries after combat", true, config.showTargetTarget)
     check(targetBar ~= nil and targetBar.movable == true, "TargetTarget > deferred lock change retries after combat")
-    check(addon.TargetTargetBarAPI.ApplySize(160, 12) == true, "TargetTarget > resize applies out of combat", true, addon.TargetTargetBarAPI.ApplySize(160, 12))
+    local sizeResult = addon.TargetTargetBarAPI.ApplySize(160, 12)
+    check(sizeResult == true, "TargetTarget > resize applies out of combat", true, sizeResult)
     check(config.targetTargetWidth == 160 and config.targetTargetHeight == 12, "TargetTarget > resized dimensions persist")
 end)
 
