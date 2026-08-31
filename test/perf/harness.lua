@@ -160,16 +160,10 @@ _G.Enum = { PowerType = { HolyPower = 9, Essence = 19, SoulShards = 7, Chi = 12,
 _G.GetRuneCooldown = function() return 0, 0, true end
 _G.GetPowerRegen = function() return 0.2, 0.2 end
 _G.GetTime = function() return 100 end
-_G.GetCursorPosition = function() return 960, 540 end
 _G.UnitName = function() return "Tester" end
 _G.GetNormalizedRealmName = function() return "Realm" end
-_G.GetSpellTexture = function() return 134400 end
-_G.GetSpellCooldown = function() return 0, 0 end
 _G.C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }
 _G.C_NamePlate = nil
-_G.C_Spell = {}
-_G.C_ActionBar = nil
-_G.C_SpellActivationOverlay = nil
 _G.UIDropDownMenu_SetText = function(frame, text) frame.text = text end
 _G.UIDropDownMenu_SetWidth = function(frame, width) frame.dropdownWidth = width end
 _G.UIDropDownMenu_Initialize = function(frame, initializer) frame.initialize = initializer end
@@ -187,10 +181,6 @@ function M.load()
     dofile("ResourceProviders.lua")
     dofile("PlayerBar.lua")
     dofile("TargetTargetBar.lua")
-    dofile("data/SpellData.lua")
-    dofile("Mouse.lua")
-    dofile("MouseResources.lua")
-    dofile("MouseCooldowns.lua")
     dofile("Menu.lua")
     dofile("ResourceDisplayMenu.lua")
     dofile("options.lua")
