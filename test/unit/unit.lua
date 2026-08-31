@@ -134,6 +134,7 @@ case("Frame Discovery > unit and compact-frame lookup", function()
 
     local member = wow.new_frame("Frame", "CompactPartyFrameMemberFrame1")
     member.displayedUnit = "party1"
+    _G["CompactPartyFrameMemberFrame1"] = member
     local seen = 0
     wow.set_group(true, false)
     addon.ForEachCompactFrame(function(frame)
@@ -141,6 +142,7 @@ case("Frame Discovery > unit and compact-frame lookup", function()
     end)
     check(seen == 1, "Frame Discovery > party member is discovered once", 1, seen)
     wow.set_group(false, false)
+    _G["CompactPartyFrameMemberFrame1"] = nil
     local outsideGroup = 0
     addon.ForEachCompactFrame(function() outsideGroup = outsideGroup + 1 end)
     check(outsideGroup == 0, "Frame Discovery > no group produces no compact frames", 0, outsideGroup)
