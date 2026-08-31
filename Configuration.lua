@@ -5,7 +5,7 @@ _G.BloodShieldOverlay = addon
 
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 6, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    configVersion = 7, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
     width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
@@ -68,11 +68,18 @@ local FIELD_VALIDATORS = {
 local function ApplyDefaults(db)
     db = db or {}
     local isLegacyProfile = db.configVersion == nil and db.showHealth == false
+    local needsCleanup = db.configVersion ~= DEFAULTS.configVersion
     for key, value in pairs(DEFAULTS) do if db[key] == nil then db[key] = value end end
     if isLegacyProfile then db.showHealth = true end
 
     for key, validator in pairs(FIELD_VALIDATORS) do
         if not validator(db[key]) then db[key] = DEFAULTS[key] end
+    end
+
+    if needsCleanup then
+        local clean = {}
+        for key in pairs(DEFAULTS) do clean[key] = db[key] end
+        db = clean
     end
 
     return db
