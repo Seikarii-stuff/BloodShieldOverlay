@@ -3,21 +3,18 @@
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
-local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
-    configVersion = 7, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
-    width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 1.0,
-    showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
+    configVersion = 8, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
+    width = 18, height = 150, locked = true, hideExternalBar = false,
+    showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
     specialResourcePipWidth = 2, specialResourcePipHeight = 10,
-    resourceDisplay = "left",
     showTargetTarget = false,
     targetTargetWidth = 130, targetTargetHeight = 10, targetTargetLocked = true,
     targetTargetPoint = "CENTER", targetTargetRelativePoint = "CENTER",
     targetTargetXOffset = 0, targetTargetYOffset = -140,
     graphicsUpdateRate = 30,
 }
-local RESOURCE_DISPLAY_MODES = { left = true, right = true, none = true }
 local profileKey
 local config = {}
 
@@ -44,16 +41,12 @@ local function IsPoint(value) return type(value) == "string" and value ~= "" end
 local FIELD_VALIDATORS = {
     width = IsPositiveNumber,
     height = IsPositiveNumber,
-    capMultiplier = function(value) return type(value) == "number" and value >= MIN_CAP_PERCENT / 100 end,
     hideExternalBar = IsBoolean,
-    showHealth = IsBoolean,
-    showSpecialResources = IsBoolean,
     showClassResourceOverlay = IsBoolean,
     classResourcePipWidth = function(value) return type(value) == "number" and value >= 4 and value <= 32 end,
     classResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
     specialResourcePipWidth = function(value) return type(value) == "number" and value >= 2 and value <= 20 end,
     specialResourcePipHeight = function(value) return type(value) == "number" and value >= 2 and value <= 32 end,
-    resourceDisplay = function(value) return type(value) == "string" and RESOURCE_DISPLAY_MODES[value] == true end,
     showTargetTarget = IsBoolean,
     targetTargetWidth = IsPositiveNumber,
     targetTargetHeight = IsPositiveNumber,
@@ -65,37 +58,29 @@ local FIELD_VALIDATORS = {
     graphicsUpdateRate = function(value) return value == 30 or value == 60 end,
 }
 
+-- Rebuild the persisted profile from the current schema. This is deliberately
+-- a whitelist rather than a patch-in-place migration: fields removed from the
+-- configuration model (including old hardcoded options) must disappear from
+-- SavedVariables instead of being loaded and overwritten at runtime.
 local function ApplyDefaults(db)
     db = db or {}
-    local isLegacyProfile = db.configVersion == nil and db.showHealth == false
-    local needsCleanup = db.configVersion ~= DEFAULTS.configVersion
-    for key, value in pairs(DEFAULTS) do if db[key] == nil then db[key] = value end end
-    if isLegacyProfile then db.showHealth = true end
-
-    for key, validator in pairs(FIELD_VALIDATORS) do
-        if not validator(db[key]) then db[key] = DEFAULTS[key] end
+    local clean = {}
+    for key, defaultValue in pairs(DEFAULTS) do
+        local value = db[key]
+        local validator = FIELD_VALIDATORS[key]
+        if value == nil or (validator and not validator(value)) then
+            value = defaultValue
+        end
+        clean[key] = value
     end
-
-    if needsCleanup then
-        local clean = {}
-        for key in pairs(DEFAULTS) do clean[key] = db[key] end
-        db = clean
-    end
-
-    -- Enforce Max % fixed to 100% for standalone player bar regardless of saved profiles.
-    db.capMultiplier = DEFAULTS.capMultiplier
-    -- Force health and special resources to be shown by default and not configurable.
-    db.showHealth = true
-    db.showSpecialResources = true
-    -- Force resource display (position) to left and not configurable.
-    db.resourceDisplay = DEFAULTS.resourceDisplay
-
-    return db
+    return clean
 end
 
 local function CopySettings(source)
     local copy = {}
-    if type(source) == "table" then for key, value in pairs(source) do copy[key] = value end end
+    if type(source) == "table" then
+        for key, value in pairs(source) do copy[key] = value end
+    end
     return copy
 end
 
@@ -136,5 +121,4 @@ addon.PlayerBarConfig = {
     Get = function() return config end,
     Reset = Reset,
     GetDefaults = function() return DEFAULTS end,
-    GetMinCapPercent = function() return MIN_CAP_PERCENT end,
 }
