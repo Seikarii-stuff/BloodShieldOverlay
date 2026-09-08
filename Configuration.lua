@@ -68,7 +68,9 @@ local function ApplyDefaults(db)
     for key, defaultValue in pairs(DEFAULTS) do
         local value = db[key]
         local validator = FIELD_VALIDATORS[key]
-        if value == nil or (validator and not validator(value)) then
+        if key == "configVersion" then
+            value = DEFAULTS.configVersion
+        elseif value == nil or (validator and not validator(value)) then
             value = defaultValue
         end
         clean[key] = value
