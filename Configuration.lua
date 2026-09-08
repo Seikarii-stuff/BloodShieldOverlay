@@ -6,7 +6,7 @@ _G.BloodShieldOverlay = addon
 local MIN_CAP_PERCENT = 20
 local DEFAULTS = {
     configVersion = 7, point = "BOTTOM", relativePoint = "BOTTOM", xOffset = 100, yOffset = 450,
-    width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 2.0,
+    width = 18, height = 150, locked = true, hideExternalBar = false, capMultiplier = 1.0,
     showHealth = true, showSpecialResources = true, showClassResourceOverlay = true,
     classResourcePipWidth = 12, classResourcePipHeight = 6,
     specialResourcePipWidth = 2, specialResourcePipHeight = 10,
@@ -81,6 +81,9 @@ local function ApplyDefaults(db)
         for key in pairs(DEFAULTS) do clean[key] = db[key] end
         db = clean
     end
+
+    -- Enforce Max % fixed to 100% for standalone player bar regardless of saved profiles.
+    db.capMultiplier = DEFAULTS.capMultiplier
 
     return db
 end

@@ -56,7 +56,7 @@ print("------------------------------")
 section("Configuration", function()
     local playerBar = _G["BloodShieldOverlayBar"]
     check(playerBar and playerBar:IsShown(), "PlayerBar initialization", true, playerBar and playerBar:IsShown())
-    check(playerBar.min == 0 and playerBar.max == 2000 and playerBar.value == 250,
+    check(playerBar.min == 0 and playerBar.max == 1000 and playerBar.value == 250,
         "standalone absorb bar update")
     check(type(addon.RegisterPlayerUpdateListener) == "function", "player listener API", "function", type(addon.RegisterPlayerUpdateListener))
     check(type(addon.RegisterUnitUpdateListener) == "function", "unit listener API", "function", type(addon.RegisterUnitUpdateListener))

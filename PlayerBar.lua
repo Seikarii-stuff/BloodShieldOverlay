@@ -18,7 +18,7 @@ local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
 
-local TICK_FRACTIONS = { 0.5, 1.0, 1.5 }
+local TICK_FRACTIONS = { 0.33, 0.66 }
 local RESOURCE_THRESHOLDS = { 0.28, 0.56 }
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
@@ -180,17 +180,14 @@ function addon.SetSpecialResourcePipSize(width, height)
 end
 
 function addon.SetPlayerBarDimensions(width, height, capPercent)
-    if type(width) ~= "number" or type(height) ~= "number" or type(capPercent) ~= "number" then return false end
+    if type(width) ~= "number" or type(height) ~= "number" then return false end
     if width <= 0 or height <= 0 then
         print("BloodShieldOverlay: width and height must be positive numbers.")
         return false
     end
-    if capPercent < MIN_CAP_PERCENT then
-        print(string.format("BloodShieldOverlay: Max %% must be at least %d.", MIN_CAP_PERCENT))
-        return false
-    end
+    -- capPercent parameter is ignored; Max % for shields is fixed to 100%.
     config.width, config.height = width, height
-    config.capMultiplier = capPercent / 100
+    config.capMultiplier = 1.0
     if bar then bar:SetSize(width, height) end
     UpdateBar()
     return true

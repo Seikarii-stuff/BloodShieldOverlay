@@ -46,11 +46,9 @@ end
 local function ApplyMainBar()
     local width = tonumber(menuFrame.widthEdit:GetText())
     local height = tonumber(menuFrame.heightEdit:GetText())
-    local cap = tonumber(menuFrame.capEdit:GetText())
-    local minCap = addon.PlayerBarConfig.GetMinCapPercent()
     if not width or width <= 0 or not height or height <= 0 then print("BloodShieldOverlay: width and height must be positive numbers."); return false end
-    if not cap or cap < minCap then print(string.format("BloodShieldOverlay: Max %% must be at least %d.", minCap)); return false end
-    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function" and addon.PlayerBarAPI.ApplyDimensions(width, height, cap) == true
+    -- Max % is fixed to 100%; pass 100 for API compatibility.
+    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function" and addon.PlayerBarAPI.ApplyDimensions(width, height, 100) == true
 end
 
 local function ApplyTargetTarget()
@@ -84,7 +82,6 @@ Refresh = function()
     if not menuFrame or not config then return end
     menuFrame.widthEdit:SetText(tostring(config.width or 18))
     menuFrame.heightEdit:SetText(tostring(config.height or 150))
-    menuFrame.capEdit:SetText(tostring((config.capMultiplier or 2) * 100))
     menuFrame.targetTargetWidthEdit:SetText(tostring(config.targetTargetWidth or 130))
     menuFrame.targetTargetHeightEdit:SetText(tostring(config.targetTargetHeight or 10))
     menuFrame.resourcePipWidthEdit:SetText(tostring(config.specialResourcePipWidth or 2))
@@ -136,10 +133,7 @@ local function CreateConfigMenu()
     menuFrame.pipWidthEdit, menuFrame.pipHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Group Resource Width / Height", menuFrame.pipWidthEdit, menuFrame.pipHeightEdit)
 
-    local capY = row(32)
-    Label(menuFrame, "Main bar Max %"):SetPoint("TOPLEFT", 28, capY)
-    menuFrame.capEdit = Input(menuFrame, 70)
-    menuFrame.capEdit:SetPoint("TOPLEFT", 235, capY + 2)
+    -- Main bar Max % is fixed to 100% and not exposed in the config UI.
 
     local function AddCheck(text, callback)
         local ry = row(27)
