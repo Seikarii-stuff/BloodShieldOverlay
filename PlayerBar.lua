@@ -122,7 +122,7 @@ local specialResourceProvider = addon.GetSpecialResourceProvider(playerClass, po
 
 local function UpdateSpecialResourcesLayout()
     if not specialResourceContainer then return end
-    if not config.showSpecialResources or config.hideExternalBar or config.resourceDisplay == "none" then
+    if config.hideExternalBar or config.resourceDisplay == "none" then
         specialResourceContainer:Hide()
         return
     end
@@ -155,7 +155,7 @@ end
 
 local function UpdateSpecialResources()
     if not specialResourceContainer then return end
-    if not config.showSpecialResources or config.hideExternalBar or config.resourceDisplay == "none" then
+    if config.hideExternalBar or config.resourceDisplay == "none" then
         UpdateSpecialResourcesLayout()
         return
     end
@@ -291,9 +291,7 @@ local function UpdateExternalBarVisibility()
         bar:Hide()
     else
         bar:Show()
-        if healthBar then
-            if config.showHealth then healthBar:Show() else healthBar:Hide() end
-        end
+        if healthBar then healthBar:Show() end
         UpdateResourceBarLayout()
         UpdateSpecialResources()
     end
@@ -352,14 +350,14 @@ addon.PlayerBarAPI = {
         if not hidden then UpdateBar() end
     end,
     SetHealthShown = function(shown)
-        config.showHealth = shown == true
+        -- Health visibility is fixed to on; ignore caller and refresh visibility.
+        config.showHealth = true
         if not bar then CreateBar() end
-        if healthBar then
-            if config.showHealth and not config.hideExternalBar then healthBar:Show() else healthBar:Hide() end
-        end
+        if healthBar then if not config.hideExternalBar then healthBar:Show() else healthBar:Hide() end end
     end,
     SetSpecialResourcesShown = function(shown)
-        config.showSpecialResources = shown == true
+        -- Special resources visibility is fixed to on; ignore caller and refresh.
+        config.showSpecialResources = true
         if not bar then CreateBar() end
         UpdateSpecialResources()
     end,

@@ -90,8 +90,6 @@ Refresh = function()
     menuFrame.pipHeightEdit:SetText(tostring(config.classResourcePipHeight or 6))
 
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar == true)
-    menuFrame.healthCheck:SetChecked(config.showHealth ~= false)
-    menuFrame.specialResCheck:SetChecked(config.showSpecialResources ~= false)
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay ~= false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget == true)
     menuFrame.unlockButton:SetText("Unlock bars")
@@ -113,7 +111,7 @@ local function CreateConfigMenu()
     menuFrame:SetScript("OnHide", ResetBarEditState)
 
     Label(menuFrame, "BloodShieldOverlay", "GameFontHighlightLarge"):SetPoint("TOP", 0, -18)
-    Label(menuFrame, "Width / height / max % fields below are staged until Apply ALL. Checkboxes apply instantly.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
+    Label(menuFrame, "Width / height fields below are staged until Apply ALL. Checkboxes apply instantly.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
 
     local y = -70
     local function row(step) local current = y; y = y - (step or 30); return current end
@@ -145,14 +143,6 @@ local function CreateConfigMenu()
     menuFrame.visibilityCheck = AddCheck("Hide external bar", function(self)
         config.hideExternalBar = self:GetChecked()
         if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHidden) == "function" then addon.PlayerBarAPI.SetHidden(config.hideExternalBar) end
-    end)
-    menuFrame.healthCheck = AddCheck("Show health", function(self)
-        config.showHealth = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHealthShown) == "function" then addon.PlayerBarAPI.SetHealthShown(config.showHealth) end
-    end)
-    menuFrame.specialResCheck = AddCheck("Show special resources", function(self)
-        config.showSpecialResources = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetSpecialResourcesShown) == "function" then addon.PlayerBarAPI.SetSpecialResourcesShown(config.showSpecialResources) end
     end)
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self)
         config.showClassResourceOverlay = self:GetChecked()

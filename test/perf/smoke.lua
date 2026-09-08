@@ -174,8 +174,9 @@ section("Menu", function()
     check(_G["BloodShieldOverlayConfig"] and _G["BloodShieldOverlayConfig"].widthEdit, "configuration menu")
 
     local configMenu = _G["BloodShieldOverlayConfig"]
-    check(configMenu.healthCheck:GetChecked() == true, "show health default")
-    check(configMenu.specialResCheck:GetChecked() == true, "special resources default")
+    local cfg = addon.PlayerBarConfig.Get()
+    check(cfg.showHealth == true, "show health default", true, cfg.showHealth)
+    check(cfg.showSpecialResources == true, "special resources default", true, cfg.showSpecialResources)
     check(configMenu.classOverlayCheck:GetChecked() == true, "group overlay default")
     check(_G["BloodShieldOverlayResourceDisplayDropdown"] ~= nil, "resource display dropdown")
     check(configMenu.unlockButton and configMenu.unlockButton:GetText() == "Unlock bars", "unlock button label")

@@ -84,6 +84,9 @@ local function ApplyDefaults(db)
 
     -- Enforce Max % fixed to 100% for standalone player bar regardless of saved profiles.
     db.capMultiplier = DEFAULTS.capMultiplier
+    -- Force health and special resources to be shown by default and not configurable.
+    db.showHealth = true
+    db.showSpecialResources = true
 
     return db
 end
