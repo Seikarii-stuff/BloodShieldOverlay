@@ -87,6 +87,8 @@ local function ApplyDefaults(db)
     -- Force health and special resources to be shown by default and not configurable.
     db.showHealth = true
     db.showSpecialResources = true
+    -- Force resource display (position) to left and not configurable.
+    db.resourceDisplay = DEFAULTS.resourceDisplay
 
     return db
 end

@@ -194,10 +194,9 @@ function addon.SetPlayerBarDimensions(width, height, capPercent)
 end
 
 function addon.SetPlayerBarResourceDisplay(mode)
-    if mode ~= "left" and mode ~= "right" and mode ~= "none" then
-        return false
-    end
-    config.resourceDisplay = mode
+    -- Resource display (position) is fixed to left and cannot be changed at runtime.
+    if not config then config = addon.PlayerBarConfig.Initialize() end
+    config.resourceDisplay = "left"
     UpdateResourceBarLayout()
     UpdateSpecialResources()
     return true
