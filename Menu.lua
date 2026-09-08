@@ -46,9 +46,12 @@ end
 local function ApplyMainBar()
     local width = tonumber(menuFrame.widthEdit:GetText())
     local height = tonumber(menuFrame.heightEdit:GetText())
-    if not width or width <= 0 or not height or height <= 0 then print("BloodShieldOverlay: width and height must be positive numbers."); return false end
-    -- Max % is fixed to 100%; pass 100 for API compatibility.
-    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function" and addon.PlayerBarAPI.ApplyDimensions(width, height, 100) == true
+    if not width or width <= 0 or not height or height <= 0 then
+        print("BloodShieldOverlay: width and height must be positive numbers.")
+        return false
+    end
+    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function"
+        and addon.PlayerBarAPI.ApplyDimensions(width, height) == true
 end
 
 local function ApplyTargetTarget()
@@ -74,7 +77,7 @@ local function ApplyAll()
     local okMain = ApplyMainBar()
     local okTarget = ApplyTargetTarget()
     local okPips = ApplyPips()
-    if okMain and okTarget and okPips then print("BloodShieldOverlay: size / cap settings applied.") else print("BloodShieldOverlay: one or more size settings could not be applied.") end
+    if okMain and okTarget and okPips then print("BloodShieldOverlay: size settings applied.") else print("BloodShieldOverlay: one or more size settings could not be applied.") end
     Refresh()
 end
 
@@ -130,8 +133,6 @@ local function CreateConfigMenu()
     SizeRow("Special Resource Width / Height", menuFrame.resourcePipWidthEdit, menuFrame.resourcePipHeightEdit)
     menuFrame.pipWidthEdit, menuFrame.pipHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Group Resource Width / Height", menuFrame.pipWidthEdit, menuFrame.pipHeightEdit)
-
-    -- Main bar Max % is fixed to 100% and not exposed in the config UI.
 
     local function AddCheck(text, callback)
         local ry = row(27)
