@@ -23,10 +23,16 @@ local RESOURCE_THRESHOLDS = { 0.28, 0.56 }
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
 
+-- These are implementation constants, not user configuration. They must never
+-- be loaded from or written to SavedVariables.
+local SHIELD_CAP_MULTIPLIER = 1.0
+local SHOW_HEALTH = true
+local SHOW_SPECIAL_RESOURCES = true
+local RESOURCE_DISPLAY = "left"
+
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
 local DEFAULTS = addon.PlayerBarConfig.GetDefaults()
-local MIN_CAP_PERCENT = addon.PlayerBarConfig.GetMinCapPercent()
 local config = {}
 
 local UpdateBar
@@ -65,51 +71,32 @@ end
 
 local function UpdateTickMarks()
     if not bar then return end
-    local capMultiplier = config.capMultiplier or DEFAULTS.capMultiplier
     local totalHeight = bar:GetHeight()
     for _, fraction in ipairs(TICK_FRACTIONS) do
         local tick = tickLines[fraction]
-        if fraction <= capMultiplier then
-            local yOffset = totalHeight * (fraction / capMultiplier)
-            tick:ClearAllPoints()
-            tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
-            tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
-            tick:Show()
-        else
-            tick:Hide()
-        end
+        local yOffset = totalHeight * (fraction / SHIELD_CAP_MULTIPLIER)
+        tick:ClearAllPoints()
+        tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
+        tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
+        tick:Show()
     end
 end
 
 local function UpdateResourceBarLayout()
     if not resourceBar or not bar then return end
     resourceBar:ClearAllPoints()
-    local mode = config.resourceDisplay or DEFAULTS.resourceDisplay
-    if mode == "left" then
-        resourceBar:SetPoint("TOPRIGHT", bar, "TOPLEFT", -2, 0)
-        resourceBar:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -2, 0)
-        resourceBar:SetWidth(RESOURCE_BAR_WIDTH)
-        resourceBar:Show()
-    elseif mode == "right" then
-        resourceBar:SetPoint("TOPLEFT", bar, "TOPRIGHT", 2, 0)
-        resourceBar:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", 2, 0)
-        resourceBar:SetWidth(RESOURCE_BAR_WIDTH)
-        resourceBar:Show()
-    else
-        resourceBar:Hide()
-    end
+    resourceBar:SetPoint("TOPRIGHT", bar, "TOPLEFT", -2, 0)
+    resourceBar:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -2, 0)
+    resourceBar:SetWidth(RESOURCE_BAR_WIDTH)
+    resourceBar:Show()
     for _, threshold in ipairs(RESOURCE_THRESHOLDS) do
         local line = resourceThresholdLines[threshold]
         if line then
-            if mode == "none" then
-                line:Hide()
-            else
-                local yOffset = resourceBar:GetHeight() * threshold
-                line:ClearAllPoints()
-                line:SetPoint("BOTTOMLEFT", resourceBar, "BOTTOMLEFT", 0, yOffset - 1)
-                line:SetPoint("BOTTOMRIGHT", resourceBar, "BOTTOMRIGHT", 0, yOffset - 1)
-                line:Show()
-            end
+            local yOffset = resourceBar:GetHeight() * threshold
+            line:ClearAllPoints()
+            line:SetPoint("BOTTOMLEFT", resourceBar, "BOTTOMLEFT", 0, yOffset - 1)
+            line:SetPoint("BOTTOMRIGHT", resourceBar, "BOTTOMRIGHT", 0, yOffset - 1)
+            line:Show()
         end
     end
 end
@@ -122,7 +109,7 @@ local specialResourceProvider = addon.GetSpecialResourceProvider(playerClass, po
 
 local function UpdateSpecialResourcesLayout()
     if not specialResourceContainer then return end
-    if config.hideExternalBar or config.resourceDisplay == "none" then
+    if config.hideExternalBar then
         specialResourceContainer:Hide()
         return
     end
@@ -155,7 +142,7 @@ end
 
 local function UpdateSpecialResources()
     if not specialResourceContainer then return end
-    if config.hideExternalBar or config.resourceDisplay == "none" then
+    if config.hideExternalBar then
         UpdateSpecialResourcesLayout()
         return
     end
@@ -179,26 +166,15 @@ function addon.SetSpecialResourcePipSize(width, height)
     return true
 end
 
-function addon.SetPlayerBarDimensions(width, height, capPercent)
+function addon.SetPlayerBarDimensions(width, height)
     if type(width) ~= "number" or type(height) ~= "number" then return false end
     if width <= 0 or height <= 0 then
         print("BloodShieldOverlay: width and height must be positive numbers.")
         return false
     end
-    -- capPercent parameter is ignored; Max % for shields is fixed to 100%.
     config.width, config.height = width, height
-    config.capMultiplier = 1.0
     if bar then bar:SetSize(width, height) end
     UpdateBar()
-    return true
-end
-
-function addon.SetPlayerBarResourceDisplay(mode)
-    -- Resource display (position) is fixed to left and cannot be changed at runtime.
-    if not config then config = addon.PlayerBarConfig.Initialize() end
-    config.resourceDisplay = "left"
-    UpdateResourceBarLayout()
-    UpdateSpecialResources()
     return true
 end
 
@@ -290,7 +266,7 @@ local function UpdateExternalBarVisibility()
         bar:Hide()
     else
         bar:Show()
-        if healthBar then healthBar:Show() end
+        healthBar:Show()
         UpdateResourceBarLayout()
         UpdateSpecialResources()
     end
@@ -307,14 +283,11 @@ UpdateBar = function(absorb, maxHP)
     absorb = absorb or GetAbsorbAmount("player")
     maxHP = maxHP or UnitHealthMax("player") or 1
     local currentHP = UnitHealth("player") or maxHP
-    if config.showHealth then
-        healthBar:Show()
-        healthBar:SetMinMaxValues(0, maxHP)
-        healthBar:SetValue(currentHP)
-    else
-        healthBar:Hide()
-    end
-    local displayMax = maxHP * (config.capMultiplier or DEFAULTS.capMultiplier)
+    healthBar:Show()
+    healthBar:SetMinMaxValues(0, maxHP)
+    healthBar:SetValue(currentHP)
+
+    local displayMax = maxHP * SHIELD_CAP_MULTIPLIER
     if displayMax > 0 then
         bar:SetMinMaxValues(0, displayMax)
         bar:SetValue(absorb)
@@ -322,16 +295,13 @@ UpdateBar = function(absorb, maxHP)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
     end
-    if config.resourceDisplay ~= "none" then
-        resourceBar:Show()
-        local curPower = UnitPower("player") or 0
-        local maxPower = UnitPowerMax("player") or 1
-        if maxPower <= 0 then maxPower = 1 end
-        resourceBar:SetMinMaxValues(0, maxPower)
-        resourceBar:SetValue(curPower)
-    else
-        resourceBar:Hide()
-    end
+
+    resourceBar:Show()
+    local curPower = UnitPower("player") or 0
+    local maxPower = UnitPowerMax("player") or 1
+    if maxPower <= 0 then maxPower = 1 end
+    resourceBar:SetMinMaxValues(0, maxPower)
+    resourceBar:SetValue(curPower)
     UpdateSpecialResources()
 end
 
@@ -348,23 +318,8 @@ addon.PlayerBarAPI = {
         UpdateExternalBarVisibility()
         if not hidden then UpdateBar() end
     end,
-    SetHealthShown = function(shown)
-        -- Health visibility is fixed to on; ignore caller and refresh visibility.
-        config.showHealth = true
-        if not bar then CreateBar() end
-        if healthBar then if not config.hideExternalBar then healthBar:Show() else healthBar:Hide() end end
-    end,
-    SetSpecialResourcesShown = function(shown)
-        -- Special resources visibility is fixed to on; ignore caller and refresh.
-        config.showSpecialResources = true
-        if not bar then CreateBar() end
-        UpdateSpecialResources()
-    end,
-    SetResourceDisplay = function(mode)
-        return addon.SetPlayerBarResourceDisplay(mode)
-    end,
-    ApplyDimensions = function(width, height, capPercent)
-        return addon.SetPlayerBarDimensions(width, height, capPercent)
+    ApplyDimensions = function(width, height)
+        return addon.SetPlayerBarDimensions(width, height)
     end,
     Reset = function()
         config = addon.PlayerBarConfig.Reset()
