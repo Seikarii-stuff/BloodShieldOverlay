@@ -208,6 +208,27 @@ function M.reset_and_load()
     return addon
 end
 
+function M.reset_and_load_with_profile_store(profileStore, legacyStore)
+    M.reset()
+    if type(profileStore) == "table" then
+        _G.BloodShieldOverlayProfiles = {}
+        for key, value in pairs(profileStore) do
+            _G.BloodShieldOverlayProfiles[key] = value
+        end
+    end
+    if type(legacyStore) == "table" then
+        _G.BloodShieldOverlayDB = {}
+        for key, value in pairs(legacyStore) do
+            _G.BloodShieldOverlayDB[key] = value
+        end
+    end
+    M.load()
+    dofile("RuntimeGuards.lua")
+    local addon = _G.BloodShieldOverlay
+    M.fire("PLAYER_LOGIN")
+    return addon
+end
+
 function M.new_frame(...) return new_frame(...) end
 function M.set_combat(value) inCombat = value end
 function M.set_group(group, raid, memberCount)

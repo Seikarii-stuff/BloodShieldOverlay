@@ -81,6 +81,29 @@ case("Configuration > migration strips removed and unknown fields", function()
     check(BloodShieldOverlayProfiles[key] == config, "Configuration > cleaned profile is persisted")
 end)
 
+case("Configuration > existing profile wins over legacy DB", function()
+    local key = "Tester-Realm"
+    BloodShieldOverlayProfiles = {
+        [key] = {
+            configVersion = 8,
+            width = 42,
+            height = 200,
+            locked = false,
+        },
+    }
+    BloodShieldOverlayDB = {
+        width = 22,
+        height = 140,
+        locked = true,
+    }
+
+    local config = addon.PlayerBarConfig.Initialize()
+    check(config.width == 42, "Configuration > existing profile remains unchanged", 42, config.width)
+    check(config.height == 200, "Configuration > existing profile keeps height", 200, config.height)
+    check(config.locked == false, "Configuration > existing profile keeps lock state", false, config.locked)
+    check(BloodShieldOverlayDB == nil, "Configuration > legacy DB is cleared after existing profile check", true, BloodShieldOverlayDB == nil)
+end)
+
 case("Configuration > legacy SavedVariable migration", function()
     BloodShieldOverlayProfiles = nil
     BloodShieldOverlayDB = {
@@ -201,6 +224,28 @@ case("Configuration > SetMany notification behavior", function()
     check(ok == true, "Configuration > SetMany accepts no-op values", true, ok)
     check(#notifications == before, "Configuration > no-op SetMany emits nothing", before, #notifications)
 
+    addon.PlayerBarConfig.Unsubscribe(token)
+end)
+
+case("Configuration > SetMany updates full state before notifying listeners", function()
+    local seen = {}
+    local token = addon.PlayerBarConfig.Subscribe(function(change)
+        seen[#seen + 1] = {
+            key = change.key,
+            width = change.config.width,
+            xOffset = change.config.xOffset,
+        }
+    end)
+
+    addon.PlayerBarConfig.SetMany({ width = 29, xOffset = 350 })
+    check(#seen == 2, "Configuration > SetMany emits the changed fields only", 2, #seen)
+    for _, item in ipairs(seen) do
+        if item.key == "width" then
+            check(item.width == 29, "Configuration > listener sees updated width", 29, item.width)
+        elseif item.key == "xOffset" then
+            check(item.xOffset == 350, "Configuration > listener sees updated xOffset", 350, item.xOffset)
+        end
+    end
     addon.PlayerBarConfig.Unsubscribe(token)
 end)
 
@@ -326,13 +371,78 @@ case("Menu > refresh stays render-pure", function()
     addon.ShowConfigMenu()
     local menu = _G["BloodShieldOverlayConfig"]
     local before = addon.PlayerBarConfig.Get().width
+    local refreshCalls = 0
+    local fieldSetText = {}
+    for _, key in ipairs({ "widthEdit", "heightEdit", "targetTargetWidthEdit", "targetTargetHeightEdit", "resourcePipWidthEdit", "resourcePipHeightEdit", "pipWidthEdit", "pipHeightEdit" }) do
+        local field = menu[key]
+        if field then
+            local originalSetText = field.SetText
+            fieldSetText[key] = originalSetText
+            field.SetText = function(self, value)
+                refreshCalls = refreshCalls + 1
+                return originalSetText(self, value)
+            end
+        end
+    end
+
     menu.widthEdit:SetText("31")
     menu.widthEdit:OnEnterPressed()
     check(addon.PlayerBarConfig.Get().width == 31, "Menu > Enter changes persisted config", 31, addon.PlayerBarConfig.Get().width)
+    check(refreshCalls >= 8 and refreshCalls <= 16, "Menu > Enter performs a single UI refresh cycle", true, refreshCalls >= 8 and refreshCalls <= 16)
+
+    refreshCalls = 0
     menu.widthEdit:SetText("-1")
     menu.widthEdit:OnEditFocusLost()
     check(addon.PlayerBarConfig.Get().width == 31, "Menu > invalid focus loss restores persisted value", 31, addon.PlayerBarConfig.Get().width)
+    check(refreshCalls >= 8 and refreshCalls <= 16, "Menu > focus loss performs a single UI refresh cycle", true, refreshCalls >= 8 and refreshCalls <= 16)
     check(before ~= addon.PlayerBarConfig.Get().width or before == 31, "Menu > refresh does not mutate persisted state", true, before ~= addon.PlayerBarConfig.Get().width or before == 31)
+end)
+
+case("Regression > width survives save position", function()
+    addon.PlayerBarConfig.Set("width", 31)
+    check(addon.PlayerBarConfig.Get().width == 31, "Regression > width is updated before move", 31, addon.PlayerBarConfig.Get().width)
+
+    local bar = _G["BloodShieldOverlayBar"]
+    if bar then
+        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 120, 40)
+        local onDragStop = bar:GetScript("OnDragStop")
+        if type(onDragStop) == "function" then
+            onDragStop(bar)
+        end
+    end
+
+    check(addon.PlayerBarConfig.Get().width == 31, "Regression > width survives move/save", 31, addon.PlayerBarConfig.Get().width)
+    check(BloodShieldOverlayProfiles["Tester-Realm"].width == 31, "Regression > persisted width remains unchanged", 31, BloodShieldOverlayProfiles["Tester-Realm"].width)
+end)
+
+case("Configuration > persistence round-trip across sessions", function()
+    local profile = {
+        ["Tester-Realm"] = {
+            configVersion = 8,
+            width = 31,
+            height = 150,
+            locked = true,
+            hideExternalBar = false,
+            showClassResourceOverlay = true,
+            classResourcePipWidth = 12,
+            classResourcePipHeight = 6,
+            specialResourcePipWidth = 2,
+            specialResourcePipHeight = 10,
+            showTargetTarget = false,
+            targetTargetWidth = 130,
+            targetTargetHeight = 10,
+            targetTargetLocked = true,
+            targetTargetPoint = "CENTER",
+            targetTargetRelativePoint = "CENTER",
+            targetTargetXOffset = 0,
+            targetTargetYOffset = -140,
+            graphicsUpdateRate = 30,
+        },
+    }
+    local reloaded = wow.reset_and_load_with_profile_store(profile, nil)
+    local config = reloaded.PlayerBarConfig.Get()
+    check(config.width == 31, "Configuration > round trip loads saved width from profile", 31, config.width)
+    check(BloodShieldOverlayProfiles["Tester-Realm"].width == 31, "Configuration > profile store retains the saved width", 31, BloodShieldOverlayProfiles["Tester-Realm"].width)
 end)
 
 case("Configuration > reset restores defaults", function()

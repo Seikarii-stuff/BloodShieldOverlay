@@ -147,15 +147,22 @@ end
 local function Initialize()
     local profiles = EnsureProfileStore()
     local key = GetProfileKey()
+    local legacyValues
+
+    if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
+        legacyValues = CopySettings(BloodShieldOverlayDB)
+    end
 
     if not profiles[key] then
-        if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
-            local legacyValues = CopySettings(BloodShieldOverlayDB)
+        if legacyValues then
             profiles[key] = ApplyDefaults(legacyValues)
-            BloodShieldOverlayDB = nil
         else
             profiles[key] = {}
         end
+    end
+
+    if legacyValues ~= nil then
+        BloodShieldOverlayDB = nil
     end
 
     config = ApplyDefaults(profiles[key])

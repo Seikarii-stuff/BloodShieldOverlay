@@ -55,7 +55,6 @@ local function CommitNumericField(box, key, label, validator, defaultValue)
         Refresh()
         return false
     end
-    Refresh()
     return true
 end
 
@@ -175,7 +174,6 @@ local function CreateConfigMenu()
 end
 
 function addon.ShowConfigMenu()
-    addon.PlayerBarConfig.Initialize()
     CreateConfigMenu()
     Refresh()
     menuFrame:Show()
