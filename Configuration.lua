@@ -227,8 +227,14 @@ PlayerBarConfig.SetMany = function(values)
         if not FIELD_VALIDATORS[key](value) then
             return false
         end
-        nextState[key] = value
-        pending[#pending + 1] = { key = key, oldValue = config[key], newValue = value }
+        if nextState[key] ~= value then
+            nextState[key] = value
+            pending[#pending + 1] = { key = key, oldValue = config[key], newValue = value }
+        end
+    end
+
+    if #pending == 0 then
+        return true
     end
 
     config = nextState
@@ -247,6 +253,12 @@ PlayerBarConfig.Reset = Reset
 PlayerBarConfig.Initialize = Initialize
 PlayerBarConfig.Subscribe = function(callback)
     if type(callback) ~= "function" then return nil end
+    for _, subscriber in ipairs(subscribers) do
+        if subscriber and subscriber.callback == callback then
+            return subscriber.token
+        end
+    end
+
     subscriptionCounter = subscriptionCounter + 1
     local token = string.format("sub-%d", subscriptionCounter)
     subscribers[#subscribers + 1] = { token = token, callback = callback }
@@ -255,14 +267,15 @@ end
 
 PlayerBarConfig.Unsubscribe = function(token)
     if type(token) ~= "string" then return false end
-    for index = 1, #subscribers do
+    local removed = false
+    for index = #subscribers, 1, -1 do
         local subscriber = subscribers[index]
         if subscriber and subscriber.token == token then
             table.remove(subscribers, index)
-            return true
+            removed = true
         end
     end
-    return false
+    return removed
 end
 
 addon.PlayerBarConfig = PlayerBarConfig

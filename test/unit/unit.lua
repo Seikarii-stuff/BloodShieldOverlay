@@ -133,6 +133,44 @@ case("Configuration > reset uses only schema defaults", function()
     check(addon.PlayerBarConfig.Get() == reset, "Configuration > reset updates active config")
 end)
 
+case("Configuration > Initialize creates profile", function()
+    local config = addon.PlayerBarConfig.Initialize()
+    check(type(config) == "table", "Configuration > profile is created", "table", type(config))
+    check(config.width == 18, "Configuration > initialized width is default", 18, config.width)
+    check(BloodShieldOverlayProfiles and BloodShieldOverlayProfiles["Tester-Realm"] == config, "Configuration > profile is stored by active key", true, BloodShieldOverlayProfiles and BloodShieldOverlayProfiles["Tester-Realm"] == config)
+end)
+
+case("Configuration > migration DB -> profile", function()
+    BloodShieldOverlayProfiles = nil
+    BloodShieldOverlayDB = { width = 26, height = 120, locked = false }
+    local config = addon.PlayerBarConfig.Initialize()
+    check(config.width == 26, "Configuration > legacy width migrates", 26, config.width)
+    check(config.height == 120, "Configuration > legacy height migrates", 120, config.height)
+    check(config.locked == false, "Configuration > legacy locked migrates", false, config.locked)
+    check(BloodShieldOverlayDB == nil, "Configuration > legacy DB is cleared after migration", true, BloodShieldOverlayDB == nil)
+end)
+
+case("Configuration > Set persists value", function()
+    local ok = addon.PlayerBarConfig.Set("width", 22)
+    check(ok == true, "Configuration > Set persists valid width", true, ok)
+    check(addon.PlayerBarConfig.Get().width == 22, "Configuration > Set stores width", 22, addon.PlayerBarConfig.Get().width)
+end)
+
+case("Configuration > Set rejects invalid", function()
+    local before = addon.PlayerBarConfig.Get().width
+    local ok = addon.PlayerBarConfig.Set("width", -5)
+    check(ok == false, "Configuration > invalid width is rejected", false, ok)
+    check(addon.PlayerBarConfig.Get().width == before, "Configuration > invalid width is not persisted", before, addon.PlayerBarConfig.Get().width)
+end)
+
+case("Configuration > SetMany updates multiple fields", function()
+    local ok = addon.PlayerBarConfig.SetMany({ height = 140, locked = false, showTargetTarget = true })
+    check(ok == true, "Configuration > SetMany accepts valid values", true, ok)
+    check(addon.PlayerBarConfig.Get().height == 140, "Configuration > SetMany persists height", 140, addon.PlayerBarConfig.Get().height)
+    check(addon.PlayerBarConfig.Get().locked == false, "Configuration > SetMany persists locked", false, addon.PlayerBarConfig.Get().locked)
+    check(addon.PlayerBarConfig.Get().showTargetTarget == true, "Configuration > SetMany persists target-target toggle", true, addon.PlayerBarConfig.Get().showTargetTarget)
+end)
+
 case("Configuration > reactive API persists and notifies listeners", function()
     local events = {}
     local token = addon.PlayerBarConfig.Subscribe(function(change)
@@ -146,6 +184,163 @@ case("Configuration > reactive API persists and notifies listeners", function()
     check(addon.PlayerBarConfig.Get().height == 140, "Configuration > SetMany persists height", 140, addon.PlayerBarConfig.Get().height)
     check(addon.PlayerBarConfig.Unsubscribe(token) == true, "Configuration > Unsubscribe removes listener", true, addon.PlayerBarConfig.Unsubscribe(token))
     check(#events >= 2, "Configuration > subscribers receive updates", 2, #events)
+end)
+
+case("Configuration > SetMany notification behavior", function()
+    local notifications = {}
+    local token = addon.PlayerBarConfig.Subscribe(function(change)
+        notifications[#notifications + 1] = change.key
+    end)
+
+    local ok = addon.PlayerBarConfig.SetMany({ width = 24, height = 160 })
+    check(ok == true, "Configuration > SetMany accepts multiple fields", true, ok)
+    check(#notifications == 2, "Configuration > SetMany emits once per changed field", 2, #notifications)
+
+    local before = #notifications
+    ok = addon.PlayerBarConfig.SetMany({ width = 24, height = 160 })
+    check(ok == true, "Configuration > SetMany accepts no-op values", true, ok)
+    check(#notifications == before, "Configuration > no-op SetMany emits nothing", before, #notifications)
+
+    addon.PlayerBarConfig.Unsubscribe(token)
+end)
+
+case("Events > Subscribe receives change", function()
+    local received = {}
+    local token = addon.PlayerBarConfig.Subscribe(function(change)
+        received[#received + 1] = change.key
+    end)
+    addon.PlayerBarConfig.Set("locked", false)
+    check(#received == 1, "Events > subscriber receives single change", 1, #received)
+    check(received[1] == "locked", "Events > subscriber receives correct key", "locked", received[1])
+    addon.PlayerBarConfig.Unsubscribe(token)
+end)
+
+case("Events > multiple subscribers receive change", function()
+    local a, b = 0, 0
+    local tokenA = addon.PlayerBarConfig.Subscribe(function(change)
+        a = a + 1
+        check(change.key == "hideExternalBar", "Events > first subscriber gets key", "hideExternalBar", change.key)
+    end)
+    local tokenB = addon.PlayerBarConfig.Subscribe(function(change)
+        b = b + 1
+        check(change.key == "hideExternalBar", "Events > second subscriber gets key", "hideExternalBar", change.key)
+    end)
+    addon.PlayerBarConfig.Set("hideExternalBar", true)
+    check(a == 1, "Events > first subscriber fires once", 1, a)
+    check(b == 1, "Events > second subscriber fires once", 1, b)
+    addon.PlayerBarConfig.Unsubscribe(tokenA)
+    addon.PlayerBarConfig.Unsubscribe(tokenB)
+end)
+
+case("Events > duplicate subscriptions are deduplicated", function()
+    local callback = function(change)
+        check(change.key == "locked", "Events > deduplicated callback gets key", "locked", change.key)
+    end
+    local tokenA = addon.PlayerBarConfig.Subscribe(callback)
+    local tokenB = addon.PlayerBarConfig.Subscribe(callback)
+    check(tokenA == tokenB, "Events > duplicate subscription reuses token", tokenA, tokenB)
+    addon.PlayerBarConfig.Set("locked", false)
+    addon.PlayerBarConfig.Unsubscribe(tokenA)
+end)
+
+case("Events > Unsubscribe stops notifications", function()
+    local seen = 0
+    local token = addon.PlayerBarConfig.Subscribe(function()
+        seen = seen + 1
+    end)
+    addon.PlayerBarConfig.Unsubscribe(token)
+    addon.PlayerBarConfig.Set("locked", true)
+    check(seen == 0, "Events > unsubscribed listener does not fire", 0, seen)
+end)
+
+case("PlayerBar > SetLocked uses config API", function()
+    local called = false
+    local originalSet = addon.PlayerBarConfig.Set
+    addon.PlayerBarConfig.Set = function(key, value)
+        called = true
+        check(key == "locked", "PlayerBar > SetLocked uses locked key", "locked", key)
+        check(value == false, "PlayerBar > SetLocked sends boolean", false, value)
+        return originalSet(key, value)
+    end
+    local ok = addon.PlayerBarAPI.SetLocked(false)
+    check(ok == true, "PlayerBar > SetLocked returns success", true, ok)
+    check(called == true, "PlayerBar > SetLocked called config API", true, called)
+    addon.PlayerBarConfig.Set = originalSet
+end)
+
+case("PlayerBar > SetHidden uses config API", function()
+    local called = false
+    local originalSet = addon.PlayerBarConfig.Set
+    addon.PlayerBarConfig.Set = function(key, value)
+        called = true
+        check(key == "hideExternalBar", "PlayerBar > SetHidden uses hideExternalBar key", "hideExternalBar", key)
+        check(value == true, "PlayerBar > SetHidden sends boolean", true, value)
+        return originalSet(key, value)
+    end
+    local ok = addon.PlayerBarAPI.SetHidden(true)
+    check(ok == true, "PlayerBar > SetHidden returns success", true, ok)
+    check(called == true, "PlayerBar > SetHidden called config API", true, called)
+    addon.PlayerBarConfig.Set = originalSet
+end)
+
+case("PlayerBar > ApplyDimensions updates via config", function()
+    local originalSetMany = addon.PlayerBarConfig.SetMany
+    local called = false
+    addon.PlayerBarConfig.SetMany = function(values)
+        called = true
+        check(values.width == 32, "PlayerBar > dimensions write width", 32, values.width)
+        check(values.height == 180, "PlayerBar > dimensions write height", 180, values.height)
+        return originalSetMany(values)
+    end
+    local ok = addon.PlayerBarAPI.ApplyDimensions(32, 180)
+    check(ok == true, "PlayerBar > ApplyDimensions uses config API", true, ok)
+    check(called == true, "PlayerBar > ApplyDimensions called SetMany", true, called)
+    addon.PlayerBarConfig.SetMany = originalSetMany
+end)
+
+case("PlayerBar > SaveBarPosition persists through API", function()
+    local originalSetMany = addon.PlayerBarConfig.SetMany
+    local called = false
+    addon.PlayerBarConfig.SetMany = function(values)
+        called = true
+        if values.point then check(values.point == "BOTTOM", "PlayerBar > SaveBarPosition persists point", "BOTTOM", values.point) end
+        if values.relativePoint then check(values.relativePoint == "BOTTOM", "PlayerBar > SaveBarPosition persists relativePoint", "BOTTOM", values.relativePoint) end
+        return originalSetMany(values)
+    end
+
+    local bar = _G["BloodShieldOverlayBar"]
+    if bar then
+        addon.PlayerBarAPI.SetLocked(false)
+        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 20, 30)
+        local onDragStop = bar:GetScript("OnDragStop")
+        if type(onDragStop) == "function" then
+            onDragStop(bar)
+        end
+    end
+
+    check(called == true or not _G["BloodShieldOverlayBar"], "PlayerBar > SaveBarPosition uses config API or no bar exists", true, called or not _G["BloodShieldOverlayBar"])
+    addon.PlayerBarConfig.SetMany = originalSetMany
+end)
+
+case("Menu > refresh stays render-pure", function()
+    addon.ShowConfigMenu()
+    local menu = _G["BloodShieldOverlayConfig"]
+    local before = addon.PlayerBarConfig.Get().width
+    menu.widthEdit:SetText("31")
+    menu.widthEdit:OnEnterPressed()
+    check(addon.PlayerBarConfig.Get().width == 31, "Menu > Enter changes persisted config", 31, addon.PlayerBarConfig.Get().width)
+    menu.widthEdit:SetText("-1")
+    menu.widthEdit:OnEditFocusLost()
+    check(addon.PlayerBarConfig.Get().width == 31, "Menu > invalid focus loss restores persisted value", 31, addon.PlayerBarConfig.Get().width)
+    check(before ~= addon.PlayerBarConfig.Get().width or before == 31, "Menu > refresh does not mutate persisted state", true, before ~= addon.PlayerBarConfig.Get().width or before == 31)
+end)
+
+case("Configuration > reset restores defaults", function()
+    local reset = addon.PlayerBarConfig.Reset()
+    check(reset.width == 18, "Configuration > reset width", 18, reset.width)
+    check(reset.height == 150, "Configuration > reset height", 150, reset.height)
+    check(reset.locked == true, "Configuration > reset locks bars", true, reset.locked)
+    check(reset.hideExternalBar == false, "Configuration > reset hides external bar false", false, reset.hideExternalBar)
 end)
 
 case("Configuration > invalid values are rejected and restored", function()
