@@ -1,11 +1,10 @@
 -- Central /shield configuration UI.
--- Numeric fields are staged and committed with Apply ALL. Checkboxes are immediate.
+-- All values are written through the shared configuration API and reflect immediately.
 
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 local menuFrame
-local config
 local Refresh
 
 local function Label(parent, text, font)
@@ -32,8 +31,6 @@ local function SetAllBarsLocked(locked)
     locked = locked == true
     if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetLocked) == "function" then addon.PlayerBarAPI.SetLocked(locked) end
     if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.SetLocked) == "function" then addon.TargetTargetBarAPI.SetLocked(locked) end
-    config.locked = locked
-    config.targetTargetLocked = locked
 end
 
 local function ResetBarEditState()
@@ -43,46 +40,30 @@ local function ResetBarEditState()
     end
 end
 
-local function ApplyMainBar()
-    local width = tonumber(menuFrame.widthEdit:GetText())
-    local height = tonumber(menuFrame.heightEdit:GetText())
-    if not width or width <= 0 or not height or height <= 0 then
-        print("BloodShieldOverlay: width and height must be positive numbers.")
+local function CommitNumericField(box, key, label, validator, defaultValue)
+    if not box then return false end
+    local value = tonumber(box:GetText())
+    if value == nil or (validator and not validator(value)) then
+        print("BloodShieldOverlay: " .. label .. " must be valid; restoring the saved value.")
+        Refresh()
         return false
     end
-    return addon.PlayerBarAPI and type(addon.PlayerBarAPI.ApplyDimensions) == "function"
-        and addon.PlayerBarAPI.ApplyDimensions(width, height) == true
-end
 
-local function ApplyTargetTarget()
-    local width = tonumber(menuFrame.targetTargetWidthEdit:GetText())
-    local height = tonumber(menuFrame.targetTargetHeightEdit:GetText())
-    if not width or width <= 0 or not height or height <= 0 then return false end
-    return addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.ApplySize) == "function" and addon.TargetTargetBarAPI.ApplySize(width, height) == true
-end
-
-local function ApplyPips()
-    local rw = tonumber(menuFrame.resourcePipWidthEdit:GetText())
-    local rh = tonumber(menuFrame.resourcePipHeightEdit:GetText())
-    local gw = tonumber(menuFrame.pipWidthEdit:GetText())
-    local gh = tonumber(menuFrame.pipHeightEdit:GetText())
-    if not rw or not rh or not gw or not gh then return false end
-    local ok = true
-    if type(addon.SetSpecialResourcePipSize) == "function" then ok = addon.SetSpecialResourcePipSize(rw, rh) == true and ok end
-    if type(addon.SetClassResourceOverlayPipSize) == "function" then ok = addon.SetClassResourceOverlayPipSize(gw, gh) == true and ok end
-    return ok
-end
-
-local function ApplyAll()
-    local okMain = ApplyMainBar()
-    local okTarget = ApplyTargetTarget()
-    local okPips = ApplyPips()
-    if okMain and okTarget and okPips then print("BloodShieldOverlay: size settings applied.") else print("BloodShieldOverlay: one or more size settings could not be applied.") end
+    local ok = addon.PlayerBarConfig.Set(key, value)
+    if not ok then
+        print("BloodShieldOverlay: invalid " .. label .. " value; restoring the saved setting.")
+        Refresh()
+        return false
+    end
     Refresh()
+    return true
 end
 
 Refresh = function()
-    if not menuFrame or not config then return end
+    if not menuFrame then return end
+    local config = addon.PlayerBarConfig.Get()
+    if not config then return end
+
     menuFrame.widthEdit:SetText(tostring(config.width or 18))
     menuFrame.heightEdit:SetText(tostring(config.height or 150))
     menuFrame.targetTargetWidthEdit:SetText(tostring(config.targetTargetWidth or 130))
@@ -95,7 +76,7 @@ Refresh = function()
     menuFrame.visibilityCheck:SetChecked(config.hideExternalBar == true)
     menuFrame.classOverlayCheck:SetChecked(config.showClassResourceOverlay ~= false)
     menuFrame.targetTargetCheck:SetChecked(config.showTargetTarget == true)
-    menuFrame.unlockButton:SetText("Unlock bars")
+    menuFrame.unlockButton:SetText(config.locked == false and "Lock bars" or "Unlock bars")
 end
 
 local function CreateConfigMenu()
@@ -114,10 +95,14 @@ local function CreateConfigMenu()
     menuFrame:SetScript("OnHide", ResetBarEditState)
 
     Label(menuFrame, "BloodShieldOverlay", "GameFontHighlightLarge"):SetPoint("TOP", 0, -18)
-    Label(menuFrame, "Width / height fields below are staged until Apply ALL. Checkboxes apply instantly.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
+    Label(menuFrame, "Values update immediately and persist to the active profile.", "GameFontNormalSmall"):SetPoint("TOP", 0, -42)
 
     local y = -70
-    local function row(step) local current = y; y = y - (step or 30); return current end
+    local function row(step)
+        local current = y
+        y = y - (step or 30)
+        return current
+    end
     local function SizeRow(text, widthBox, heightBox)
         local ry = row(32)
         Label(menuFrame, text):SetPoint("TOPLEFT", 28, ry)
@@ -127,12 +112,31 @@ local function CreateConfigMenu()
 
     menuFrame.widthEdit, menuFrame.heightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Main bar Width / Height", menuFrame.widthEdit, menuFrame.heightEdit)
+    menuFrame.widthEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "width", "Main bar width", function(value) return type(value) == "number" and value > 0 end, 18) end)
+    menuFrame.heightEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "height", "Main bar height", function(value) return type(value) == "number" and value > 0 end, 150) end)
+    menuFrame.widthEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "width", "Main bar width", function(value) return type(value) == "number" and value > 0 end, 18) end)
+    menuFrame.heightEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "height", "Main bar height", function(value) return type(value) == "number" and value > 0 end, 150) end)
+
     menuFrame.targetTargetWidthEdit, menuFrame.targetTargetHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Target of Target Width / Height", menuFrame.targetTargetWidthEdit, menuFrame.targetTargetHeightEdit)
+    menuFrame.targetTargetWidthEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "targetTargetWidth", "Target of target width", function(value) return type(value) == "number" and value > 0 end, 130) end)
+    menuFrame.targetTargetHeightEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "targetTargetHeight", "Target of target height", function(value) return type(value) == "number" and value > 0 end, 10) end)
+    menuFrame.targetTargetWidthEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "targetTargetWidth", "Target of target width", function(value) return type(value) == "number" and value > 0 end, 130) end)
+    menuFrame.targetTargetHeightEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "targetTargetHeight", "Target of target height", function(value) return type(value) == "number" and value > 0 end, 10) end)
+
     menuFrame.resourcePipWidthEdit, menuFrame.resourcePipHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Special Resource Width / Height", menuFrame.resourcePipWidthEdit, menuFrame.resourcePipHeightEdit)
+    menuFrame.resourcePipWidthEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "specialResourcePipWidth", "Special resource width", function(value) return type(value) == "number" and value >= 2 and value <= 20 end, 2) end)
+    menuFrame.resourcePipHeightEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "specialResourcePipHeight", "Special resource height", function(value) return type(value) == "number" and value >= 2 and value <= 32 end, 10) end)
+    menuFrame.resourcePipWidthEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "specialResourcePipWidth", "Special resource width", function(value) return type(value) == "number" and value >= 2 and value <= 20 end, 2) end)
+    menuFrame.resourcePipHeightEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "specialResourcePipHeight", "Special resource height", function(value) return type(value) == "number" and value >= 2 and value <= 32 end, 10) end)
+
     menuFrame.pipWidthEdit, menuFrame.pipHeightEdit = Input(menuFrame), Input(menuFrame)
     SizeRow("Group Resource Width / Height", menuFrame.pipWidthEdit, menuFrame.pipHeightEdit)
+    menuFrame.pipWidthEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "classResourcePipWidth", "Group resource width", function(value) return type(value) == "number" and value >= 4 and value <= 32 end, 12) end)
+    menuFrame.pipHeightEdit:SetScript("OnEnterPressed", function(self) CommitNumericField(self, "classResourcePipHeight", "Group resource height", function(value) return type(value) == "number" and value >= 2 and value <= 20 end, 6) end)
+    menuFrame.pipWidthEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "classResourcePipWidth", "Group resource width", function(value) return type(value) == "number" and value >= 4 and value <= 32 end, 12) end)
+    menuFrame.pipHeightEdit:SetScript("OnEditFocusLost", function(self) CommitNumericField(self, "classResourcePipHeight", "Group resource height", function(value) return type(value) == "number" and value >= 2 and value <= 20 end, 6) end)
 
     local function AddCheck(text, callback)
         local ry = row(27)
@@ -142,48 +146,37 @@ local function CreateConfigMenu()
     end
 
     menuFrame.visibilityCheck = AddCheck("Hide external bar", function(self)
-        config.hideExternalBar = self:GetChecked()
-        if addon.PlayerBarAPI and type(addon.PlayerBarAPI.SetHidden) == "function" then addon.PlayerBarAPI.SetHidden(config.hideExternalBar) end
+        addon.PlayerBarConfig.Set("hideExternalBar", self:GetChecked())
     end)
     menuFrame.classOverlayCheck = AddCheck("Show group resource overlay", function(self)
-        config.showClassResourceOverlay = self:GetChecked()
-        if type(addon.SetClassResourceOverlayEnabled) == "function" then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
+        addon.PlayerBarConfig.Set("showClassResourceOverlay", self:GetChecked())
     end)
     menuFrame.targetTargetCheck = AddCheck("Show target of target frame (target something to see it)", function(self)
-        config.showTargetTarget = self:GetChecked()
-        if addon.TargetTargetBarAPI and type(addon.TargetTargetBarAPI.Enable) == "function" then addon.TargetTargetBarAPI.Enable(config.showTargetTarget) end
+        addon.PlayerBarConfig.Set("showTargetTarget", self:GetChecked())
     end)
 
     local actionY = row(36)
-    local apply = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
-    apply:SetSize(120, 26)
-    apply:SetPoint("TOPLEFT", 24, actionY)
-    apply:SetText("Apply ALL")
-    apply:SetScript("OnClick", ApplyAll)
-    menuFrame.applyButton = apply
-
     local unlock = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     unlock:SetSize(120, 26)
-    unlock:SetPoint("TOPLEFT", 154, actionY)
+    unlock:SetPoint("TOPLEFT", 24, actionY)
     unlock:SetText("Unlock bars")
     unlock:SetScript("OnClick", function(self)
-        local lockedNow = config.locked ~= false
+        local lockedNow = addon.PlayerBarConfig.Get().locked ~= false
         SetAllBarsLocked(not lockedNow)
-        self:SetText(config.locked == false and "Lock bars" or "Unlock bars")
+        self:SetText(addon.PlayerBarConfig.Get().locked == false and "Lock bars" or "Unlock bars")
     end)
     menuFrame.unlockButton = unlock
 
     local close = CreateFrame("Button", nil, menuFrame, "UIPanelButtonTemplate")
     close:SetSize(100, 26)
-    close:SetPoint("TOPLEFT", 284, actionY)
+    close:SetPoint("TOPLEFT", 154, actionY)
     close:SetText("Close")
     close:SetScript("OnClick", function() menuFrame:Hide() end)
 end
 
 function addon.ShowConfigMenu()
-    config = addon.PlayerBarConfig.Initialize()
+    addon.PlayerBarConfig.Initialize()
     CreateConfigMenu()
-    ResetBarEditState()
     Refresh()
     menuFrame:Show()
 end
@@ -191,4 +184,6 @@ end
 addon.MenuAPI = addon.MenuAPI or {}
 addon.MenuAPI.ShowConfigMenu = function() addon.ShowConfigMenu() end
 
-addon.RegisterInitializer(function() config = addon.PlayerBarConfig.Initialize() end)
+addon.PlayerBarConfig.Subscribe(function()
+    if menuFrame then Refresh() end
+end)

@@ -18,7 +18,9 @@ end
 local function SetGraphicsRate(config, rate)
     rate = tonumber(rate)
     if rate ~= 30 and rate ~= 60 then return end
-    config.graphicsUpdateRate = rate
+    if addon.PlayerBarConfig and type(addon.PlayerBarConfig.Set) == "function" then
+        addon.PlayerBarConfig.Set("graphicsUpdateRate", rate)
+    end
     if addon.SetGraphicsUpdateRate then addon.SetGraphicsUpdateRate(rate) end
 end
 

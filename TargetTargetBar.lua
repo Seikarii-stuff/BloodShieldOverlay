@@ -1,13 +1,11 @@
 -- Minimal healer target-of-target bar.
--- Midnight secret values are passed directly to Blizzard UI APIs.
--- Secret health/name values are never compared, converted, formatted, or inspected.
 -- The frame is a SecureUnitButton; click interaction remains intentionally disabled for now.
 local addon = _G.BloodShieldOverlay or {}
 _G.BloodShieldOverlay = addon
 
 local UNIT = "targettarget"
 local W, H = 130, 10
-local frame, bar, nameText, config
+local frame, bar, nameText
 local pendingLocked
 local pendingEnable
 local CreateFrame = CreateFrame
@@ -20,7 +18,12 @@ local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
 local C_ClassColor = C_ClassColor
 
+local function CurrentConfig()
+    return addon.PlayerBarConfig.Get()
+end
+
 local function UpdateVisuals()
+    local config = CurrentConfig()
     if not frame or not bar or not nameText or not config or not config.showTargetTarget then return end
     nameText:SetText(UnitName(UNIT))
     local _, classFilename = UnitClass(UNIT)
@@ -35,6 +38,7 @@ local function UpdateVisuals()
 end
 
 local function UpdateHealth()
+    local config = CurrentConfig()
     if not frame or not bar or not config or not config.showTargetTarget then return end
     bar:SetMinMaxValues(0, UnitHealthMax(UNIT))
     bar:SetValue(UnitHealth(UNIT))
@@ -46,10 +50,15 @@ local function Update()
 end
 
 local function SavePosition()
+    if not frame then return end
     local p, _, rp, x, y = frame:GetPoint()
     if type(p) == "string" and type(rp) == "string" and type(x) == "number" and type(y) == "number" then
-        config.targetTargetPoint, config.targetTargetRelativePoint = p, rp
-        config.targetTargetXOffset, config.targetTargetYOffset = x, y
+        addon.PlayerBarConfig.SetMany({
+            targetTargetPoint = p,
+            targetTargetRelativePoint = rp,
+            targetTargetXOffset = x,
+            targetTargetYOffset = y,
+        })
     end
 end
 
@@ -61,7 +70,10 @@ local function SetLocked(locked)
     end
 
     pendingLocked = nil
-    config.targetTargetLocked = locked
+    local didSet = addon.PlayerBarConfig.Set("targetTargetLocked", locked)
+    if not didSet then return false end
+
+    local config = CurrentConfig()
     frame:SetMovable(not config.targetTargetLocked)
     frame:EnableMouse(true)
     if config.targetTargetLocked then
@@ -84,6 +96,7 @@ local function SetLocked(locked)
 end
 
 local function Create()
+    local config = CurrentConfig()
     if frame or InCombatLockdown() then return frame ~= nil end
 
     frame = CreateFrame("Button", "BloodShieldOverlayTargetTargetBar", UIParent, "SecureUnitButtonTemplate")
@@ -139,9 +152,10 @@ local function Enable(show)
     end
 
     pendingEnable = nil
-    config.showTargetTarget = show
+    local result = addon.PlayerBarConfig.Set("showTargetTarget", show)
+    if not result then return false end
 
-    if not config.showTargetTarget then
+    if not CurrentConfig().showTargetTarget then
         if frame and UnregisterUnitWatch then UnregisterUnitWatch(frame) end
         if frame then frame:Hide() end
         return true
@@ -159,12 +173,60 @@ end
 local function ApplySize(width, height)
     if type(width) ~= "number" or type(height) ~= "number" or width <= 0 or height <= 0 then return false end
     if InCombatLockdown() then return false end
-    config.targetTargetWidth, config.targetTargetHeight = width, height
+    local result = addon.PlayerBarConfig.SetMany({ targetTargetWidth = width, targetTargetHeight = height })
+    if not result then return false end
     if frame then
         frame:SetSize(width, height)
         if nameText then nameText:SetWidth(math_max(1, width - 4)) end
     end
     return true
+end
+
+local function HandleConfigChange(change)
+    if not change or not change.key then return end
+    local config = CurrentConfig()
+    if change.key == "showTargetTarget" then
+        if not config.showTargetTarget then
+            if frame and UnregisterUnitWatch then UnregisterUnitWatch(frame) end
+            if frame then frame:Hide() end
+            return
+        end
+        if not frame then
+            Create()
+        end
+        if frame and RegisterUnitWatch then RegisterUnitWatch(frame) end
+        Update()
+    elseif change.key == "targetTargetWidth" or change.key == "targetTargetHeight" then
+        if frame then
+            frame:SetSize(config.targetTargetWidth, config.targetTargetHeight)
+            if nameText then nameText:SetWidth(math_max(1, config.targetTargetWidth - 4)) end
+        end
+    elseif change.key == "targetTargetLocked" then
+        if frame then
+            frame:SetMovable(not config.targetTargetLocked)
+            if config.targetTargetLocked then
+                frame:RegisterForDrag()
+                frame:SetScript("OnDragStart", nil)
+                frame:SetScript("OnDragStop", nil)
+            else
+                frame:RegisterForDrag("LeftButton")
+                frame:SetScript("OnDragStart", function(self)
+                    if not InCombatLockdown() then self:StartMoving() end
+                end)
+                frame:SetScript("OnDragStop", function(self)
+                    if not InCombatLockdown() then
+                        self:StopMovingOrSizing()
+                        SavePosition()
+                    end
+                end)
+            end
+        end
+    elseif change.key == "targetTargetPoint" or change.key == "targetTargetRelativePoint" or change.key == "targetTargetXOffset" or change.key == "targetTargetYOffset" then
+        if frame then
+            frame:ClearAllPoints()
+            frame:SetPoint(config.targetTargetPoint, UIParent, config.targetTargetRelativePoint, config.targetTargetXOffset, config.targetTargetYOffset)
+        end
+    end
 end
 
 local events = CreateFrame("Frame")
@@ -210,17 +272,9 @@ addon.TargetTargetBarAPI = {
 }
 
 addon.RegisterTargetTargetUpdateListener(Update)
+addon.PlayerBarConfig.Subscribe(HandleConfigChange)
 
 addon.RegisterInitializer(function()
-    config = addon.PlayerBarConfig.Initialize()
-    config.showTargetTarget = config.showTargetTarget == true
-    config.targetTargetWidth = config.targetTargetWidth or W
-    config.targetTargetHeight = config.targetTargetHeight or H
-    config.targetTargetLocked = config.targetTargetLocked ~= false
-    config.targetTargetPoint = config.targetTargetPoint or "CENTER"
-    config.targetTargetRelativePoint = config.targetTargetRelativePoint or "CENTER"
-    config.targetTargetXOffset = config.targetTargetXOffset or 0
-    config.targetTargetYOffset = config.targetTargetYOffset or -140
-
+    local config = addon.PlayerBarConfig.Initialize()
     if config.showTargetTarget then Create() end
 end)

@@ -28,7 +28,7 @@ function addon.SetGraphicsUpdateRate(value)
 end
 
 function addon.InitializeGraphicsSettings(config)
-    rate = NormalizeRate(config and config.graphicsUpdateRate)
-    if config then config.graphicsUpdateRate = rate end
+    local resolved = NormalizeRate(config and config.graphicsUpdateRate or DEFAULT_RATE)
+    rate = resolved
     return rate
 end

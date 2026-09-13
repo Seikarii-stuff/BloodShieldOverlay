@@ -133,6 +133,49 @@ case("Configuration > reset uses only schema defaults", function()
     check(addon.PlayerBarConfig.Get() == reset, "Configuration > reset updates active config")
 end)
 
+case("Configuration > reactive API persists and notifies listeners", function()
+    local events = {}
+    local token = addon.PlayerBarConfig.Subscribe(function(change)
+        events[#events + 1] = { key = change.key, value = change.newValue }
+    end)
+    local ok = addon.PlayerBarConfig.Set("width", 22)
+    check(ok == true, "Configuration > Set accepts valid width", true, ok)
+    check(addon.PlayerBarConfig.Get().width == 22, "Configuration > Set persists width", 22, addon.PlayerBarConfig.Get().width)
+    ok = addon.PlayerBarConfig.SetMany({ height = 140, locked = false })
+    check(ok == true, "Configuration > SetMany accepts valid values", true, ok)
+    check(addon.PlayerBarConfig.Get().height == 140, "Configuration > SetMany persists height", 140, addon.PlayerBarConfig.Get().height)
+    check(addon.PlayerBarConfig.Unsubscribe(token) == true, "Configuration > Unsubscribe removes listener", true, addon.PlayerBarConfig.Unsubscribe(token))
+    check(#events >= 2, "Configuration > subscribers receive updates", 2, #events)
+end)
+
+case("Configuration > invalid values are rejected and restored", function()
+    local prior = addon.PlayerBarConfig.Get().width
+    local ok = addon.PlayerBarConfig.Set("width", -5)
+    check(ok == false, "Configuration > invalid width is rejected", false, ok)
+    check(addon.PlayerBarConfig.Get().width == prior, "Configuration > invalid width is not persisted", prior, addon.PlayerBarConfig.Get().width)
+end)
+
+case("Menu > edit boxes commit on enter and focus loss", function()
+    addon.ShowConfigMenu()
+    local menu = _G["BloodShieldOverlayConfig"]
+    menu.widthEdit:SetText("25")
+    menu.widthEdit:OnEnterPressed()
+    check(addon.PlayerBarConfig.Get().width == 25, "Menu > Enter applies width", 25, addon.PlayerBarConfig.Get().width)
+    menu.heightEdit:SetText("-2")
+    menu.heightEdit:OnEditFocusLost()
+    check(addon.PlayerBarConfig.Get().height ~= -2, "Menu > invalid focus loss restores persisted value", false, addon.PlayerBarConfig.Get().height == -2)
+end)
+
+case("Regression > width survives move after change", function()
+    addon.PlayerBarConfig.Set("width", 24)
+    local bar = _G["BloodShieldOverlayBar"]
+    if bar then
+        bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 80, 120)
+        bar:SetSize(24, addon.PlayerBarConfig.Get().height)
+    end
+    check(addon.PlayerBarConfig.Get().width == 24, "Regression > width remains after move", 24, addon.PlayerBarConfig.Get().width)
+end)
+
 case("PlayerBar > fixed behavior has no config dependency", function()
     local config = addon.PlayerBarConfig.Get()
     check(config.capMultiplier == nil, "PlayerBar > cap is not persisted")

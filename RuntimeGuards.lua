@@ -6,6 +6,7 @@ if not addon then return end
 
 local MIN_MOUSE_COOLDOWN_SIZE = 4
 local MAX_MOUSE_COOLDOWN_SIZE = 24
+local mouseCooldownPipSize = 12
 
 local function ClampMouseCooldownPipSize(value)
     value = tonumber(value)
@@ -15,22 +16,10 @@ local function ClampMouseCooldownPipSize(value)
     return value
 end
 
-local function GetConfig()
-    local playerBarConfig = addon.PlayerBarConfig
-    if not playerBarConfig then return nil end
-    if type(playerBarConfig.Get) == "function" then
-        return playerBarConfig.Get()
-    end
-    return nil
-end
-
 function addon.SetMouseCooldownPipSize(value)
     local size = ClampMouseCooldownPipSize(value)
     if not size then return false end
-
-    local config = GetConfig()
-    if not config then return false end
-    config.mouseCooldownPipSize = size
+    mouseCooldownPipSize = size
     return true
 end
 
@@ -40,10 +29,9 @@ local function WrapMouseCooldownRefresh()
     if type(originalRefreshMouseCooldowns) ~= "function" then return false end
 
     addon.RefreshMouseCooldowns = function(...)
-        local config = GetConfig()
-        if config then
-            local size = ClampMouseCooldownPipSize(config.mouseCooldownPipSize)
-            if size then config.mouseCooldownPipSize = size end
+        local size = ClampMouseCooldownPipSize(mouseCooldownPipSize)
+        if size then
+            mouseCooldownPipSize = size
         end
         return originalRefreshMouseCooldowns(...)
     end
