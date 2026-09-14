@@ -18,7 +18,9 @@ end
 local function SetGraphicsRate(config, rate)
     rate = tonumber(rate)
     if rate ~= 30 and rate ~= 60 then return end
-    config.graphicsUpdateRate = rate
+    if addon.PlayerBarConfig and type(addon.PlayerBarConfig.Set) == "function" then
+        addon.PlayerBarConfig.Set("graphicsUpdateRate", rate)
+    end
     if addon.SetGraphicsUpdateRate then addon.SetGraphicsUpdateRate(rate) end
 end
 
@@ -31,7 +33,7 @@ local function CreatePerformanceControls(panel)
     description:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     description:SetText("Non-realtime addon visuals only")
 
-    local config = addon.PlayerBarConfig.Initialize()
+    local config = addon.PlayerBarConfig.Get()
     local rate30 = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
     rate30:SetPoint("TOPLEFT", 16, -178)
     rate30.Text:SetText("30 FPS")

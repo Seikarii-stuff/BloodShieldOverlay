@@ -22,20 +22,16 @@ local TICK_FRACTIONS = { 0.33, 0.66 }
 local RESOURCE_THRESHOLDS = { 0.28, 0.56 }
 local RESOURCE_BAR_WIDTH = 8
 local MAX_SPECIAL_CIRCLES = 7
-
--- These are implementation constants, not user configuration. They must never
--- be loaded from or written to SavedVariables.
 local SHIELD_CAP_MULTIPLIER = 1.0
-local SHOW_HEALTH = true
-local SHOW_SPECIAL_RESOURCES = true
-local RESOURCE_DISPLAY = "left"
 
 local _, playerClass = UnitClass("player")
 local powerTypes = Enum and Enum.PowerType
 local DEFAULTS = addon.PlayerBarConfig.GetDefaults()
-local config = {}
 
-local UpdateBar
+local function CurrentConfig()
+    local config = addon.PlayerBarConfig and addon.PlayerBarConfig.Get and addon.PlayerBarConfig.Get() or nil
+    return config or DEFAULTS
+end
 
 local function GetAbsorbAmount(unit)
     if UnitGetTotalAbsorbs then return UnitGetTotalAbsorbs(unit) or 0 end
@@ -45,13 +41,14 @@ end
 local function SaveBarPosition()
     if not bar then return end
     local point, _, relativePoint, xOffset, yOffset = bar:GetPoint()
-    if type(point) ~= "string" or type(relativePoint) ~= "string"
-        or type(xOffset) ~= "number" or type(yOffset) ~= "number" then return end
-    config.point, config.relativePoint = point, relativePoint
-    config.xOffset, config.yOffset = xOffset, yOffset
+    if type(point) ~= "string" or type(relativePoint) ~= "string" or type(xOffset) ~= "number" or type(yOffset) ~= "number" then
+        return
+    end
+    addon.PlayerBarConfig.SetMany({ point = point, relativePoint = relativePoint, xOffset = xOffset, yOffset = yOffset })
 end
 
 local function UpdateBarLock()
+    local config = CurrentConfig()
     if not bar then return end
     bar:EnableMouse(not config.locked)
     bar:SetMovable(not config.locked)
@@ -74,11 +71,13 @@ local function UpdateTickMarks()
     local totalHeight = bar:GetHeight()
     for _, fraction in ipairs(TICK_FRACTIONS) do
         local tick = tickLines[fraction]
-        local yOffset = totalHeight * (fraction / SHIELD_CAP_MULTIPLIER)
-        tick:ClearAllPoints()
-        tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
-        tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
-        tick:Show()
+        if tick then
+            local yOffset = totalHeight * (fraction / SHIELD_CAP_MULTIPLIER)
+            tick:ClearAllPoints()
+            tick:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, yOffset - 1)
+            tick:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, yOffset - 1)
+            tick:Show()
+        end
     end
 end
 
@@ -108,6 +107,7 @@ end
 local specialResourceProvider = addon.GetSpecialResourceProvider(playerClass, powerTypes)
 
 local function UpdateSpecialResourcesLayout()
+    local config = CurrentConfig()
     if not specialResourceContainer then return end
     if config.hideExternalBar then
         specialResourceContainer:Hide()
@@ -141,6 +141,7 @@ local function UpdateSpecialResourcesLayout()
 end
 
 local function UpdateSpecialResources()
+    local config = CurrentConfig()
     if not specialResourceContainer then return end
     if config.hideExternalBar then
         UpdateSpecialResourcesLayout()
@@ -161,9 +162,7 @@ addon.UpdateSpecialResources = UpdateSpecialResources
 function addon.SetSpecialResourcePipSize(width, height)
     if type(width) ~= "number" or type(height) ~= "number" then return false end
     if width < 2 or width > 20 or height < 2 or height > 32 then return false end
-    config.specialResourcePipWidth, config.specialResourcePipHeight = width, height
-    UpdateSpecialResourcesLayout()
-    return true
+    return addon.PlayerBarConfig.SetMany({ specialResourcePipWidth = width, specialResourcePipHeight = height })
 end
 
 function addon.SetPlayerBarDimensions(width, height)
@@ -172,10 +171,7 @@ function addon.SetPlayerBarDimensions(width, height)
         print("BloodShieldOverlay: width and height must be positive numbers.")
         return false
     end
-    config.width, config.height = width, height
-    if bar then bar:SetSize(width, height) end
-    UpdateBar()
-    return true
+    return addon.PlayerBarConfig.SetMany({ width = width, height = height })
 end
 
 local function CreateSpecialResources()
@@ -210,6 +206,7 @@ end
 
 local function CreateBar()
     if bar then return end
+    local config = CurrentConfig()
     bar = CreateFrame("StatusBar", "BloodShieldOverlayBar", UIParent)
     bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
     bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
@@ -261,6 +258,7 @@ local function CreateBar()
 end
 
 local function UpdateExternalBarVisibility()
+    local config = CurrentConfig()
     if not bar then return end
     if config.hideExternalBar then
         bar:Hide()
@@ -272,7 +270,10 @@ local function UpdateExternalBarVisibility()
     end
 end
 
+local UpdateBar
+
 UpdateBar = function(absorb, maxHP)
+    local config = CurrentConfig()
     if not bar then CreateBar() end
     if not bar then return end
     if config.hideExternalBar then
@@ -306,23 +307,19 @@ UpdateBar = function(absorb, maxHP)
 end
 
 addon.PlayerBarAPI = {
-    IsLocked = function() return config.locked end,
+    IsLocked = function() return CurrentConfig().locked end,
     SetLocked = function(locked)
-        config.locked = locked == true
-        if not bar then CreateBar() end
-        UpdateBarLock()
+        return addon.PlayerBarConfig.Set("locked", locked == true)
     end,
     SetHidden = function(hidden)
-        config.hideExternalBar = hidden == true
-        if not bar then CreateBar() end
-        UpdateExternalBarVisibility()
-        if not hidden then UpdateBar() end
+        return addon.PlayerBarConfig.Set("hideExternalBar", hidden == true)
     end,
     ApplyDimensions = function(width, height)
         return addon.SetPlayerBarDimensions(width, height)
     end,
     Reset = function()
-        config = addon.PlayerBarConfig.Reset()
+        addon.PlayerBarConfig.Reset()
+        local config = CurrentConfig()
         if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
         if addon.SetClassResourceOverlayPipSize then addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight) end
         if bar then
@@ -336,11 +333,35 @@ addon.PlayerBarAPI = {
     end,
 }
 
+local function HandleConfigChange(change)
+    if not change or not change.key then return end
+    local config = CurrentConfig()
+    if change.key == "locked" then
+        UpdateBarLock()
+    elseif change.key == "hideExternalBar" then
+        UpdateExternalBarVisibility()
+        if not config.hideExternalBar then UpdateBar() end
+    elseif change.key == "width" or change.key == "height" then
+        if bar then
+            bar:SetSize(config.width or DEFAULTS.width, config.height or DEFAULTS.height)
+        end
+        UpdateBar()
+    elseif change.key == "specialResourcePipWidth" or change.key == "specialResourcePipHeight" then
+        UpdateSpecialResourcesLayout()
+    elseif change.key == "point" or change.key == "relativePoint" or change.key == "xOffset" or change.key == "yOffset" then
+        if bar then
+            bar:ClearAllPoints()
+            bar:SetPoint(config.point, UIParent, config.relativePoint, config.xOffset, config.yOffset)
+        end
+    end
+end
+
 addon.RegisterInitializer(function()
-    config = addon.PlayerBarConfig.Initialize()
+    local config = CurrentConfig()
     if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
     if addon.SetClassResourceOverlayPipSize then addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight) end
     if addon.SetSpecialResourcePipSize then addon.SetSpecialResourcePipSize(config.specialResourcePipWidth, config.specialResourcePipHeight) end
+    addon.PlayerBarConfig.Subscribe(HandleConfigChange)
     UpdateBar()
     addon.RegisterPlayerUpdateListener(UpdateBar)
 end)

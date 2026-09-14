@@ -7,7 +7,6 @@ _G.table.wipe = _G.table.wipe or function(t) for k in pairs(t) do t[k] = nil end
 _G.UIParent = { name = "UIParent", scale = 1 }
 _G.UIParent.GetEffectiveScale = function(self) return self.scale end
 _G.BloodShieldOverlayProfiles = nil
-_G.BloodShieldOverlayDB = nil
 _G.SlashCmdList = {}
 _G.print = _G.print or function() end
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
@@ -43,6 +42,8 @@ local function new_frame(objectType, name, parent)
     frame_method(frame, "SetAttribute", function(self, key, value) self[key] = value end)
     frame_method(frame, "SetScript", function(self, event, fn) self.scripts[event] = fn end)
     frame_method(frame, "GetScript", function(self, event) return self.scripts[event] end)
+    frame_method(frame, "OnEnterPressed", function(self) local fn = self.scripts.OnEnterPressed if fn then fn(self) end end)
+    frame_method(frame, "OnEditFocusLost", function(self) local fn = self.scripts.OnEditFocusLost if fn then fn(self) end end)
     frame_method(frame, "RegisterEvent", function(self, event) self.events[event] = true end)
     frame_method(frame, "UnregisterEvent", function(self, event) self.events[event] = nil end)
     frame_method(frame, "UnregisterAllEvents", function(self) self.events = {} end)
@@ -177,7 +178,6 @@ function M.reset()
     for key, value in pairs(baseline_globals) do _G[key] = value end
     restore_table(_G.SlashCmdList, baseline_globals.SlashCmdList)
     _G.BloodShieldOverlayProfiles = nil
-    _G.BloodShieldOverlayDB = nil
 end
 
 function M.load()
@@ -199,6 +199,21 @@ end
 
 function M.reset_and_load()
     M.reset()
+    M.load()
+    dofile("RuntimeGuards.lua")
+    local addon = _G.BloodShieldOverlay
+    M.fire("PLAYER_LOGIN")
+    return addon
+end
+
+function M.reset_and_load_with_profile_store(profileStore)
+    M.reset()
+    if type(profileStore) == "table" then
+        _G.BloodShieldOverlayProfiles = {}
+        for key, value in pairs(profileStore) do
+            _G.BloodShieldOverlayProfiles[key] = value
+        end
+    end
     M.load()
     dofile("RuntimeGuards.lua")
     local addon = _G.BloodShieldOverlay

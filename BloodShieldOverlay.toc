@@ -4,7 +4,7 @@
 ## Author: Seikarii
 ## Version: 2.3
 ## IconTexture: 237540
-## SavedVariables: BloodShieldOverlayProfiles, BloodShieldOverlayDB
+## SavedVariables: BloodShieldOverlayProfiles
 
 BloodShieldOverlay.lua
 Core.lua
