@@ -275,6 +275,8 @@ addon.RegisterTargetTargetUpdateListener(Update)
 addon.PlayerBarConfig.Subscribe(HandleConfigChange)
 
 addon.RegisterInitializer(function()
-    local config = addon.PlayerBarConfig.Initialize()
+    local config = addon.PlayerBarConfig.Get() or addon.PlayerBarConfig.GetDefaults()
     if config.showTargetTarget then Create() end
 end)
+
+

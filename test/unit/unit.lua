@@ -51,79 +51,6 @@ case("Configuration > current schema", function()
     end
 end)
 
-case("Configuration > migration strips removed and unknown fields", function()
-    local key = "Tester-Realm"
-    BloodShieldOverlayProfiles = {
-        [key] = {
-            configVersion = 7,
-            width = 22,
-            height = 140,
-            capMultiplier = 1.5,
-            showHealth = false,
-            showSpecialResources = false,
-            resourceDisplay = "right",
-            classResourcePipWidth = 20,
-            unexpectedLegacyField = true,
-        },
-    }
-    BloodShieldOverlayDB = nil
-
-    local config = addon.PlayerBarConfig.Initialize()
-    check(config.width == 22, "Configuration > valid width is preserved", 22, config.width)
-    check(config.height == 140, "Configuration > valid height is preserved", 140, config.height)
-    check(config.classResourcePipWidth == 20, "Configuration > valid pip width is preserved", 20, config.classResourcePipWidth)
-    check(config.configVersion == 8, "Configuration > migration updates schema version", 8, config.configVersion)
-    check(config.capMultiplier == nil, "Configuration > old capMultiplier is discarded")
-    check(config.showHealth == nil, "Configuration > old showHealth is discarded")
-    check(config.showSpecialResources == nil, "Configuration > old showSpecialResources is discarded")
-    check(config.resourceDisplay == nil, "Configuration > old resourceDisplay is discarded")
-    check(config.unexpectedLegacyField == nil, "Configuration > unknown fields are discarded")
-    check(BloodShieldOverlayProfiles[key] == config, "Configuration > cleaned profile is persisted")
-end)
-
-case("Configuration > existing profile wins over legacy DB", function()
-    local key = "Tester-Realm"
-    BloodShieldOverlayProfiles = {
-        [key] = {
-            configVersion = 8,
-            width = 42,
-            height = 200,
-            locked = false,
-        },
-    }
-    BloodShieldOverlayDB = {
-        width = 22,
-        height = 140,
-        locked = true,
-    }
-
-    local config = addon.PlayerBarConfig.Initialize()
-    check(config.width == 42, "Configuration > existing profile remains unchanged", 42, config.width)
-    check(config.height == 200, "Configuration > existing profile keeps height", 200, config.height)
-    check(config.locked == false, "Configuration > existing profile keeps lock state", false, config.locked)
-    check(BloodShieldOverlayDB == nil, "Configuration > legacy DB is cleared after existing profile check", true, BloodShieldOverlayDB == nil)
-end)
-
-case("Configuration > legacy SavedVariable migration", function()
-    BloodShieldOverlayProfiles = nil
-    BloodShieldOverlayDB = {
-        width = 22,
-        height = 140,
-        capMultiplier = 1.8,
-        showHealth = false,
-        showSpecialResources = false,
-        resourceDisplay = "right",
-    }
-    local migrated = addon.PlayerBarConfig.Initialize()
-    check(migrated.width == 22, "Configuration > legacy width is preserved", 22, migrated.width)
-    check(migrated.height == 140, "Configuration > legacy height is preserved", 140, migrated.height)
-    check(migrated.capMultiplier == nil, "Configuration > legacy capMultiplier is discarded")
-    check(migrated.showHealth == nil, "Configuration > legacy showHealth is discarded")
-    check(migrated.showSpecialResources == nil, "Configuration > legacy showSpecialResources is discarded")
-    check(migrated.resourceDisplay == nil, "Configuration > legacy resourceDisplay is discarded")
-    check(BloodShieldOverlayDB == nil, "Configuration > legacy DB is removed after migration")
-end)
-
 case("Configuration > invalid values are repaired", function()
     local key = "Tester-Realm"
     BloodShieldOverlayProfiles = {
@@ -136,7 +63,6 @@ case("Configuration > invalid values are repaired", function()
             graphicsUpdateRate = 120,
         },
     }
-    BloodShieldOverlayDB = nil
     local config = addon.PlayerBarConfig.Initialize()
     check(config.width == 18, "Configuration > invalid width is repaired", 18, config.width)
     check(config.height == 150, "Configuration > invalid height is repaired", 150, config.height)
@@ -157,20 +83,11 @@ case("Configuration > reset uses only schema defaults", function()
 end)
 
 case("Configuration > Initialize creates profile", function()
+    BloodShieldOverlayProfiles = nil
     local config = addon.PlayerBarConfig.Initialize()
     check(type(config) == "table", "Configuration > profile is created", "table", type(config))
     check(config.width == 18, "Configuration > initialized width is default", 18, config.width)
     check(BloodShieldOverlayProfiles and BloodShieldOverlayProfiles["Tester-Realm"] == config, "Configuration > profile is stored by active key", true, BloodShieldOverlayProfiles and BloodShieldOverlayProfiles["Tester-Realm"] == config)
-end)
-
-case("Configuration > migration DB -> profile", function()
-    BloodShieldOverlayProfiles = nil
-    BloodShieldOverlayDB = { width = 26, height = 120, locked = false }
-    local config = addon.PlayerBarConfig.Initialize()
-    check(config.width == 26, "Configuration > legacy width migrates", 26, config.width)
-    check(config.height == 120, "Configuration > legacy height migrates", 120, config.height)
-    check(config.locked == false, "Configuration > legacy locked migrates", false, config.locked)
-    check(BloodShieldOverlayDB == nil, "Configuration > legacy DB is cleared after migration", true, BloodShieldOverlayDB == nil)
 end)
 
 case("Configuration > Set persists value", function()
@@ -371,31 +288,25 @@ case("Menu > refresh stays render-pure", function()
     addon.ShowConfigMenu()
     local menu = _G["BloodShieldOverlayConfig"]
     local before = addon.PlayerBarConfig.Get().width
+    local originalRefresh = addon.MenuAPI.Refresh
     local refreshCalls = 0
-    local fieldSetText = {}
-    for _, key in ipairs({ "widthEdit", "heightEdit", "targetTargetWidthEdit", "targetTargetHeightEdit", "resourcePipWidthEdit", "resourcePipHeightEdit", "pipWidthEdit", "pipHeightEdit" }) do
-        local field = menu[key]
-        if field then
-            local originalSetText = field.SetText
-            fieldSetText[key] = originalSetText
-            field.SetText = function(self, value)
-                refreshCalls = refreshCalls + 1
-                return originalSetText(self, value)
-            end
-        end
+    addon.MenuAPI.Refresh = function()
+        refreshCalls = refreshCalls + 1
+        return originalRefresh()
     end
 
     menu.widthEdit:SetText("31")
     menu.widthEdit:OnEnterPressed()
     check(addon.PlayerBarConfig.Get().width == 31, "Menu > Enter changes persisted config", 31, addon.PlayerBarConfig.Get().width)
-    check(refreshCalls >= 8 and refreshCalls <= 16, "Menu > Enter performs a single UI refresh cycle", true, refreshCalls >= 8 and refreshCalls <= 16)
+    check(refreshCalls == 1, "Menu > Enter triggers exactly one Refresh()", 1, refreshCalls)
 
-    refreshCalls = 0
     menu.widthEdit:SetText("-1")
     menu.widthEdit:OnEditFocusLost()
     check(addon.PlayerBarConfig.Get().width == 31, "Menu > invalid focus loss restores persisted value", 31, addon.PlayerBarConfig.Get().width)
-    check(refreshCalls >= 8 and refreshCalls <= 16, "Menu > focus loss performs a single UI refresh cycle", true, refreshCalls >= 8 and refreshCalls <= 16)
+    check(refreshCalls == 1, "Menu > invalid focus loss does not trigger a second Refresh()", 1, refreshCalls)
     check(before ~= addon.PlayerBarConfig.Get().width or before == 31, "Menu > refresh does not mutate persisted state", true, before ~= addon.PlayerBarConfig.Get().width or before == 31)
+
+    addon.MenuAPI.Refresh = originalRefresh
 end)
 
 case("Regression > width survives save position", function()

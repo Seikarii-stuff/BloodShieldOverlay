@@ -33,7 +33,7 @@ local function CreatePerformanceControls(panel)
     description:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     description:SetText("Non-realtime addon visuals only")
 
-    local config = addon.PlayerBarConfig.Initialize()
+    local config = addon.PlayerBarConfig.Get()
     local rate30 = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
     rate30:SetPoint("TOPLEFT", 16, -178)
     rate30.Text:SetText("30 FPS")

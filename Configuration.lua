@@ -147,22 +147,9 @@ end
 local function Initialize()
     local profiles = EnsureProfileStore()
     local key = GetProfileKey()
-    local legacyValues
-
-    if type(BloodShieldOverlayDB) == "table" and next(BloodShieldOverlayDB) ~= nil then
-        legacyValues = CopySettings(BloodShieldOverlayDB)
-    end
 
     if not profiles[key] then
-        if legacyValues then
-            profiles[key] = ApplyDefaults(legacyValues)
-        else
-            profiles[key] = {}
-        end
-    end
-
-    if legacyValues ~= nil then
-        BloodShieldOverlayDB = nil
+        profiles[key] = ApplyDefaults({})
     end
 
     config = ApplyDefaults(profiles[key])
@@ -258,6 +245,7 @@ end
 
 PlayerBarConfig.Reset = Reset
 PlayerBarConfig.Initialize = Initialize
+
 PlayerBarConfig.Subscribe = function(callback)
     if type(callback) ~= "function" then return nil end
     for _, subscriber in ipairs(subscribers) do
@@ -286,3 +274,7 @@ PlayerBarConfig.Unsubscribe = function(token)
 end
 
 addon.PlayerBarConfig = PlayerBarConfig
+
+addon.RegisterInitializer(function()
+    PlayerBarConfig.Initialize()
+end)

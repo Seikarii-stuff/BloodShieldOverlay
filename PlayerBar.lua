@@ -29,7 +29,8 @@ local powerTypes = Enum and Enum.PowerType
 local DEFAULTS = addon.PlayerBarConfig.GetDefaults()
 
 local function CurrentConfig()
-    return addon.PlayerBarConfig.Get()
+    local config = addon.PlayerBarConfig and addon.PlayerBarConfig.Get and addon.PlayerBarConfig.Get() or nil
+    return config or DEFAULTS
 end
 
 local function GetAbsorbAmount(unit)
@@ -356,7 +357,7 @@ local function HandleConfigChange(change)
 end
 
 addon.RegisterInitializer(function()
-    local config = addon.PlayerBarConfig.Initialize()
+    local config = CurrentConfig()
     if addon.SetClassResourceOverlayEnabled then addon.SetClassResourceOverlayEnabled(config.showClassResourceOverlay) end
     if addon.SetClassResourceOverlayPipSize then addon.SetClassResourceOverlayPipSize(config.classResourcePipWidth, config.classResourcePipHeight) end
     if addon.SetSpecialResourcePipSize then addon.SetSpecialResourcePipSize(config.specialResourcePipWidth, config.specialResourcePipHeight) end

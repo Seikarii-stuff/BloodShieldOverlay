@@ -43,16 +43,19 @@ end
 local function CommitNumericField(box, key, label, validator, defaultValue)
     if not box then return false end
     local value = tonumber(box:GetText())
+    local currentConfig = addon.PlayerBarConfig.Get()
+    local savedValue = currentConfig and currentConfig[key] ~= nil and currentConfig[key] or defaultValue
+
     if value == nil or (validator and not validator(value)) then
         print("BloodShieldOverlay: " .. label .. " must be valid; restoring the saved value.")
-        Refresh()
+        box:SetText(tostring(savedValue))
         return false
     end
 
     local ok = addon.PlayerBarConfig.Set(key, value)
     if not ok then
         print("BloodShieldOverlay: invalid " .. label .. " value; restoring the saved setting.")
-        Refresh()
+        box:SetText(tostring(savedValue))
         return false
     end
     return true
@@ -181,7 +184,10 @@ end
 
 addon.MenuAPI = addon.MenuAPI or {}
 addon.MenuAPI.ShowConfigMenu = function() addon.ShowConfigMenu() end
+addon.MenuAPI.Refresh = function()
+    if menuFrame then Refresh() end
+end
 
 addon.PlayerBarConfig.Subscribe(function()
-    if menuFrame then Refresh() end
+    addon.MenuAPI.Refresh()
 end)
