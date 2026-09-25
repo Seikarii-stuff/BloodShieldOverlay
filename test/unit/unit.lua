@@ -448,6 +448,48 @@ case("TargetTarget > combat deferral", function()
     check(targetBar and targetBar.movable == true, "TargetTarget > deferred lock change retries after combat")
 end)
 
+case("Arena > no party visibility mutation while overlay still updates", function()
+    wow.set_group(true, false)
+    wow.set_arena(true)
+
+    local partyFrame = wow.new_frame("Frame", "ArenaCompactPartyFrame")
+    partyFrame.unit = "party1"
+    partyFrame.displayedUnit = "party1"
+    local healthBar = wow.new_frame("StatusBar", "ArenaHealthBar", partyFrame)
+    partyFrame.healthBar = healthBar
+    partyFrame:Show()
+
+    local originalShow = partyFrame.Show
+    local originalHide = partyFrame.Hide
+    local showCalls, hideCalls = 0, 0
+    partyFrame.Show = function(self)
+        showCalls = showCalls + 1
+        return originalShow(self)
+    end
+    partyFrame.Hide = function(self)
+        hideCalls = hideCalls + 1
+        return originalHide(self)
+    end
+
+    _G.PartyFrame = wow.new_frame("Frame", "PartyFrame")
+    _G.CompactPartyFrame = partyFrame
+    _G.PartyMemberFrame1 = wow.new_frame("Frame", "PartyMemberFrame1")
+    _G.CompactPartyFrameMemberFrame1 = wow.new_frame("Frame", "CompactPartyFrameMemberFrame1")
+
+    addon.RequestRefresh()
+    wow.flush_timers()
+
+    check(showCalls == 0, "Arena > Show() is not called by visibility refresh", 0, showCalls)
+    check(hideCalls == 0, "Arena > Hide() is not called by visibility refresh", 0, hideCalls)
+    check(partyFrame:IsShown(), "Arena > Blizzard party frame remains visible", true, partyFrame:IsShown())
+
+    local overlay = addon.CreateAbsorbOverlay(healthBar)
+    addon.UpdateAbsorbOverlay(overlay, 180, 500)
+    check(overlay.parent == healthBar, "Arena > absorb overlay is parented to the health bar", healthBar, overlay.parent)
+    check(overlay:IsShown(), "Arena > absorb overlay remains visible", true, overlay:IsShown())
+    check(overlay.min == 0 and overlay.max == 500 and overlay.value == 180, "Arena > absorb overlay keeps its current value and max", true, overlay.min == 0 and overlay.max == 500 and overlay.value == 180)
+end)
+
 case("Mouse overlay removal > legacy regression", function()
     local legacyApis = { "SetMouseResourceOverlayEnabled", "UpdateMouseResourceOverlay", "RefreshMouseCooldowns", "GetMouseCooldownOptions" }
     local missingApis = {}

@@ -20,9 +20,27 @@ local function IsForbiddenFrame(frame)
     return frame and addon.IsForbiddenFrame and addon.IsForbiddenFrame(frame)
 end
 
+local function IsArenaInstance()
+    if _G.C_PvP and _G.C_PvP.IsArena then
+        local ok, isArena = pcall(_G.C_PvP.IsArena)
+        if ok and isArena then return true end
+    end
+    if _G.IsInInstance then
+        local instanceType = _G.IsInInstance()
+        if instanceType == "arena" then return true end
+    end
+    return false
+end
+addon.IsArenaInstance = IsArenaInstance
+
 local function TryEnsurePartyFramesVisible()
     if InCombatLockdown() then
         pendingRefresh = true
+        return
+    end
+
+    if IsArenaInstance() then
+        pendingRefresh = false
         return
     end
 
@@ -83,12 +101,14 @@ addon.RequestRefresh = function()
     end
 
     TryEnsurePartyFramesVisible()
+    if addon.RefreshAll then addon.RefreshAll() end
 
     if not refreshScheduled then
         refreshScheduled = true
         C_Timer.After(0.2, function()
             refreshScheduled = false
             TryEnsurePartyFramesVisible()
+            if addon.RefreshAll then addon.RefreshAll() end
         end)
     end
 end
