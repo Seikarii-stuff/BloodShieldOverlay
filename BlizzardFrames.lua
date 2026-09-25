@@ -148,6 +148,7 @@ end
 -- handling.
 local function FallbackRefreshPartyFrames()
     if InCombatLockdown() then return end
+    if addon.IsArenaInstance and addon.IsArenaInstance() then return end
     if IsInRaid and IsInRaid() then
         if PartyFrame and PartyFrame.Hide then PartyFrame:Hide() end
         if CompactPartyFrame and CompactPartyFrame.Hide then CompactPartyFrame:Hide() end
@@ -188,6 +189,9 @@ local function RefreshAll()
     UpdatePlayerOverlay()
     UpdatePersonalOverlay()
 end
+
+addon.RefreshAll = RefreshAll
+addon.RefreshAbsorbOverlays = RefreshAll
 
 if hooksecurefunc then
     -- Same basic strategy used by established raid-frame addons: hook the

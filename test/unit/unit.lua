@@ -448,6 +448,49 @@ case("TargetTarget > combat deferral", function()
     check(targetBar and targetBar.movable == true, "TargetTarget > deferred lock change retries after combat")
 end)
 
+case("Arena > no party visibility mutation while overlay still updates", function()
+    wow.set_group(true, false)
+    wow.set_arena(true)
+    wow.set_values("party1", 180, 500)
+
+    local partyFrame = wow.new_frame("Frame", "ArenaCompactPartyFrame")
+    partyFrame.unit = "party1"
+    partyFrame.displayedUnit = "party1"
+    local healthBar = wow.new_frame("StatusBar", "ArenaHealthBar", partyFrame)
+    partyFrame.healthBar = healthBar
+    partyFrame:Show()
+
+    local originalShow = partyFrame.Show
+    local originalHide = partyFrame.Hide
+    local showCalls, hideCalls = 0, 0
+    partyFrame.Show = function(self)
+        showCalls = showCalls + 1
+        return originalShow(self)
+    end
+    partyFrame.Hide = function(self)
+        hideCalls = hideCalls + 1
+        return originalHide(self)
+    end
+
+    _G.PartyFrame = wow.new_frame("Frame", "PartyFrame")
+    _G.CompactPartyFrame = wow.new_frame("Frame", "CompactPartyFrame")
+    _G.PartyMemberFrame1 = wow.new_frame("Frame", "PartyMemberFrame1")
+    _G.CompactPartyFrameMemberFrame1 = partyFrame
+
+    addon.RequestRefresh()
+    wow.flush_timers()
+
+    check(showCalls == 0, "Arena > Show() is not called by visibility refresh", 0, showCalls)
+    check(hideCalls == 0, "Arena > Hide() is not called by visibility refresh", 0, hideCalls)
+    check(partyFrame:IsShown(), "Arena > Blizzard party frame remains visible", true, partyFrame:IsShown())
+
+    local overlay = healthBar.children and healthBar.children[1] or nil
+    check(overlay ~= nil, "Arena > real compact-frame refresh creates the absorb overlay", "not nil", overlay and overlay.name or nil)
+    check(overlay and overlay.parent == healthBar, "Arena > absorb overlay is parented to the health bar", healthBar, overlay and overlay.parent)
+    check(overlay and overlay:IsShown(), "Arena > absorb overlay remains visible", true, overlay and overlay:IsShown())
+    check(overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180, "Arena > absorb overlay reflects the simulated party absorb values", true, overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180)
+end)
+
 case("Mouse overlay removal > legacy regression", function()
     local legacyApis = { "SetMouseResourceOverlayEnabled", "UpdateMouseResourceOverlay", "RefreshMouseCooldowns", "GetMouseCooldownOptions" }
     local missingApis = {}

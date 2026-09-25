@@ -22,6 +22,7 @@ local maxPower = { player = 100 }
 local inCombat = false
 local inRaid = false
 local inGroup = false
+local isArena = false
 local groupMemberCount = 0
 local getChildrenCalls = 0
 
@@ -126,6 +127,8 @@ _G.hooksecurefunc = function() end
 _G.InCombatLockdown = function() return inCombat end
 _G.IsInGroup = function() return inGroup end
 _G.IsInRaid = function() return inRaid end
+_G.IsInInstance = function() return isArena and "arena" or "none" end
+_G.C_PvP = { IsArena = function() return isArena end }
 _G.GetNumGroupMembers = function() return groupMemberCount end
 _G.UnitGetTotalAbsorbs = function(unit) return absorbs[unit] or 0 end
 _G.UnitHealthMax = function(unit) return health[unit] or 0 end
@@ -169,6 +172,7 @@ function M.reset()
     inCombat = false
     inRaid = false
     inGroup = false
+    isArena = false
     groupMemberCount = 0
     getChildrenCalls = 0
 
@@ -193,6 +197,7 @@ function M.load()
     dofile("Menu.lua")
     dofile("options.lua")
     dofile("Commands.lua")
+    dofile("ShowPartyWhenSolo.lua")
     dofile("BlizzardFrames.lua")
     dofile("ClassResourceOverlay.lua")
 end
@@ -226,6 +231,9 @@ function M.set_combat(value) inCombat = value end
 function M.set_group(group, raid, memberCount)
     inGroup, inRaid = group, raid
     if memberCount ~= nil then groupMemberCount = memberCount end
+end
+function M.set_arena(value)
+    isArena = value == true
 end
 function M.set_values(unit, absorb, maxHealth) absorbs[unit], health[unit] = absorb, maxHealth end
 function M.set_power(unit, current, maximum) power[unit], maxPower[unit] = current, maximum end
