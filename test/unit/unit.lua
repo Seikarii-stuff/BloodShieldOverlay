@@ -451,6 +451,7 @@ end)
 case("Arena > no party visibility mutation while overlay still updates", function()
     wow.set_group(true, false)
     wow.set_arena(true)
+    wow.set_values("party1", 180, 500)
 
     local partyFrame = wow.new_frame("Frame", "ArenaCompactPartyFrame")
     partyFrame.unit = "party1"
@@ -472,9 +473,9 @@ case("Arena > no party visibility mutation while overlay still updates", functio
     end
 
     _G.PartyFrame = wow.new_frame("Frame", "PartyFrame")
-    _G.CompactPartyFrame = partyFrame
+    _G.CompactPartyFrame = wow.new_frame("Frame", "CompactPartyFrame")
     _G.PartyMemberFrame1 = wow.new_frame("Frame", "PartyMemberFrame1")
-    _G.CompactPartyFrameMemberFrame1 = wow.new_frame("Frame", "CompactPartyFrameMemberFrame1")
+    _G.CompactPartyFrameMemberFrame1 = partyFrame
 
     addon.RequestRefresh()
     wow.flush_timers()
@@ -483,11 +484,11 @@ case("Arena > no party visibility mutation while overlay still updates", functio
     check(hideCalls == 0, "Arena > Hide() is not called by visibility refresh", 0, hideCalls)
     check(partyFrame:IsShown(), "Arena > Blizzard party frame remains visible", true, partyFrame:IsShown())
 
-    local overlay = addon.CreateAbsorbOverlay(healthBar)
-    addon.UpdateAbsorbOverlay(overlay, 180, 500)
-    check(overlay.parent == healthBar, "Arena > absorb overlay is parented to the health bar", healthBar, overlay.parent)
-    check(overlay:IsShown(), "Arena > absorb overlay remains visible", true, overlay:IsShown())
-    check(overlay.min == 0 and overlay.max == 500 and overlay.value == 180, "Arena > absorb overlay keeps its current value and max", true, overlay.min == 0 and overlay.max == 500 and overlay.value == 180)
+    local overlay = healthBar.children and healthBar.children[1] or nil
+    check(overlay ~= nil, "Arena > real compact-frame refresh creates the absorb overlay", "not nil", overlay and overlay.name or nil)
+    check(overlay and overlay.parent == healthBar, "Arena > absorb overlay is parented to the health bar", healthBar, overlay and overlay.parent)
+    check(overlay and overlay:IsShown(), "Arena > absorb overlay remains visible", true, overlay and overlay:IsShown())
+    check(overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180, "Arena > absorb overlay reflects the simulated party absorb values", true, overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180)
 end)
 
 case("Mouse overlay removal > legacy regression", function()
