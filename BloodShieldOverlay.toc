@@ -1,4 +1,4 @@
-## Interface: 120100,120007
+## Interface: 120150, 120170
 ## Title: Shield Overlay
 ## Notes: /shield to open the floating menu, /shield reload to refresh party/group frames. 100% shield cap, shows shield overlays in raid/player/party frames. Minimal addon for blizzard original raid/party UI.
 ## Author: Seikarii
