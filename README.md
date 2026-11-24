@@ -57,6 +57,8 @@
 
 `/heal`, `/tank`, `/dps` y `/carry` asignan o alternan el icono del rol indicado arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles reales ni se guardan. Se conservan aunque entren o salgan miembros y se limpian al salir del grupo, antes de entrar en otra party o raid. Si asignas otro rol a alguien ya marcado, su icono cambia al nuevo rol. Carry usa una estrella porque no es un rol estándar de Blizzard.
 
+También se pueden asignar desde el menú contextual nativo: clic derecho en un raidframe → **Añadir stick** → carry/heal/tank/dps.
+
 ---
 
 ## 📁 Estructura del Proyecto

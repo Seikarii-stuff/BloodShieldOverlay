@@ -17,6 +17,8 @@ local pairs = pairs
 
 local markedUnits = {}
 local markersByFrame = setmetatable({}, { __mode = "k" })
+local ROLE_MENU_ORDER = { "carry", "heal", "tank", "dps" }
+local roleMenusRegistered = false
 local function GetGroupState()
     if not IsInGroup or not IsInGroup() then return "none" end
     return IsInRaid and IsInRaid() and "raid" or "party"
@@ -47,6 +49,23 @@ local function FindTargetGroupUnit()
         end
     end
     return nil
+end
+
+local function IsCurrentGroupUnit(unit)
+    if type(unit) ~= "string" then return false end
+    local index = unit:match("^raid([1-9]?[0-9])$")
+    if index then
+        index = tonumber(index)
+        return IsInRaid and IsInRaid() and index <= 40 and index <= (GetNumGroupMembers and GetNumGroupMembers() or 0)
+    end
+    index = unit:match("^party([1-4])$")
+    if index then
+        index = tonumber(index)
+        local memberCount = GetNumGroupMembers and GetNumGroupMembers() or 0
+        return IsInGroup and IsInGroup() and not (IsInRaid and IsInRaid())
+            and index <= math.min(4, math.max(0, memberCount - 1))
+    end
+    return false
 end
 
 local function CreateMarker(frame)
@@ -98,6 +117,18 @@ local function ClearMarks()
     for unit in pairs(markedUnits) do markedUnits[unit] = nil end
 end
 
+function addon.ToggleRoleForUnit(unit, role)
+    if not ROLE_STYLE[role] or not IsCurrentGroupUnit(unit) then return false end
+    local previousRole = markedUnits[unit]
+    if previousRole == role then
+        markedUnits[unit] = nil
+    else
+        markedUnits[unit] = role
+    end
+    RefreshFrames()
+    return true, markedUnits[unit] and "assigned" or "removed", previousRole
+end
+
 function addon.HandleRoleSlashCommand(role, message)
     if not ROLE_STYLE[role] then return end
     local argument = type(message) == "string" and message:match("^%s*(.-)%s*$") or ""
@@ -112,14 +143,8 @@ function addon.HandleRoleSlashCommand(role, message)
         return
     end
 
-    local previousRole = markedUnits[unit]
-    if previousRole == role then
-        markedUnits[unit] = nil
-    else
-        markedUnits[unit] = role
-    end
-    RefreshFrames()
-    if markedUnits[unit] then
+    local _, state, previousRole = addon.ToggleRoleForUnit(unit, role)
+    if state == "assigned" then
         print("BloodShieldOverlay: target marked as " .. role .. ".")
     elseif previousRole then
         print("BloodShieldOverlay: " .. previousRole .. " marker removed.")
@@ -152,3 +177,37 @@ if hooksecurefunc then
     if _G.CompactUnitFrame_UpdateHealPrediction then hooksecurefunc("CompactUnitFrame_UpdateHealPrediction", OnCompactFrameUpdated) end
     if _G.CompactUnitFrame_SetUpFrame then hooksecurefunc("CompactUnitFrame_SetUpFrame", OnCompactFrameUpdated) end
 end
+
+local function RegisterRoleContextMenus()
+    if roleMenusRegistered or not _G.Menu or type(_G.Menu.ModifyMenu) ~= "function" then return false end
+
+    local function AddRoleSubmenu(owner, rootDescription)
+        -- Do not inspect owner/context data while Blizzard builds its secure
+        -- menu. Read the normal unit token only after the user clicks an item.
+        local submenu = rootDescription:CreateButton("Añadir stick")
+        for _, role in ipairs(ROLE_MENU_ORDER) do
+            local selectedRole = role
+            submenu:CreateButton(role, function()
+                local ok, unit = pcall(addon.GetUnit, owner)
+                if not ok then return end
+                pcall(addon.ToggleRoleForUnit, unit, selectedRole)
+            end)
+        end
+    end
+
+    _G.Menu.ModifyMenu("MENU_UNIT_RAID_PLAYER", AddRoleSubmenu)
+    _G.Menu.ModifyMenu("MENU_UNIT_RAID", AddRoleSubmenu)
+    _G.Menu.ModifyMenu("MENU_UNIT_PARTY", AddRoleSubmenu)
+    roleMenusRegistered = true
+    return true
+end
+
+addon.RegisterInitializer(RegisterRoleContextMenus)
+
+local menuLoadFrame = CreateFrame("Frame")
+menuLoadFrame:RegisterEvent("ADDON_LOADED")
+menuLoadFrame:SetScript("OnEvent", function(_, _, loadedAddon)
+    if loadedAddon == "Blizzard_Menu" and RegisterRoleContextMenus() then
+        menuLoadFrame:UnregisterEvent("ADDON_LOADED")
+    end
+end)
