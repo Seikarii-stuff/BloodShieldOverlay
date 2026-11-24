@@ -1,4 +1,4 @@
--- Temporary visual heal markers on Blizzard compact party/raid frames.
+-- Temporary visual role markers on Blizzard compact party/raid frames.
 -- Resolve the current target with UnitIsUnit; never read GUIDs or player names.
 
 local addon = _G.BloodShieldOverlay or {}
@@ -13,9 +13,16 @@ local UnitExists = UnitExists
 local UnitIsUnit = UnitIsUnit
 local hooksecurefunc = hooksecurefunc
 local type = type
+local unpack = unpack
 
 local markedUnits = {}
 local markersByFrame = setmetatable({}, { __mode = "k" })
+local ROLE_STYLE = {
+    heal = { label = "HEAL", color = { 0.25, 1, 0.35, 1 } },
+    tank = { label = "TANK", color = { 0.25, 0.65, 1, 1 } },
+    dps = { label = "DPS", color = { 1, 0.45, 0.15, 1 } },
+    carry = { label = "CARRY", color = { 1, 0.8, 0.15, 1 } },
+}
 
 local function FindTargetGroupUnit()
     if not UnitExists("target") then return nil end
@@ -39,7 +46,7 @@ end
 local function CreateMarker(frame)
     if not frame or addon.IsForbiddenFrame(frame) or InCombatLockdown() then return nil end
     local marker = CreateFrame("Frame", nil, frame)
-    marker:SetSize(42, 16)
+    marker:SetSize(50, 16)
     marker:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
     marker:SetFrameLevel((frame.GetFrameLevel and frame:GetFrameLevel() or 0) + 20)
     marker:EnableMouse(false)
@@ -48,8 +55,7 @@ local function CreateMarker(frame)
     background:SetColorTexture(0.05, 0.05, 0.05, 0.82)
     local label = marker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     label:SetPoint("CENTER", marker, "CENTER", 0, 0)
-    label:SetText("HEAL")
-    label:SetTextColor(0.25, 1, 0.35, 1)
+    marker.label = label
     marker:Hide()
     markersByFrame[frame] = marker
     return marker
@@ -61,7 +67,15 @@ local function UpdateFrame(frame)
     local marker = markersByFrame[frame]
     if not marker and unit and markedUnits[unit] then marker = CreateMarker(frame) end
     if not marker then return end
-    if unit and markedUnits[unit] then marker:Show() else marker:Hide() end
+    local role = unit and markedUnits[unit]
+    if role and ROLE_STYLE[role] then
+        local style = ROLE_STYLE[role]
+        marker.label:SetText(style.label)
+        marker.label:SetTextColor(unpack(style.color))
+        marker:Show()
+    else
+        marker:Hide()
+    end
 end
 
 local function RefreshFrames()
@@ -69,10 +83,11 @@ local function RefreshFrames()
     addon.ForEachCompactFrame(UpdateFrame)
 end
 
-function addon.HandleHealSlashCommand(message)
+function addon.HandleRoleSlashCommand(role, message)
+    if not ROLE_STYLE[role] then return end
     local argument = type(message) == "string" and message:match("^%s*(.-)%s*$") or ""
     if argument ~= "" then
-        print("BloodShieldOverlay: /heal takes no arguments. Target a group member, then use /heal.")
+        print("BloodShieldOverlay: /" .. role .. " takes no arguments. Target a group member, then use /" .. role .. ".")
         return
     end
 
@@ -82,9 +97,22 @@ function addon.HandleHealSlashCommand(message)
         return
     end
 
-    markedUnits[unit] = not markedUnits[unit] or nil
+    local previousRole = markedUnits[unit]
+    if previousRole == role then
+        markedUnits[unit] = nil
+    else
+        markedUnits[unit] = role
+    end
     RefreshFrames()
-    print(markedUnits[unit] and "BloodShieldOverlay: target marked as heal." or "BloodShieldOverlay: heal marker removed.")
+    if markedUnits[unit] then
+        print("BloodShieldOverlay: target marked as " .. role .. ".")
+    elseif previousRole then
+        print("BloodShieldOverlay: " .. previousRole .. " marker removed.")
+    end
+end
+
+function addon.HandleHealSlashCommand(message)
+    addon.HandleRoleSlashCommand("heal", message)
 end
 
 addon.RegisterLayoutListener(function(event)

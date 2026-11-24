@@ -1,6 +1,6 @@
 ## Interface: 120150, 120170
 ## Title: Shield Overlay
-## Notes: /shield opens configuration, /heal toggles a visual marker on your target. /shield reload refreshes group frames.
+## Notes: /shield config; /heal, /tank, /dps, /carry mark your target visually; /shield reload refreshes group frames.
 ## Author: Seikarii
 ## Version: 2.3
 ## IconTexture: 237540

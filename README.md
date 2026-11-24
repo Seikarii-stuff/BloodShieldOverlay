@@ -53,8 +53,9 @@
 | `/shield show` | Muestra la barra independiente para el personaje actual. |
 | `/shield reset` | Restaura la posición, tamaño y opciones por defecto. |
 | `/shield party` | Fuerza un refresco manual del descubrimiento de marcos de party/raid. |
+| `/heal`, `/tank`, `/dps`, `/carry` | Marca tu objetivo actual con el rol visual indicado o quita esa marca si ya tenía ese rol. |
 
-`/heal` alterna una pegatina «HEAL» arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles ni se guardan. Se limpian cuando cambia el roster para evitar que una unidad distinta herede una marca.
+`/heal`, `/tank`, `/dps` y `/carry` asignan o alternan la pegatina del rol indicado arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles reales ni se guardan. Se limpian cuando cambia el roster para evitar que una unidad distinta herede una marca. Si asignas otro rol a alguien ya marcado, su pegatina cambia al nuevo rol.
 
 ---
 
@@ -99,7 +100,7 @@
     - Mantiene separado el descubrimiento de marcos, el renderizado y la lógica de recursos de clase.
 
 12. **[HealMarker.lua](HealMarker.lua)**
-    - Añade pegatinas visuales temporales a compact party/raid frames y resuelve el objetivo con `UnitIsUnit` sin consultar GUIDs ni nombres.
+    - Añade pegatinas visuales temporales de heal, tank, dps o carry a compact party/raid frames. Resuelve el objetivo con `UnitIsUnit` sin consultar GUIDs ni nombres.
 
 ---
 

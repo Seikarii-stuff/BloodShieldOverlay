@@ -52,3 +52,15 @@ SlashCmdList["BLOODSHIELDHEAL"] = function(msg)
 		end
 	end
 SLASH_BLOODSHIELDHEAL1 = "/heal"
+SlashCmdList["BLOODSHIELDTANK"] = function(msg)
+		if addon.HandleRoleSlashCommand then addon.HandleRoleSlashCommand("tank", msg) end
+	end
+SLASH_BLOODSHIELDTANK1 = "/tank"
+SlashCmdList["BLOODSHIELDDPS"] = function(msg)
+		if addon.HandleRoleSlashCommand then addon.HandleRoleSlashCommand("dps", msg) end
+	end
+SLASH_BLOODSHIELDDPS1 = "/dps"
+SlashCmdList["BLOODSHIELDCARRY"] = function(msg)
+		if addon.HandleRoleSlashCommand then addon.HandleRoleSlashCommand("carry", msg) end
+	end
+SLASH_BLOODSHIELDCARRY1 = "/carry"
