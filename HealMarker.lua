@@ -13,15 +13,15 @@ local UnitExists = UnitExists
 local UnitIsUnit = UnitIsUnit
 local hooksecurefunc = hooksecurefunc
 local type = type
-local unpack = unpack
 
 local markedUnits = {}
 local markersByFrame = setmetatable({}, { __mode = "k" })
 local ROLE_STYLE = {
-    heal = { label = "HEAL", color = { 0.25, 1, 0.35, 1 } },
-    tank = { label = "TANK", color = { 0.25, 0.65, 1, 1 } },
-    dps = { label = "DPS", color = { 1, 0.45, 0.15, 1 } },
-    carry = { label = "CARRY", color = { 1, 0.8, 0.15, 1 } },
+    heal = { atlas = "roleicon-tiny-healer" },
+    tank = { atlas = "roleicon-tiny-tank" },
+    dps = { atlas = "roleicon-tiny-dps" },
+    -- Carry is not a Blizzard group role, so use the familiar raid star.
+    carry = { texture = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1" },
 }
 
 local function FindTargetGroupUnit()
@@ -46,16 +46,17 @@ end
 local function CreateMarker(frame)
     if not frame or addon.IsForbiddenFrame(frame) or InCombatLockdown() then return nil end
     local marker = CreateFrame("Frame", nil, frame)
-    marker:SetSize(50, 16)
+    marker:SetSize(18, 18)
     marker:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
     marker:SetFrameLevel((frame.GetFrameLevel and frame:GetFrameLevel() or 0) + 20)
     marker:EnableMouse(false)
     local background = marker:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints(marker)
     background:SetColorTexture(0.05, 0.05, 0.05, 0.82)
-    local label = marker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    label:SetPoint("CENTER", marker, "CENTER", 0, 0)
-    marker.label = label
+    local icon = marker:CreateTexture(nil, "OVERLAY")
+    icon:SetSize(16, 16)
+    icon:SetPoint("CENTER", marker, "CENTER", 0, 0)
+    marker.icon = icon
     marker:Hide()
     markersByFrame[frame] = marker
     return marker
@@ -70,8 +71,11 @@ local function UpdateFrame(frame)
     local role = unit and markedUnits[unit]
     if role and ROLE_STYLE[role] then
         local style = ROLE_STYLE[role]
-        marker.label:SetText(style.label)
-        marker.label:SetTextColor(unpack(style.color))
+        if style.atlas then
+            marker.icon:SetAtlas(style.atlas)
+        else
+            marker.icon:SetTexture(style.texture)
+        end
         marker:Show()
     else
         marker:Hide()
