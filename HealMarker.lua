@@ -120,11 +120,8 @@ function addon.HandleHealSlashCommand(message)
 end
 
 addon.RegisterLayoutListener(function(event)
-    if event == "GROUP_ROSTER_UPDATE" then
-        -- Unit tokens can be reassigned after roster changes; discard marks
-        -- rather than letting a different member inherit one.
-        for unit in pairs(markedUnits) do markedUnits[unit] = nil end
-    end
+    -- Keep role assignments across roster/layout refreshes. Blizzard's compact
+    -- frame hooks will rebind the existing unit-token marks to their frames.
     RefreshFrames()
 end)
 
