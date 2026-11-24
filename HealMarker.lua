@@ -18,6 +18,7 @@ local pairs = pairs
 local markedUnits = {}
 local markersByFrame = setmetatable({}, { __mode = "k" })
 local ROLE_MENU_ORDER = { "carry", "heal", "tank", "dps" }
+local ROLE_MENU_LABELS = { carry = "Carry", heal = "Heal", tank = "Tank", dps = "DPS" }
 local roleMenusRegistered = false
 local function GetGroupState()
     if not IsInGroup or not IsInGroup() then return "none" end
@@ -179,22 +180,35 @@ if hooksecurefunc then
 end
 
 local function RegisterRoleContextMenus()
-    if roleMenusRegistered or not _G.Menu or type(_G.Menu.ModifyMenu) ~= "function" then return false end
+    if roleMenusRegistered or not _G.Menu or type(_G.Menu.ModifyMenu) ~= "function"
+        or not _G.MenuUtil or type(_G.MenuUtil.CreateButton) ~= "function" then return false end
 
-    local function AddRoleSubmenu(owner, rootDescription)
+    local function AddRoleSubmenu(owner, rootDescription, contextData)
         -- Do not inspect owner/context data while Blizzard builds its secure
         -- menu. Read the normal unit token only after the user clicks an item.
-        local submenu = rootDescription:CreateButton("Añadir stick")
+        local submenu = _G.MenuUtil.CreateButton("Añadir stick")
+        -- Attach first: child descriptions inherit shared menu properties
+        -- from their parent and otherwise Menu.lua's callbacks are nil.
+        rootDescription:Insert(submenu, 1)
         for _, role in ipairs(ROLE_MENU_ORDER) do
             local selectedRole = role
-            submenu:CreateButton(role, function()
+            submenu:CreateButton(ROLE_MENU_LABELS[role], function()
                 local ok, unit = pcall(addon.GetUnit, owner)
-                if not ok then return end
-                pcall(addon.ToggleRoleForUnit, unit, selectedRole)
+                if ok then
+                    local actionOK, assigned = pcall(addon.ToggleRoleForUnit, unit, selectedRole)
+                    if actionOK and assigned then return end
+                end
+
+                -- Some self/player popup variants expose their unit token only
+                -- through contextData; access it only after the menu is chosen.
+                local contextOK, contextUnit = pcall(function() return contextData and contextData.unit end)
+                if contextOK then pcall(addon.ToggleRoleForUnit, contextUnit, selectedRole) end
             end)
         end
     end
 
+    _G.Menu.ModifyMenu("MENU_UNIT_SELF", AddRoleSubmenu)
+    _G.Menu.ModifyMenu("MENU_UNIT_PLAYER", AddRoleSubmenu)
     _G.Menu.ModifyMenu("MENU_UNIT_RAID_PLAYER", AddRoleSubmenu)
     _G.Menu.ModifyMenu("MENU_UNIT_RAID", AddRoleSubmenu)
     _G.Menu.ModifyMenu("MENU_UNIT_PARTY", AddRoleSubmenu)
