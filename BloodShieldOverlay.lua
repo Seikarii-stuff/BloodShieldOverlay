@@ -46,3 +46,9 @@ SlashCmdList["BLOODSHIELDOVERLAY"] = function(msg)
 SLASH_BLOODSHIELDOVERLAY1 = "/shield"
 SLASH_BLOODSHIELDOVERLAY2 = "/shieldbar"
 SLASH_BLOODSHIELDOVERLAY3 = "/shields"
+SlashCmdList["BLOODSHIELDHEAL"] = function(msg)
+		if addon.HandleHealSlashCommand then
+			addon.HandleHealSlashCommand(msg)
+		end
+	end
+SLASH_BLOODSHIELDHEAL1 = "/heal"

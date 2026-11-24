@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Shield Overlay
-## Notes: /shield to open the floating menu, /shield reload to refresh party/group frames. 100% shield cap, shows shield overlays in raid/player/party frames. Minimal addon for blizzard original raid/party UI.
+## Notes: /shield opens configuration, /heal toggles a visual marker on your target. /shield reload refreshes group frames.
 ## Author: Seikarii
 ## Version: 2.3
 ## IconTexture: 237540
@@ -22,3 +22,4 @@ Commands.lua
 ShowPartyWhenSolo.lua
 BlizzardFrames.lua
 ClassResourceOverlay.lua
+HealMarker.lua

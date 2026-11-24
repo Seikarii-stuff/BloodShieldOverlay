@@ -54,6 +54,8 @@
 | `/shield reset` | Restaura la posición, tamaño y opciones por defecto. |
 | `/shield party` | Fuerza un refresco manual del descubrimiento de marcos de party/raid. |
 
+`/heal` alterna una pegatina «HEAL» arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles ni se guardan. Se limpian cuando cambia el roster para evitar que una unidad distinta herede una marca.
+
 ---
 
 ## 📁 Estructura del Proyecto
@@ -95,6 +97,9 @@
 11. **[ClassResourceOverlay.lua](ClassResourceOverlay.lua)**
     - Renderiza horizontalmente los recursos especiales del jugador sobre la barra de recurso de su marco de party/raid.
     - Mantiene separado el descubrimiento de marcos, el renderizado y la lógica de recursos de clase.
+
+12. **[HealMarker.lua](HealMarker.lua)**
+    - Añade pegatinas visuales temporales a compact party/raid frames y resuelve el objetivo con `UnitIsUnit` sin consultar GUIDs ni nombres.
 
 ---
 
