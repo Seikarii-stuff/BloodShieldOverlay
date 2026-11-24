@@ -55,7 +55,7 @@
 | `/shield party` | Fuerza un refresco manual del descubrimiento de marcos de party/raid. |
 | `/heal`, `/tank`, `/dps`, `/carry` | Marca tu objetivo actual con el rol visual indicado o quita esa marca si ya tenía ese rol. |
 
-`/heal`, `/tank`, `/dps` y `/carry` asignan o alternan el icono del rol indicado arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles reales ni se guardan. Se conservan durante los refrescos de la banda mientras dure la sesión. Si asignas otro rol a alguien ya marcado, su icono cambia al nuevo rol. Carry usa una estrella porque no es un rol estándar de Blizzard.
+`/heal`, `/tank`, `/dps` y `/carry` asignan o alternan el icono del rol indicado arriba a la izquierda del raidframe de tu objetivo actual. Puedes marcar varios miembros; las marcas son solo visuales, no cambian roles reales ni se guardan. Se conservan aunque entren o salgan miembros y se limpian al salir del grupo, antes de entrar en otra party o raid. Si asignas otro rol a alguien ya marcado, su icono cambia al nuevo rol. Carry usa una estrella porque no es un rol estándar de Blizzard.
 
 ---
 

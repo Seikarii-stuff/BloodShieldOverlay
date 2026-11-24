@@ -13,9 +13,15 @@ local UnitExists = UnitExists
 local UnitIsUnit = UnitIsUnit
 local hooksecurefunc = hooksecurefunc
 local type = type
+local pairs = pairs
 
 local markedUnits = {}
 local markersByFrame = setmetatable({}, { __mode = "k" })
+local function GetGroupState()
+    if not IsInGroup or not IsInGroup() then return "none" end
+    return IsInRaid and IsInRaid() and "raid" or "party"
+end
+local lastGroupKind = GetGroupState()
 local ROLE_STYLE = {
     heal = { atlas = "roleicon-tiny-healer" },
     tank = { atlas = "roleicon-tiny-tank" },
@@ -84,7 +90,12 @@ end
 
 local function RefreshFrames()
     if InCombatLockdown() then return end
+    for frame in pairs(markersByFrame) do UpdateFrame(frame) end
     addon.ForEachCompactFrame(UpdateFrame)
+end
+
+local function ClearMarks()
+    for unit in pairs(markedUnits) do markedUnits[unit] = nil end
 end
 
 function addon.HandleRoleSlashCommand(role, message)
@@ -120,8 +131,13 @@ function addon.HandleHealSlashCommand(message)
 end
 
 addon.RegisterLayoutListener(function(event)
-    -- Keep role assignments across roster/layout refreshes. Blizzard's compact
-    -- frame hooks will rebind the existing unit-token marks to their frames.
+    if event == "GROUP_ROSTER_UPDATE" then
+        local groupKind = GetGroupState()
+        -- Keep marks while this group changes. Clear only after leaving it so
+        -- marks do not carry into the next party/raid.
+        if groupKind == "none" and lastGroupKind ~= "none" then ClearMarks() end
+        lastGroupKind = groupKind
+    end
     RefreshFrames()
 end)
 
