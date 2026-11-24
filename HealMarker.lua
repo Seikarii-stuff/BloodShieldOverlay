@@ -96,6 +96,7 @@ local function UpdateFrame(frame)
     if not marker then return end
     local role = unit and markedUnits[unit]
     if role and ROLE_STYLE[role] then
+        if marker.displayedRole == role then return end
         local style = ROLE_STYLE[role]
         if style.atlas then
             marker.icon:SetAtlas(style.atlas)
@@ -103,8 +104,12 @@ local function UpdateFrame(frame)
             marker.icon:SetTexture(style.texture)
         end
         marker:Show()
+        marker.displayedRole = role
     else
-        marker:Hide()
+        if marker.displayedRole then
+            marker:Hide()
+            marker.displayedRole = nil
+        end
     end
 end
 
