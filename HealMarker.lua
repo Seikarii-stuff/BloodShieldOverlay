@@ -11,6 +11,7 @@ local IsInGroup = IsInGroup
 local GetNumGroupMembers = GetNumGroupMembers
 local UnitExists = UnitExists
 local UnitIsUnit = UnitIsUnit
+local IsInInstance = IsInInstance
 local hooksecurefunc = hooksecurefunc
 local type = type
 local pairs = pairs
@@ -25,6 +26,15 @@ local function GetGroupState()
     return IsInRaid and IsInRaid() and "raid" or "party"
 end
 local lastGroupKind = GetGroupState()
+local function GetInstanceKind()
+    if not IsInInstance then return "none" end
+    local instanceType = IsInInstance()
+    if instanceType == "pvp" or instanceType == "arena" then
+        return instanceType
+    end
+    return "none"
+end
+local lastInstanceKind = GetInstanceKind()
 local ROLE_STYLE = {
     heal = { atlas = "roleicon-tiny-healer" },
     tank = { atlas = "roleicon-tiny-tank" },
@@ -162,10 +172,20 @@ function addon.HandleHealSlashCommand(message)
 end
 
 addon.RegisterLayoutListener(function(event)
-    if event == "GROUP_ROSTER_UPDATE" then
+    if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+        local instanceKind = GetInstanceKind()
+        if instanceKind ~= lastInstanceKind then
+            -- Clearing on both entering and leaving PvP prevents sticks from
+            -- crossing battleground/arena boundaries when the premade stays grouped.
+            if lastInstanceKind == "pvp" or lastInstanceKind == "arena"
+                or instanceKind == "pvp" or instanceKind == "arena" then
+                ClearMarks()
+            end
+            lastInstanceKind = instanceKind
+        end
+
         local groupKind = GetGroupState()
-        -- Keep marks while this group changes. Clear only after leaving it so
-        -- marks do not carry into the next party/raid.
+        -- Keep marks while this group changes. Clear only after leaving it.
         if groupKind == "none" and lastGroupKind ~= "none" then ClearMarks() end
         lastGroupKind = groupKind
     end

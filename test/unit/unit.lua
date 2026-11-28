@@ -491,6 +491,24 @@ case("Arena > no party visibility mutation while overlay still updates", functio
     check(overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180, "Arena > absorb overlay reflects the simulated party absorb values", true, overlay and overlay.min == 0 and overlay.max == 500 and overlay.value == 180)
 end)
 
+case("HealMarker > premade BG exit clears sticks", function()
+    wow.set_group(true, false, 2)
+    wow.set_battleground(true)
+    wow.fire("PLAYER_ENTERING_WORLD")
+
+    local firstOK, firstState, firstPrevious = addon.ToggleRoleForUnit("party1", "heal")
+    check(firstOK == true, "premade BG > party member stick can be assigned", true, firstOK)
+    check(firstState == "assigned", "premade BG > heal stick is assigned", "assigned", firstState)
+
+    wow.set_battleground(false)
+    wow.fire("PLAYER_ENTERING_WORLD")
+
+    local secondOK, secondState, secondPrevious = addon.ToggleRoleForUnit("party1", "heal")
+    check(secondOK == true, "premade BG exit > party still accepts stick assignment", true, secondOK)
+    check(secondState == "assigned", "premade BG exit > previous stick was cleared", "assigned", secondState)
+    check(secondPrevious == nil, "premade BG exit > no stale previous role remains", nil, secondPrevious)
+end)
+
 case("Mouse overlay removal > legacy regression", function()
     local legacyApis = { "SetMouseResourceOverlayEnabled", "UpdateMouseResourceOverlay", "RefreshMouseCooldowns", "GetMouseCooldownOptions" }
     local missingApis = {}
